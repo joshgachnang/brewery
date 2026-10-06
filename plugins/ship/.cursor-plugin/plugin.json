@@ -1,9 +1,0 @@
-{
-  "name": "ship",
-  "description": "Day-to-day shipping: commit, create-pr, submit, fullsend, go, review, respond-to-review, fix-conflicts, check-watcher, test audits and Playwright e2e.",
-  "version": "0.1.0",
-  "author": {"name": "Josh Gachnang", "email": "josh@nang.io"},
-  "repository": "https://github.com/joshgachnang/brewery",
-  "keywords": ["git", "pull-requests", "review", "ci"],
-  "skills": "skills"
-}
