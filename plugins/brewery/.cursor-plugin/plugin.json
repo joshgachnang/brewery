@@ -1,0 +1,9 @@
+{
+  "name": "brewery",
+  "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it through Pick and Roast to a PR, and finish it to green CI.",
+  "version": "0.1.0",
+  "author": {"name": "Josh Gachnang", "email": "josh@nang.io"},
+  "repository": "https://github.com/joshgachnang/brewery",
+  "keywords": ["brewery", "planning", "terreno", "sdlc"],
+  "skills": "skills"
+}

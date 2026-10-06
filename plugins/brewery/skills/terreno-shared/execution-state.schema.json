@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terreno.dev/schemas/execution-state.schema.json",
+  "title": "Terreno lifecycle execution state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "stage", "attempt", "next"],
+  "properties": {
+    "v": {"const": 2},
+    "ip": {"type": "string"},
+    "task": {"type": "string"},
+    "stage": {"enum": ["grow", "pick", "roast", "brew", "taste"]},
+    "attempt": {"type": "integer", "minimum": 1},
+    "branch": {"type": "string"},
+    "sha": {"type": "string"},
+    "pr": {"type": "string"},
+    "skills": {"type": "array", "items": {"type": "string"}},
+    "last": {
+      "anyOf": [
+        {"type": "null"},
+        {"$ref": "stage-result.schema.json"}
+      ]
+    },
+    "artifacts": {"type": "array", "items": {"type": "string"}},
+    "tried": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stage", "attempt", "why", "status", "ev"],
+        "properties": {
+          "stage": {"enum": ["grow", "pick", "roast", "brew", "taste"]},
+          "attempt": {"type": "integer", "minimum": 1},
+          "why": {"type": "string"},
+          "status": {"enum": ["PASS", "FAIL", "BLOCKED", "PENDING"]},
+          "ev": {"type": "string"}
+        }
+      }
+    },
+    "ledger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["task", "stage", "attempt", "sha", "status", "summary", "ev"],
+        "properties": {
+          "task": {"type": "string"},
+          "stage": {"enum": ["pick", "roast"]},
+          "attempt": {"type": "integer", "minimum": 1},
+          "sha": {"type": "string"},
+          "status": {"enum": ["PASS", "FAIL", "BLOCKED"]},
+          "summary": {"type": "string"},
+          "hypothesis": {"type": "string"},
+          "files": {"type": "array", "items": {"type": "string"}},
+          "checks": {"type": "array", "items": {"type": "string"}},
+          "artifacts": {"type": "array", "items": {"type": "string"}},
+          "docs": {"type": "array", "items": {"type": "string"}},
+          "risks": {"type": "array", "items": {"type": "string"}},
+          "ev": {"type": "string"}
+        }
+      }
+    },
+    "next": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "why", "human"],
+      "properties": {
+        "stage": {
+          "type": ["string", "null"],
+          "enum": ["grow", "pick", "roast", "brew", "taste", null]
+        },
+        "why": {"type": "string"},
+        "human": {"type": "boolean"}
+      }
+    }
+  }
+}

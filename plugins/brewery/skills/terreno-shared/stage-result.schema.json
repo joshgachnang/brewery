@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://terreno.dev/schemas/stage-result.schema.json",
+  "title": "Terreno lifecycle stage result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "stage", "status", "next", "action"],
+  "properties": {
+    "v": {"const": 2},
+    "stage": {"enum": ["grow", "pick", "roast", "brew", "taste"]},
+    "status": {"enum": ["PASS", "FAIL", "BLOCKED", "PENDING"]},
+    "ip": {"type": "string"},
+    "task": {"type": "string"},
+    "attempt": {"type": "integer", "minimum": 1},
+    "branch": {"type": "string"},
+    "sha": {"type": "string"},
+    "pr": {"type": "string"},
+    "skills": {"type": "array", "items": {"type": "string"}},
+    "done": {"type": "array", "items": {"type": "string"}},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "status", "ev"],
+        "properties": {
+          "name": {"type": "string"},
+          "status": {"enum": ["PASS", "FAIL", "BLOCKED", "PENDING"]},
+          "ev": {"type": "string"}
+        }
+      }
+    },
+    "artifacts": {"type": "array", "items": {"type": "string"}},
+    "fail": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["need", "want", "got", "ev"],
+        "properties": {
+          "need": {"type": "string"},
+          "sev": {"enum": ["blocking", "non_blocking"]},
+          "want": {"type": "string"},
+          "got": {"type": "string"},
+          "ev": {"type": "string"}
+        }
+      }
+    },
+    "block": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "why"],
+        "properties": {
+          "kind": {"enum": ["human", "environment", "access", "external"]},
+          "why": {"type": "string"},
+          "ev": {"type": "string"}
+        }
+      }
+    },
+    "ask": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["q", "rec"],
+        "properties": {
+          "q": {"type": "string"},
+          "opts": {"type": "array", "items": {"type": "string"}},
+          "rec": {"type": "string"}
+        }
+      }
+    },
+    "next": {
+      "type": ["string", "null"],
+      "enum": ["grow", "pick", "roast", "brew", "taste", null]
+    },
+    "action": {"type": "string"},
+    "wait": {"type": "integer", "minimum": 1}
+  }
+}

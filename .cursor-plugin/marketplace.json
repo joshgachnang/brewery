@@ -1,0 +1,13 @@
+{
+  "name": "brewery",
+  "owner": {"name": "Josh Gachnang", "email": "josh@nang.io"},
+  "metadata": {
+    "description": "Josh's agent skills: the brewery pipeline and the shipping workflow.",
+    "version": "0.1.0",
+    "pluginRoot": "plugins"
+  },
+  "plugins": [
+    {"name": "brewery", "source": "brewery", "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it through Pick and Roast to a PR, and finish it to green CI."},
+    {"name": "ship", "source": "ship", "description": "Day-to-day shipping: commit, create-pr, submit, fullsend, go, review, respond-to-review, fix-conflicts, check-watcher, test audits and Playwright e2e."}
+  ]
+}
