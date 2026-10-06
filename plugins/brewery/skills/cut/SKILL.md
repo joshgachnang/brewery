@@ -60,7 +60,10 @@ planner's context). Pass the packet and this brief:
 >    rollout and compatibility gaps the plan does not address.
 > 7. **Decomposition.** Two tasks that write the same file with no dependency between
 >    them; a task that is really two independently roast-able behaviours; a chain that
->    could be a fan-out. Check `Depends on:` against `Files:` and the proof for each task.
+>    could be a fan-out; a dependency with no real read/extend relationship; a chain
+>    longer than three without a reason per link; a `Files:` line that omits a shared
+>    registry, index, or barrel the task must edit. Check `Depends on:` against `Files:`
+>    and the proof for each task.
 > 8. **Readability.** The brief does not make sense to someone who knows only the request.
 >
 > Return at most 12 findings, most severe first, as a markdown table:

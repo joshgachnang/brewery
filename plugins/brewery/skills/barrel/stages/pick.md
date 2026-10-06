@@ -70,8 +70,11 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    findings and rerun affected checks.
 10. **Check drift, docs, and runtime.** Compare the diff to the current task/IP. Update
     architecture and public docs in this slice using the documentation contract. Run any
-    mandatory runtime/UI/safety verification declared by repository instructions or
-    supporting skills. Missing mandatory capability is `BLOCKED`, not skipped.
+    mandatory safety verification declared by repository instructions or supporting
+    skills. Leave e2e, browser, and launched-app UI verification to the integrated Roast
+    (see [test tiers](../../terreno-shared/testing.md#test-tiers)); write or update the
+    e2e spec here when the slice needs one. Missing mandatory capability is `BLOCKED`,
+    not skipped.
     Missing docs for a user-visible or architectural change is `FAIL`.
 11. **Record.** Record the completed task/slice in execution state with commands,
     evidence, artifacts, docs files, and attempts. Do not commit a separate task-file

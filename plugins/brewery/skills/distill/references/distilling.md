@@ -127,11 +127,15 @@ Then split the remaining work into small, composable tasks. Each task is one
 independently testable behaviour that can be roasted on its own; split any task that
 needs more than one roast-able behaviour.
 
-Every task carries `Depends on:` (`none` or task IDs) and `Files:` (the files or seams
-it touches). Declare the real prerequisites, rather than depending on the previous
-task by habit. Two tasks that share a file depend on each other, so their writes are
-ordered. Prefer wide over deep: fan out independent tasks and keep dependency chains
-short. Use a join task only when a behaviour requires the branches to be complete.
+Every task carries `Depends on:` (`none` or task IDs) and `Files:` (every file it
+writes, comma-separated, including shared registries, barrels, and route or tool
+indexes). Declare the real prerequisites, rather than depending on the previous task
+by habit: depend on a task only when this one reads or extends something it creates.
+Two tasks that share a file depend on each other, so their writes are ordered; brewery
+also refuses to build two tasks with a shared `Files:` entry at once. Prefer wide over
+deep: fan out independent tasks and keep dependency chains short. A chain longer than
+three needs a reason for each link. Use a join task only when a behaviour requires the
+branches to be complete.
 
 For example, after a tracer adds a reports API, a reports client and an export utility
 can both depend on the tracer if they write different files. If both write the same
