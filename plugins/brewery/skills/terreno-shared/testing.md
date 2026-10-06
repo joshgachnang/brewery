@@ -23,6 +23,17 @@ Prefer the highest existing seam that proves the behavior. Add a seam only when 
 
 Expected values come from a literal worked example, the IP, or another independent source of truth.
 
+## Test tiers
+
+| Tier | Examples | Runs in |
+| --- | --- | --- |
+| Fast | lint, typecheck, unit, integration, component, HTTP route tests | Pick, per-task Roast, review fixes, pre-push gates |
+| Slow | e2e, Playwright and other browser suites, launched-app UI verification | integrated Roast once all tasks land, and product CI |
+
+Per-task steps never run the slow tier. A browser-only criterion is deferred to the
+integrated Roast, not failed. A task may still write or change an e2e spec; the per-task
+check is that it typechecks.
+
 ## Repository composition
 
 Load applicable repository testing skills before choosing commands, harnesses, fixtures,

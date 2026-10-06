@@ -44,15 +44,18 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    invocation: repository-prescribed tests, integration/system behavior, lint/type/build
    checks, runtime/API/database probes, regression reproductions, or real UI interaction.
    Do not spawn two unconstrained reviewers. Prefer named commands here over a second
-   general-purpose child that rediscovers the repo. Run the gate CI will run on these
-   files, not only this task's test file. Use the root `prepush` package script when
-   present, since it scopes itself to changed files. Otherwise run each touched
-   package's lint, typecheck, and the same test command CI runs, including coverage
-   thresholds. A test that passes alone but fails in the package suite is `FAIL`.
-5. **Exercise changed behavior.** For UI-facing work in **this task's file list**, spawn
-   at most one specialized UI/runtime verifier with the same briefing. Interact with the
-   actual changed workflow and capture required screenshots/video/logs. App launch alone
-   is not proof. Skip that child when this task has no UI/runtime files.
+   general-purpose child that rediscovers the repo. Run the fast tiers (see
+   [`testing guidance`](../../terreno-shared/testing.md#test-tiers)) for the touched
+   packages, not only this task's test file: the root `prepush` package script when
+   present, otherwise each touched package's lint, typecheck, and unit/integration test
+   command, including coverage thresholds. A test that passes alone but fails in the
+   package suite is `FAIL`. Do not run e2e or browser suites here.
+5. **Exercise changed behavior.** Per-task Roast does not launch the app or run browser
+   suites. For UI-facing work, prove what component and integration tests can, check that
+   any new or changed e2e spec typechecks, and record the browser-only criteria as
+   deferred. The integrated Roast, after every task lands, runs the e2e suites and
+   spawns at most one specialized UI/runtime verifier that interacts with the actual
+   changed workflows and captures screenshots/video/logs. App launch alone is not proof.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
    criterion that is true in code but absent or wrong in docs is `FAIL`.
 7. **Classify each criterion.** Record `PASS`, `FAIL`, or `BLOCKED` with reproducible

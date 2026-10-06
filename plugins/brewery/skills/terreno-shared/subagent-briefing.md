@@ -32,8 +32,8 @@ Do not tell the child to read the skill catalog or reconstruct independently.
 Roast is criterion → evidence. It is not a second independent-review pair.
 
 - Prefer running named checks in the Roast invocation itself.
-- Spawn at most one specialized UI/runtime verifier, and only when this task's
-  briefing lists UI/runtime files.
+- Per-task Roast spawns no UI/runtime verifier and runs no browser suites. The
+  integrated Roast spawns at most one, and only when the branch has UI/runtime files.
 - Do not spawn two unconstrained reviewers that each rediscover the repo.
 - Do not spawn a conventions reviewer during Roast. Pick and Brew own that axis.
 
