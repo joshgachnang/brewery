@@ -1,0 +1,19 @@
+{
+  "name": "brewery",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Drive distill → cut → sign-off → barrel → finish as separate agent processes (Claude, Codex, local models), one bounded step per process.",
+  "bin": {
+    "brewery": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit",
+    "compile": "bun build --compile src/cli.ts --outfile brewery && (command -v codesign >/dev/null 2>&1 && codesign --force --sign - brewery || true)"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.2",
+    "typescript": "^7.0.2"
+  }
+}
