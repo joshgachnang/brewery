@@ -4,6 +4,7 @@
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
+import { failureExcerpt } from "../ci.ts";
 import { configuredRepos, loadConfig } from "../config.ts";
 import { activeRules, RULES_PATH } from "../docs.ts";
 import type { FailedRun, Forge, MergedPr } from "../forge.ts";
@@ -143,7 +144,7 @@ export const cellar = async (name: string, forge: Forge, opts: CellarOptions = {
     const key = `${run.workflow}|${run.branch}`;
     if (seen.has(key) || logs.size >= LOGS) continue;
     seen.add(key);
-    const text = scrubTail(await forge.runLog(name, run.id), 3000);
+    const text = scrubTail(failureExcerpt(await forge.runLog(name, run.id)), 3000);
     if (text) logs.set(run.id, text);
   }
   const evidence = renderEvidence(name, since, journals, failed, logs, merged);

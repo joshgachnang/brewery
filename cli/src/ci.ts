@@ -20,6 +20,14 @@ export interface CiFailure {
   resolvedAt?: string;
 }
 
+// gh --log-failed lines are "<job>\t<step>\t<timestamp> <text>". Drop that prefix, and cut
+// after the last ##[error] so the post-job cleanup steps don't crowd the failure out of the tail.
+export const failureExcerpt = (raw: string): string => {
+  const lines = raw.split("\n").map((line) => line.replace(/^[^\t\n]*\t[^\t\n]*\t\d{4}-\d{2}-\d{2}T[\d:.]+Z ?/, ""));
+  const last = lines.findLastIndex((line) => line.includes("##[error]"));
+  return (last >= 0 ? lines.slice(0, last + 1) : lines).join("\n");
+};
+
 export const ciDir = (state: RunState): string => join(runDir(state.repo, state.slug), "ci");
 
 export const readFailures = (state: RunState): { file: string; failure: CiFailure }[] => {
@@ -42,7 +50,7 @@ export const recordFailures = async (state: RunState, ci: Ci, sha: string, faili
   let n = existing.length;
   for (const check of failing) {
     if (existing.some(({ failure }) => failure.check === check.name && failure.sha === sha)) continue;
-    const log = check.link ? scrubTail(await ci.failedLog(state.repo, check.link)) : "";
+    const log = check.link ? scrubTail(failureExcerpt(await ci.failedLog(state.repo, check.link))) : "";
     n += 1;
     const file = join(dir, `${String(n).padStart(3, "0")}-${slugify(check.name) || "check"}.json`);
     save(file, { check: check.name, link: check.link, pr: state.pr, sha, at: new Date().toISOString(), log, status: "open" });

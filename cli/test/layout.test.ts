@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readFailures } from "../src/ci.ts";
+import { failureExcerpt, readFailures } from "../src/ci.ts";
 import { finish } from "../src/commands/finish.ts";
 import { initDocs, RULES_PATH } from "../src/docs.ts";
 import { pipelinePath, projectPipeline } from "../src/pipeline.ts";
@@ -160,6 +160,18 @@ describe("scrub", () => {
 });
 
 describe("CI evidence", () => {
+  test("the excerpt drops gh's line prefix and the cleanup steps after the last error", () => {
+    const raw = [
+      "Test\tUNKNOWN STEP\t2026-10-12T21:21:08.9497222Z 1 tests failed:",
+      "Test\tUNKNOWN STEP\t2026-10-12T21:21:08.9498329Z (fail) harness > delivers a PNG",
+      "Test\tUNKNOWN STEP\t2026-10-12T21:21:08.9923434Z ##[error]Process completed with exit code 1.",
+      "Test\tUNKNOWN STEP\t2026-10-12T21:21:09.2756679Z [command]/usr/bin/git config --local --unset includeif",
+      "Test\tUNKNOWN STEP\t2026-10-12T21:21:09.3637655Z Cleaning up orphan processes",
+    ].join("\n");
+    expect(failureExcerpt(raw)).toBe("1 tests failed:\n(fail) harness > delivers a PNG\n##[error]Process completed with exit code 1.");
+    expect(failureExcerpt("plain\nlog")).toBe("plain\nlog");
+  });
+
   const snap = (sha: string, bucket: "pass" | "fail"): PrSnapshot => ({
     sha,
     mergeable: "MERGEABLE",
