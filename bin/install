@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# install — install the brewery CLI's dependencies and link it. Idempotent.
+#   ~/bin/brewery -> <checkout>/cli/src/cli.ts
+# Run from this checkout, the CLI finds its skills in plugins/brewery/skills, so nothing is
+# linked into ~/.claude/skills. Interactive sessions get the same skills from the plugin
+# (/brewery:distill), which dotfiles enables in each account's settings.
+set -euo pipefail
+
+SRC="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+
+# Non-interactive SSH may not have Bun on PATH; a laptop may use Homebrew or a version manager.
+BUN="$HOME/.bun/bin/bun"
+[[ -x "$BUN" ]] || BUN="$(command -v bun || true)"
+if [[ -z "$BUN" ]]; then
+  echo "error: bun not found; install Bun in ~/.bun/bin or on PATH" >&2
+  exit 1
+fi
+(cd "$SRC/cli" && "$BUN" install --frozen-lockfile)
+
+mkdir -p "$HOME/bin"
+ln -sfn "$SRC/cli/src/cli.ts" "$HOME/bin/brewery"
+echo "linked ~/bin/brewery -> $SRC/cli/src/cli.ts"

@@ -15,7 +15,7 @@ Cut never edits the IP. It returns findings, and the caller fixes them.
 
 `brewery cut <ip> --request "<what the human said>"` runs this as separate agent processes (Claude, Codex, or local models via
 litellm). It fans the attack out across every agent routed to `cut`, each in a
-clean worktree of HEAD. Source: `tools/brewery/`. Use this skill directly for an
+clean worktree of HEAD. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
 interactive, single-session run.
 
 ## Build the user-context packet

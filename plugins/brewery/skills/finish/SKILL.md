@@ -16,7 +16,7 @@ Read [`taste.md`](taste.md), [`product CI`](../terreno-shared/product-ci.md),
 
 `brewery finish [pr]` runs this as separate agent processes (Claude, Codex, or local models via
 litellm). brewery does the CI waiting itself with `gh`, so no model runs while
-CI is pending, and it starts one Taste agent per red snapshot. Source: `tools/brewery/`. Use this skill directly for an
+CI is pending, and it starts one Taste agent per red snapshot. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
 interactive, single-session run.
 
 ## Setup

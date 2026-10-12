@@ -27,7 +27,7 @@ keeps a `ledger`.
 litellm). Every Pick, every Roast, the branch review, and Brew run in a fresh
 process, and brewery commits between them, so Roast judges a fixed tree. Ready tasks run in
 isolated worktrees up to `limits.parallelTasks` (`--parallel N` for one run), then land serially
-after Roast PASS; dependencies must already have landed. Source: `tools/brewery/`. Use this skill directly for an
+after Roast PASS; dependencies must already have landed. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
 interactive, single-session run.
 
 ## Preconditions

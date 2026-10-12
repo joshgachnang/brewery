@@ -21,7 +21,7 @@ Read before acting:
 
 `brewery distill "<request>"` runs this as separate agent processes (Claude, Codex, or local models via
 litellm). brewery runs cut in a clean worktree, owns the `Status:` line, and
-collects the sign-off reply with `brewery answer <slug> "ok"`. Source: `tools/brewery/`. Use this skill directly for an
+collects the sign-off reply with `brewery answer <slug> "ok"`. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
 interactive, single-session run.
 
 ## Inputs

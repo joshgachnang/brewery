@@ -23,10 +23,14 @@ brewery barrel <slug>            ready tasks (up to parallelTasks), each: create
 ## Install
 
 ```bash
-cd tools/brewery && bun install
-ln -sf "$PWD/src/cli.ts" ~/bin/brewery   # or: bun run compile
-brewery agents                                            # what is available, how stages route
+~/src/brewery/bin/install    # bun install, and links ~/bin/brewery to cli/src/cli.ts
+brewery agents               # what is available, how stages route
 ```
+
+Run from the checkout, brewery finds its skills in `plugins/brewery/skills`. A repo that
+vendors its own (`<repo>/.claude/skills/distill`) uses those, and `BREWERY_SKILLS_DIR` overrides
+both (the zerg image sets it). `bun run compile` builds a standalone binary, which falls back
+to `~/.claude/skills`.
 
 ## Agents and routing
 

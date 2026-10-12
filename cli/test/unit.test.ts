@@ -242,7 +242,8 @@ describe("config and agents", () => {
   test("a repo that vendors the skills uses its own copy", () => {
     process.env.BREWERY_CONFIG = join(tmpdir(), "brewery-no-such-config.json");
     const repo = mkdtempSync(join(tmpdir(), "brewery-skills-"));
-    expect(loadConfig(repo).skillsDir).toBe(DEFAULT_CONFIG.skillsDir);
+    // Without a vendored copy, a CLI run from this checkout uses the plugin's skills beside it.
+    expect(loadConfig(repo).skillsDir).toBe(join(import.meta.dir, "..", "..", "plugins", "brewery", "skills"));
     mkdirSync(join(repo, ".claude", "skills", "distill"), { recursive: true });
     writeFileSync(join(repo, ".claude", "skills", "distill", "SKILL.md"), "---\nname: distill\n---\n");
     expect(loadConfig(repo).skillsDir).toBe(join(repo, ".claude", "skills"));
