@@ -1,6 +1,7 @@
 // Agent profiles, stage routing, and limits. Layered: built-in defaults ←
 // ~/.config/brewery/config.json (or $BREWERY_CONFIG) ← <repo>/.brewery.json ← --agents flag.
-// skillsDir defaults to <repo>/.claude/skills when it vendors distill, else $BREWERY_SKILLS_DIR, else ~/.claude/skills.
+// skillsDir defaults to <repo>/.claude/skills when it vendors distill, else $BREWERY_SKILLS_DIR, else the
+// plugin skills beside this CLI in a brewery checkout, else ~/.claude/skills.
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
@@ -158,7 +159,12 @@ const repoSkillsDir = (repo: string): string | undefined => {
 };
 
 // An image that bakes the skills in (zerg's agent-dev) points here instead of a per-account home.
-const installedSkillsDir = (): string => process.env.BREWERY_SKILLS_DIR || DEFAULT_CONFIG.skillsDir;
+// Run from a brewery checkout (bin/install links ~/bin/brewery here), the plugin's skills sit beside the CLI.
+// A compiled binary has no checkout around it, so it falls through to ~/.claude/skills.
+const checkoutSkillsDir = join(import.meta.dir, "..", "..", "plugins", "brewery", "skills");
+const installedSkillsDir = (): string =>
+  process.env.BREWERY_SKILLS_DIR ||
+  (existsSync(join(checkoutSkillsDir, "distill", "SKILL.md")) ? checkoutSkillsDir : DEFAULT_CONFIG.skillsDir);
 
 export const loadConfig = (repo: string, agentsFlag?: string): Config => {
   const defaults = { ...DEFAULT_CONFIG, skillsDir: repoSkillsDir(repo) ?? installedSkillsDir() };
