@@ -1,7 +1,9 @@
 // Prompts for each step. Skills hold the method; these say which slice of it this
 // process runs and where brewery takes over.
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Ask, Finding } from "./agents.ts";
+import { activeRules, RULES_PATH } from "./docs.ts";
 import type { Ctx } from "./step.ts";
 import { refreshNotes } from "./state.ts";
 import type { PrSnapshot } from "./vcs.ts";
@@ -40,6 +42,10 @@ export const header = (ctx: Ctx, resultFile: string): string => {
         .map((note) => `<note>\n${note}\n</note>`)
         .join("\n")}\n`
     : "";
+  const rules = activeRules(ctx.state.repo);
+  const learned = rules.length
+    ? `\nRules learned from past runs in this repo (${RULES_PATH}). Follow them:\n${rules.join("\n")}\n`
+    : "";
   return `You are running one bounded step of a brewery run in ${ctx.state.repo}.
 brewery is the outer loop. It owns sequencing, retries, commits between tasks, waiting on
 CI, and every contact with the human.
@@ -59,7 +65,7 @@ Rules for this step:
           "block": [{"kind": "human|environment|access|external", "why": "", "ev": ""}]}
   plus any step-specific keys named below. Omit keys you do not use. Writing this file is
   mandatory, including on failure.
-${answers}${notes}`;
+${answers}${notes}${learned}`;
 };
 
 export const distillBody = (ctx: Ctx, request: string, ipPath: string): string => `## Step: distill (write the IP)
@@ -71,6 +77,7 @@ Read and follow ${skill(ctx, "distill/SKILL.md")} steps 1–9, with these overri
   write the plan on your recommendation and mark the question fundamental.
 - Stop after step 9. brewery runs cut (step 10) and sign-off (step 11) itself.
 - Leave the \`Status:\` line as \`Status: draft\`. brewery owns that line.
+${existsSync(join(ctx.state.repo, "docs", "learnings")) ? "- Before shaping the plan, grep the frontmatter in docs/learnings/ (module, component, tags,\n  symptoms) for the area this request touches. Carry what applies into the IP as constraints,\n  and name approaches that already failed so Pick does not retry them.\n" : ""}
 - The task list must use exactly this line format so brewery can track it, with details
   indented or in a following block:
     - [ ] **T1** — <task title, written as a commit subject>
@@ -119,7 +126,8 @@ ${reply}
 
 brewery read this reply as: ${verdict}.
 - "ok" alone accepts every recommendation. "2b" picks option b for question 2.
-- Move every question the reply settles into Decisions, with the question as asked.
+- Move every question the reply settles into Decisions, with the question as asked. Mark
+  the ID \`(durable)\` only when the answer should outlive this plan (see distilling.md).
 - Where an answer differs from the recommendation, rewrite the affected tasks and criteria.
 ${verdict === "reject" ? "- The human rejected the plan. Return to distill step 5 with their reason and reshape it.\n" : ""}- Leave the \`Status:\` line alone. brewery sets it. Keep the task line format.
 
@@ -264,3 +272,37 @@ Act on it:
 - Actionable review-bot findings on this head: address them.
 Status PASS after acting (or when nothing was actionable), with \`sha\` set to the head you
 leave. BLOCKED for a human decision, with \`ask\`.`;
+
+export const compoundBody = (ctx: Ctx, evidence: string): string => `## Step: compound (record at most one learning)
+
+Read and follow ${skill(ctx, "compound/SKILL.md")}. The run's IP is ${ctx.state.ip}; the branch is
+${ctx.state.branch} against ${ctx.state.base}. This run struggled here:
+
+${evidence}
+
+${ctx.config.phi ? "This repo handles PHI. Do not quote CI log lines in the learning; describe the error by its shape.\n\n" : ""}Write or update at most one file under docs/learnings/<category>/<slug>.md, using
+docs/learnings/TEMPLATE.md, or write nothing when the bar is not met. Change no other file:
+not RULES.md, not code. brewery commits what you leave. Do not commit or push.
+
+Result: status PASS, \`learning\` (the repo-relative path you wrote or updated, or null), and
+\`summary\` (one line: what the learning says, or why nothing cleared the bar).`;
+
+export const cellarBody = (ctx: Ctx, name: string, since: string, evidence: string): string => `## Step: cellar (learn from ${name} since ${since})
+
+Read and follow ${skill(ctx, "cellar/SKILL.md")}. You are in a fresh worktree of the default
+branch of ${name}, on a new branch. Learning mode for this repo: ${ctx.config.learn}.${ctx.config.phi ? "\nThis repo handles PHI: never quote CI log lines in anything you write; describe errors by shape." : ""}
+brewery commits what you leave, pushes, and opens one PR. Do not commit, push, or open a PR.
+
+Limits brewery enforces: at most 3 changes counting each new Active rule in
+docs/learnings/RULES.md and each changed file outside docs/learnings/<category>/. Over the
+limit, nothing ships. Learning files themselves are not counted.
+
+Result: status PASS, \`summary\` (two or three sentences for the PR description),
+\`changes\` (one line per change, each citing its evidence: run, PR, CI link, or learning)${
+  ctx.config.learn === "shared"
+    ? `, and \`proposals\` (markdown: generic changes to the brewery skills that would have
+prevented these failures in any repo; describe them, do not edit skill files)`
+    : ""
+}. Leave the tree unchanged and say why in \`summary\` when nothing clears the bar.
+
+${evidence}`;

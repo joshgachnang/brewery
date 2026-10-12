@@ -217,6 +217,78 @@ lines as they arrive and appends `narration` events for assistant text and brief
 summaries, such as `Read groupQueue.ts` or `Bash: bun test`. It ignores malformed lines,
 tool output, and final result records. `command` profiles emit only step start and end.
 
+## Docs layout and learning
+
+`brewery init-docs` adds the standard layout to a repo and points `AGENTS.md`/`CLAUDE.md` at it:
+
+| Path | What |
+| --- | --- |
+| `docs/plans/`, `docs/specs/` | IPs and design specs (unchanged) |
+| `docs/decisions/NNNN-<slug>.md` | Decisions that outlive a plan |
+| `docs/journal/` | One generated journal per run |
+| `docs/learnings/<category>/<slug>.md` | One learning per file, grep-able frontmatter (`TEMPLATE.md`) |
+| `docs/learnings/RULES.md` | At most 15 active rules every stage reads |
+
+At the first green of a brewery run, in a repo that has `docs/journal/`:
+1. **compound** runs, but only if the run struggled: failed Pick/Roast attempts, branch-review fixes, CI
+   failures fixed during finish, or a human reply beyond "ok"/"skip". It follows `compound/SKILL.md` and
+   may write or update **one** file under `docs/learnings/`. brewery reverts anything else it touched,
+   and keeps nothing if it wrote two.
+2. brewery renders `docs/journal/YYYY-MM-DD-<slug>.md` from the run state: stages, tasks, human answers,
+   CI failures with log tails, and the timeline.
+3. Both are committed together and pushed once. finish then waits for green on the new head.
+   If the push fails, the journal is left uncommitted.
+
+Set `"phi": true` in a PHI repo's `.brewery.json` (the Flourish repos). Its journal then leaves out CI log
+tails, which stay in the git-ignored run state. Compound and cellar are told not to quote log lines.
+
+Every step's prompt includes the Active rules from `docs/learnings/RULES.md`. Distill also searches
+`docs/learnings/` before shaping the plan. Set `"learn": "off"` in `.brewery.json` to skip compound.
+The `compound` stage routes like any other (default: claude).
+
+Run state also feeds learning:
+- `finish` saves each failing check to `.terreno/brewery/<slug>/ci/NNN-<check>.json` before Taste reacts.
+  Each file holds the scrubbed failed-step log tail. Once green it is marked `fixed` (with the fixing sha),
+  or `flaky` if it passed at the same sha.
+- Every state save also writes `.terreno/pipeline/<slug>.json` in the terreno execution-state shape,
+  for the vendored skills and zerg.
+
+A `D2 (durable)` row in an IP's Decisions table is copied to `docs/decisions/NNNN-<slug>.md` in the
+same end-of-run commit, and the marker becomes a link.
+
+## Nightly learning: `brewery cellar <owner/name>`
+
+One repo per call. It gathers everything since that repo's last pass (first pass: 7 days):
+- brewery journals that reached the default branch
+- failed GitHub Actions runs, with the newest scrubbed failed-step log per workflow and branch
+- merged PRs from any session: local, remote, web, or Cursor cloud
+
+It skips the agent entirely when nothing happened. Otherwise the `cellar` skill runs in a fresh worktree
+of the default branch and may:
+- write or update learnings
+- promote recurring ones to rules in `RULES.md`, or to checks
+- retire stale rules
+
+brewery then opens one PR. More than 3 rule or check changes in one pass means no PR (exit 4).
+With `"learn": "shared"`, the PR also lists proposed changes to the brewery skills. `"off"` skips the repo.
+
+The local checkout comes from `repos` in the user config (`{"repos": {"owner/name": "/path"}}`), or any
+repo brewery has run in whose origin matches. If neither exists, it clones to a temp dir.
+State is one stamp file per repo plus `cellar.log`, in `~/.local/state/brewery/cellar/`
+(`BREWERY_CELLAR_DIR` overrides it). Runs for different repos can overlap.
+
+Scheduling is up to the host: one line per repo, e.g. cron
+
+```
+0 3 * * * brewery cellar acme/widgets >> ~/.local/state/brewery/cellar/cron.log 2>&1
+```
+
+`--dry-run` prints the gathered evidence without calling an agent or moving the stamp.
+`--since <ISO date>` overrides the window. Exit codes: 0 PR opened or nothing to do,
+4 over the change limit, 1 error.
+
+Design: `docs/specs/2026-10-12-brewery-docs-and-learning-loop-design.md`.
+
 ## Development
 
 ```bash

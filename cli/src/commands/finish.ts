@@ -1,6 +1,8 @@
 // Taste until the PR has no conflicts and every check passes. brewery does the waiting
 // (gh watches cost no tokens) and only starts an agent when there is something to react to.
+import { recordFailures, resolveFailures } from "../ci.ts";
 import { ping } from "../human.ts";
+import { recordRun } from "../learn.ts";
 import { appendEvent } from "../events.ts";
 import { tasteBody } from "../prompts.ts";
 import { saveState } from "../state.ts";
@@ -46,6 +48,13 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
       snap.mergeable === "CONFLICTING" || snap.checks.some((c) => c.bucket === "fail" || c.bucket === "cancel") ? "fail" : "pending";
     appendEvent(state, { kind: "ci", state: ciState });
     if (isGreen(snap) && !snap.checks.some((c) => c.bucket === "pending")) {
+      resolveFailures(state, snap.sha);
+      if (!run.recorded) {
+        run.recorded = true;
+        saveState(state);
+        // The journal push moves the head, so wait for green on the new one.
+        if ((await recordRun(ctx)) === "recorded") continue;
+      }
       state.phase = "done";
       saveState(state);
       appendEvent(state, { kind: "done" });
@@ -55,6 +64,7 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
     }
     const failing = snap.checks.filter((c) => c.bucket === "fail" || c.bucket === "cancel");
     if (!failing.length && snap.mergeable !== "CONFLICTING") continue; // only pending: wait again
+    await recordFailures(state, ci, snap.sha, failing);
 
     const key = failureKey(snap);
     run.stuck = key === run.lastKey ? run.stuck + 1 : 0;

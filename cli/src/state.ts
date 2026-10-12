@@ -4,6 +4,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmdirS
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Ask, Finding, Status } from "./agents.ts";
+import { writePipeline } from "./pipeline.ts";
 
 export type Phase = "distill" | "signoff" | "approved" | "build" | "integrate" | "review" | "brew" | "finish" | "done";
 
@@ -55,7 +56,7 @@ export interface RunState {
   landing?: { task: string; head: string; ip: string; index?: { mode: string; sha: string; path: string } };
   reviewPending?: boolean;
   reviewFindings?: Finding[];
-  finish?: { startedAt: string; pushes: number; reactions: number; stuck: number; lastKey?: string };
+  finish?: { startedAt: string; pushes: number; reactions: number; stuck: number; lastKey?: string; recorded?: boolean };
   history: HistoryEntry[];
 }
 
@@ -173,6 +174,7 @@ const writeState = (state: RunState): void => {
   const temporary = join(dir, `state.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`);
   writeFileSync(temporary, `${JSON.stringify(state, null, 2)}\n`);
   renameSync(temporary, statePath(state.repo, state.slug));
+  writePipeline(state);
   const index = readIndex();
   if (index[state.slug] !== state.repo) {
     index[state.slug] = state.repo;

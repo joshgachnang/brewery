@@ -18,6 +18,13 @@ work that struggled, and cellar is the nightly per-repo pass that promotes recur
 learnings to rules and checks. They came from dotfiles; the design is in
 `docs/specs/2026-10-12-brewery-docs-and-learning-loop-design.md`.
 
+## The CLI
+
+`cli/` is the `brewery` command that runs distill → cut → sign-off → barrel → finish as
+separate agent processes, plus the learning loop (`init-docs`, journals, `compound`, and the
+nightly `brewery cellar <owner/name>`). It came from shade's `tools/brewery`; see
+`cli/README.md`. `cd cli && bun install && bun test`.
+
 ## Layout
 
 ```

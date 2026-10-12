@@ -5,11 +5,14 @@ import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
+import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
 import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
+import { initDocs } from "./docs.ts";
+import { githubForge } from "./forge.ts";
 import { readReplyFromTty } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";
@@ -34,6 +37,10 @@ Usage:
       Taste until the PR has no conflicts and all checks pass.
   brewery cut <ip> [--request "text" | --context file]
       Attack an IP with only the human's words; prints findings.
+  brewery cellar <owner/name> [--since <ISO date>] [--dry-run]
+      Learn from one repo's journals, failed CI runs, and merged PRs since the last
+      pass, and open one PR with learnings, rules, or checks. Meant for a nightly timer.
+  brewery init-docs            Add docs/{decisions,journal,learnings}/ and point AGENTS.md/CLAUDE.md at them
   brewery status [slug]        Runs, phases, and what is waiting on you
   brewery agents               Agent profiles, availability, and stage routing
   brewery help
@@ -46,7 +53,8 @@ Common flags:
   --parallel N             Max concurrent task builds for this run (1 = sequential)
 
 Config: ${userConfigPath()} and <repo>/.brewery.json.
-Exit codes: 0 done or approved, 3 waiting on the human, 1 error.`;
+Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar proposed more
+changes than allowed (no PR), 1 error.`;
 
 const WAITING = 3;
 
@@ -62,7 +70,7 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
     const [name, inline] = arg.slice(2).split("=", 2);
     const next = argv[i + 1];
     if (inline !== undefined) flags[name] = inline;
-    else if (["go", "no-wait", "here"].includes(name) || next === undefined || next.startsWith("--")) flags[name] = true;
+    else if (["go", "no-wait", "here", "dry-run"].includes(name) || next === undefined || next.startsWith("--")) flags[name] = true;
     else flags[name] = argv[++i];
   }
   return { positional, flags };
@@ -230,6 +238,19 @@ const cmdCut = async (positional: string[], flags: Record<string, string | true>
   });
 };
 
+const cmdCellar = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
+  if (!positional[0]) throw new Error("usage: brewery cellar <owner/name> [--since <ISO date>] [--dry-run]");
+  const outcome = await cellar(positional[0], githubForge, { since: str(flags.since), dryRun: Boolean(flags["dry-run"]), log });
+  return outcome.status === "too-many" ? 4 : 0;
+};
+
+const cmdInitDocs = async (flags: Record<string, string | true>): Promise<number> => {
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  const changed = initDocs(repo);
+  log(changed.length ? `Created or updated:\n${changed.map((p) => `  ${p}`).join("\n")}` : "Docs layout already in place.");
+  return 0;
+};
+
 const cmdStatus = (positional: string[]): number => {
   const index = readIndex();
   const slugs = positional[0] ? [positional[0]] : Object.keys(index);
@@ -295,6 +316,10 @@ const main = async (): Promise<number> => {
       return cmdFinish(positional, flags);
     case "cut":
       return cmdCut(positional, flags);
+    case "cellar":
+      return cmdCellar(positional, flags);
+    case "init-docs":
+      return cmdInitDocs(flags);
     case "status":
       return cmdStatus(positional);
     case "agents":

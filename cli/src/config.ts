@@ -26,7 +26,7 @@ export interface AgentProfile {
   timeoutMin?: number;
 }
 
-export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste"] as const;
+export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste", "compound", "cellar"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Stages whose agents all run and whose verdicts are merged. Every other stage uses
@@ -44,12 +44,19 @@ export interface Limits {
   stepTimeoutMin: number;
 }
 
+// off: no learning step. local: learnings stay in this repo. shared: cellar may also
+// generalise them into the brewery skills.
+export type LearnMode = "off" | "local" | "shared";
+
 export interface Config {
   agents: Record<string, AgentProfile>;
   stages: Record<Stage, string[]>;
   skillsDir: string;
   worktreeSetup: string[];
   notify: { ntfyUrl?: string };
+  learn: LearnMode;
+  // The repo handles PHI (Flourish): nothing derived from CI logs is committed.
+  phi: boolean;
   limits: Limits;
 }
 
@@ -78,11 +85,15 @@ export const DEFAULT_CONFIG: Config = {
     review: ["claude", "codex"],
     brew: ["claude"],
     taste: ["claude"],
+    compound: ["claude"],
+    cellar: ["claude"],
   },
   skillsDir: join(homedir(), ".claude", "skills"),
   worktreeSetup: [],
   // Shade's ntfy-compatible webhook relays to Slack. Pings carry no content.
   notify: { ntfyUrl: "https://shade-api.nang.io/webhooks/notifications" },
+  learn: "local",
+  phi: false,
   limits: {
     pickAttempts: 3,
     parallelTasks: 3,
@@ -115,11 +126,17 @@ const merge = (base: Config, over: PartialConfig): Config => ({
   skillsDir: over.skillsDir ?? base.skillsDir,
   worktreeSetup: over.worktreeSetup ?? base.worktreeSetup,
   notify: { ...base.notify, ...over.notify },
+  learn: over.learn ?? base.learn,
+  phi: over.phi ?? base.phi,
   limits: { ...base.limits, ...over.limits },
 });
 
 export const userConfigPath = (): string =>
   process.env.BREWERY_CONFIG ?? join(homedir(), ".config", "brewery", "config.json");
+
+// `repos` in the user config: GitHub owner/name → local checkout, for `brewery cellar`.
+export const configuredRepos = (): Record<string, string> =>
+  ((readJson(userConfigPath()) as { repos?: Record<string, string> }).repos ?? {});
 
 // `--agents pick=claude,roast=claude+codex+local`
 export const parseAgentsFlag = (flag: string): Partial<Record<Stage, string[]>> => {

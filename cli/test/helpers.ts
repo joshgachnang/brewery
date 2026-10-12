@@ -48,6 +48,8 @@ export const fakeSetup = (dir: string, plan: unknown[]): { planPath: string; con
         review: ["alpha", "beta"],
         brew: ["alpha"],
         taste: ["alpha"],
+        compound: ["alpha"],
+        cellar: ["alpha"],
       },
       // Never ping the real webhook from tests.
       notify: { ntfyUrl: "" },
@@ -63,7 +65,7 @@ export const quietCtx = (state: RunState, config: Config): Ctx & { lines: string
   return { state, config, log: (line: string) => lines.push(line), lines };
 };
 
-export const fakeCi = (snapshots: PrSnapshot[], pr = 7): Ci & { waits: number } => {
+export const fakeCi = (snapshots: PrSnapshot[], pr = 7, log = ""): Ci & { waits: number } => {
   let i = 0;
   const ci = {
     waits: 0,
@@ -73,6 +75,7 @@ export const fakeCi = (snapshots: PrSnapshot[], pr = 7): Ci & { waits: number } 
     waitForChecks: async (): Promise<void> => {
       ci.waits += 1;
     },
+    failedLog: async (): Promise<string> => log,
   };
   return ci;
 };

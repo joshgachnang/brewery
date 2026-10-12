@@ -36,6 +36,8 @@ export interface StepResult {
   block?: { kind: "human" | "environment" | "access" | "external"; why: string; ev?: string }[];
   findings?: Finding[];
   structural?: boolean;
+  // compound: the repo-relative learning written or updated, or null when skipped
+  learning?: string | null;
   tally?: { edited: number; moved: number; rebutted: number };
 }
 

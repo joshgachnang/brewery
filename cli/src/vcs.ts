@@ -97,6 +97,8 @@ export interface Ci {
   prUrl: (cwd: string, pr: number) => Promise<string>;
   snapshot: (cwd: string, pr: number) => Promise<PrSnapshot>;
   waitForChecks: (cwd: string, pr: number, timeoutMin: number) => Promise<void>;
+  // The failed steps' log for a check, or "" when it isn't a GitHub Actions job.
+  failedLog: (cwd: string, link: string) => Promise<string>;
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -144,5 +146,13 @@ export const githubCi: Ci = {
     if (!registered) return;
     const remaining = Math.max(deadline - Date.now(), 1_000);
     await sh(cwd, ["gh", "pr", "checks", String(pr), "--watch", "--interval", "30"], remaining);
+  },
+  failedLog: async (cwd, link) => {
+    const match = link.match(/\/actions\/runs\/(\d+)(?:\/job\/(\d+))?/);
+    if (!match) return "";
+    const [, runId, jobId] = match;
+    const argv = jobId ? ["gh", "run", "view", "--job", jobId, "--log-failed"] : ["gh", "run", "view", runId, "--log-failed"];
+    const res = await sh(cwd, argv, 120_000);
+    return res.code === 0 ? res.out : "";
   },
 };
