@@ -5,13 +5,25 @@ plugin, with a manifest for each tool beside it.
 
 | Plugin | Skills |
 |---|---|
-| `brewery` | `distill`, `cut`, `barrel`, `finish`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
+| `brewery` | `distill`, `cut`, `barrel`, `finish`, `compound`, `cellar`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
 
 Copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at `14e3a0c`.
 Everything else in shade's `.claude/skills` stays there, including the unmodified `terreno-*`
 lifecycle copies, which the upstream [terreno marketplace](https://github.com/FlourishHealth/terreno)
 already serves to both tools.
 `terreno-shared/VENDORED.md` explains how the brewery skills relate to upstream terreno.
+
+`compound` and `cellar` are the learning loop: compound records at most one learning after
+work that struggled, and cellar is the nightly per-repo pass that promotes recurring
+learnings to rules and checks. They came from dotfiles; the design is in
+`docs/specs/2026-10-12-brewery-docs-and-learning-loop-design.md`.
+
+## The CLI
+
+`cli/` is the `brewery` command that runs distill → cut → sign-off → barrel → finish as
+separate agent processes, plus the learning loop (`init-docs`, journals, `compound`, and the
+nightly `brewery cellar <owner/name>`). It came from shade's `tools/brewery`; see
+`cli/README.md`. `cd cli && bun install && bun test`.
 
 ## Layout
 

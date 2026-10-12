@@ -1,0 +1,3 @@
+node_modules/
+/brewery
+.*.bun-build
