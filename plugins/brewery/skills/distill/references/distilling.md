@@ -74,6 +74,10 @@ Rules:
 - A question answered in chat goes straight to Decisions and never appears in Open questions.
 - Expansions are not promises. `barrel` never builds them.
 - Empty sections stay with a single `None.` line so the human can see nothing was hidden.
+- Mark a Decisions row `D2 (durable)` when the answer should outlive this plan: an
+  architecture choice, a convention, "we don't use X". brewery copies it to
+  `docs/decisions/` at the end of the run and replaces the marker with a link. Most
+  decisions are about this plan only and stay unmarked.
 
 ## The brief (top of the IP)
 
