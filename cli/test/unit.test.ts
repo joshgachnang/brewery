@@ -12,6 +12,7 @@ import { cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFix
 import type { Ctx } from "../src/step.ts";
 import { mergeVerdicts } from "../src/step.ts";
 import { isGreen } from "../src/commands/finish.ts";
+import { unansweredBotThreads } from "../src/vcs.ts";
 import { IP } from "./helpers.ts";
 
 describe("planning prompts", () => {
@@ -303,6 +304,27 @@ describe("verdicts", () => {
     expect(isGreen(snap)).toBe(true);
     expect(isGreen({ ...snap, mergeable: "CONFLICTING" })).toBe(false);
     expect(isGreen({ ...snap, checks: [{ name: "t", bucket: "fail" }] })).toBe(false);
+    expect(isGreen({ ...snap, botThreads: [{ id: "T1", author: "cursor", body: "Possible null deref" }] })).toBe(false);
+    expect(isGreen({ ...snap, botThreads: [] })).toBe(true);
+  });
+
+  test("a bot thread stays unanswered until someone other than a bot replies or it is resolved", () => {
+    const bot = { __typename: "Bot", login: "cursor" };
+    const human = { __typename: "User", login: "josh" };
+    const thread = (id: string, isResolved: boolean, ...authors: (typeof bot)[]) => ({
+      id,
+      isResolved,
+      comments: { nodes: authors.map((author) => ({ author, path: "a.ts", line: 3, body: "Bug" })) },
+    });
+    expect(
+      unansweredBotThreads([
+        thread("open", false, bot),
+        thread("bot-only-replies", false, bot, { __typename: "User", login: "dependabot[bot]" }),
+        thread("answered", false, bot, human),
+        thread("resolved", true, bot),
+        thread("human", false, human),
+      ]).map((t) => t.id),
+    ).toEqual(["open", "bot-only-replies"]);
   });
 });
 

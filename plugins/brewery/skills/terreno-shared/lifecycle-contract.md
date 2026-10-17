@@ -33,6 +33,11 @@ tests, and other local policy. When it is absent, Taste falls back to lint, type
 and locally affected tests in each affected package. Taste then pushes and watches
 product CI. Hosts and tokens are on the product-CI page.
 
+Every stage that pushes follows [`push ownership`](push-ownership.md): the PR stays
+owned until CI is green on every host and every review-bot comment is addressed, or
+until three fix rounds fail and the human is told. A pushed PR is never left red or
+unwatched.
+
 ## Discover supporting skills
 
 At the start of every stage:
@@ -196,6 +201,10 @@ completed work, failed/recovered attempts, decisive evidence, options and impact
 recommended default. It ends with one exact question, then the Demo section when the PR
 has deployment URLs. Objective engineering failures are not human gates while a concrete
 safe action remains.
+
+A PR that is still red after three fix rounds is `BLOCKED` and escalated per
+[`push ownership`](push-ownership.md#escalation). No stage or loop ends silently on a
+red PR.
 
 Bounded engineering retries must be hypothesis-driven. Taste waits in-process for
 async review bots and for product CI (bounded watch loop). The outer loop reinvokes

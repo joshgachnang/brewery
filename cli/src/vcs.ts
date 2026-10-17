@@ -85,12 +85,51 @@ export interface Check {
   link?: string;
 }
 
+// An unresolved review thread started by a bot (Bugbot, CodeQL, Copilot, ...) that nobody has answered.
+export interface BotThread {
+  id: string;
+  author: string;
+  path?: string;
+  line?: number;
+  body: string;
+}
+
 export interface PrSnapshot {
   sha: string;
   mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
   mergeState: string;
   checks: Check[];
+  botThreads?: BotThread[];
 }
+
+interface ThreadNode {
+  id: string;
+  isResolved: boolean;
+  comments: { nodes: { author: { __typename: string; login: string } | null; path?: string; line?: number | null; body: string }[] };
+}
+
+const BOT_THREADS_QUERY = `query($owner: String!, $repo: String!, $pr: Int!) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $pr) {
+      reviewThreads(first: 100) {
+        nodes { id isResolved comments(first: 50) { nodes { author { __typename login } path line body } } }
+      }
+    }
+  }
+}`;
+
+const isBot = (author: { __typename: string; login: string } | null): boolean =>
+  !!author && (author.__typename === "Bot" || author.login.endsWith("[bot]"));
+
+// A bot thread counts as answered once anyone other than a bot has replied in it.
+export const unansweredBotThreads = (nodes: ThreadNode[]): BotThread[] =>
+  nodes
+    .filter((t) => !t.isResolved && isBot(t.comments.nodes[0]?.author ?? null))
+    .filter((t) => t.comments.nodes.slice(1).every((c) => isBot(c.author)))
+    .map((t) => {
+      const first = t.comments.nodes[0];
+      return { id: t.id, author: first.author?.login ?? "", path: first.path, line: first.line ?? undefined, body: first.body.slice(0, 300) };
+    });
 
 export interface Ci {
   prForBranch: (cwd: string) => Promise<number | null>;
@@ -126,11 +165,17 @@ export const githubCi: Ci = {
     const checks = await sh(cwd, ["gh", "pr", "checks", String(pr), "--json", "name,bucket,link"]);
     // exit 8 = checks pending, 1 with "no checks reported" = none yet; both still print JSON or nothing
     const list = checks.out.startsWith("[") ? (JSON.parse(checks.out) as Check[]) : [];
+    const threads = await sh(cwd, [
+      "gh", "api", "graphql", "-f", `query=${BOT_THREADS_QUERY}`, "-F", "owner={owner}", "-F", "repo={repo}", "-F", `pr=${pr}`,
+      "--jq", ".data.repository.pullRequest.reviewThreads.nodes",
+    ]);
+    if (threads.code !== 0) throw new Error(`gh api graphql reviewThreads ${pr}: ${threads.err}`);
     return {
       sha: view?.headRefOid ?? "",
       mergeable: view?.mergeable ?? "UNKNOWN",
       mergeState: view?.mergeStateStatus ?? "",
       checks: list,
+      botThreads: threads.out.startsWith("[") ? unansweredBotThreads(JSON.parse(threads.out) as ThreadNode[]) : [],
     };
   },
   waitForChecks: async (cwd, pr, timeoutMin) => {

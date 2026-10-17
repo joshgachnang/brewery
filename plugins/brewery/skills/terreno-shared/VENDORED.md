@@ -3,7 +3,9 @@
 Not a skill (no `SKILL.md`). Shared references for `distill`, `cut`, `barrel`, and `finish`.
 
 Copied from [TerrenoLabs/terreno](https://github.com/TerrenoLabs/terreno) at `d8fdd897`
-(plugin `terreno` 2.12.0, `plugins/terreno-claude/`):
+(plugin `terreno` 2.12.0, `plugins/terreno-claude/`), then resynced with terreno's
+push-ownership change (`push-ownership.md` added; Taste, Brew, async-review-bots,
+lifecycle-contract, and pick-roast-loop updated):
 
 | Here | Upstream | Changes |
 | --- | --- | --- |

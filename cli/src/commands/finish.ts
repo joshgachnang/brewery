@@ -12,15 +12,18 @@ import { asksFrom, gate } from "./gate.ts";
 
 export type Outcome = "done" | "waiting";
 
-export const isGreen = (snap: PrSnapshot): boolean =>
+const checksGreen = (snap: PrSnapshot): boolean =>
   snap.mergeable !== "CONFLICTING" && snap.checks.every((c) => c.bucket === "pass" || c.bucket === "skipping");
+
+// Done means green checks and no bot comment left unanswered, not just green checks.
+export const isGreen = (snap: PrSnapshot): boolean => checksGreen(snap) && !snap.botThreads?.length;
 
 const failureKey = (snap: PrSnapshot): string =>
   `${snap.sha}|${snap.mergeable}|${snap.checks
     .filter((c) => c.bucket === "fail" || c.bucket === "cancel")
     .map((c) => c.name)
     .sort()
-    .join(",")}`;
+    .join(",")}|${(snap.botThreads ?? []).map((t) => t.id).sort().join(",")}`;
 
 export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome> => {
   const { state, config } = ctx;
@@ -44,7 +47,7 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
     ctx.log(`… waiting on CI for PR #${pr}`);
     await ci.waitForChecks(state.repo, pr, config.limits.ciWaitMin);
     const snap = await ci.snapshot(state.repo, pr);
-    const ciState = isGreen(snap) && !snap.checks.some((c) => c.bucket === "pending") ? "pass" :
+    const ciState = checksGreen(snap) && !snap.checks.some((c) => c.bucket === "pending") ? "pass" :
       snap.mergeable === "CONFLICTING" || snap.checks.some((c) => c.bucket === "fail" || c.bucket === "cancel") ? "fail" : "pending";
     appendEvent(state, { kind: "ci", state: ciState });
     if (isGreen(snap) && !snap.checks.some((c) => c.bucket === "pending")) {
@@ -63,16 +66,24 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
       return "done";
     }
     const failing = snap.checks.filter((c) => c.bucket === "fail" || c.bucket === "cancel");
-    if (!failing.length && snap.mergeable !== "CONFLICTING") continue; // only pending: wait again
+    if (!failing.length && snap.mergeable !== "CONFLICTING" && !snap.botThreads?.length) continue; // only pending: wait again
     await recordFailures(state, ci, snap.sha, failing);
 
     const key = failureKey(snap);
     run.stuck = key === run.lastKey ? run.stuck + 1 : 0;
     run.lastKey = key;
     if (run.stuck >= 2) {
-      const detail = `Same failure after two reactions on ${snap.sha.slice(0, 8)}: ${failing.map((c) => `${c.name} ${c.link ?? ""}`).join(", ") || "merge conflict"}.`;
+      const detail = `Same failure after two reactions on ${snap.sha.slice(0, 8)}: ${failing.map((c) => `${c.name} ${c.link ?? ""}`).join(", ") || (snap.mergeable === "CONFLICTING" ? "merge conflict" : `${snap.botThreads?.length ?? 0} unanswered bot threads`)}.`;
       await gate(ctx, [{ q: "CI is stuck on the same failure. How should I proceed?", rec: "retry", opts: ["retry: <hint>", "stop"] }], "CI is stuck", detail);
       run.stuck = 0;
+      saveState(state);
+      return "waiting";
+    }
+
+    // Three fix rounds that left the PR red: escalate instead of starting a fourth.
+    if (run.pushes >= config.limits.finishPushes) {
+      await gate(ctx, [{ q: `BLOCKED — PR #${pr} still red after ${run.pushes} fix rounds. Keep going?`, rec: "retry", opts: ["retry", "stop"] }], "too many fix pushes", `Still failing on ${snap.sha.slice(0, 8)}: ${failing.map((c) => `${c.name} ${c.link ?? ""}`).join(", ") || "merge conflict or unanswered bot threads"}.`);
+      run.pushes = 0;
       saveState(state);
       return "waiting";
     }
@@ -87,12 +98,6 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
     if (after.sha !== snap.sha) {
       run.pushes += 1;
       run.stuck = 0;
-      if (run.pushes > config.limits.finishPushes) {
-        await gate(ctx, [{ q: `${run.pushes} fix pushes and PR #${pr} is still red. Keep going?`, rec: "retry", opts: ["retry", "stop"] }], "too many fix pushes", result.action);
-        run.pushes = 0;
-        saveState(state);
-        return "waiting";
-      }
     }
     saveState(state);
   }

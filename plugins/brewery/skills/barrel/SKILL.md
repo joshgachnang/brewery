@@ -15,6 +15,7 @@ how each step is done:
 | Finish | the `finish` skill | until the PR is conflict-free with green CI |
 
 Read [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
+[`push ownership`](../terreno-shared/push-ownership.md),
 [`pick-roast loop`](../terreno-shared/pick-roast-loop.md),
 [`subagent briefing`](../terreno-shared/subagent-briefing.md), and
 [`reaching the human`](../terreno-shared/reaching-the-human.md). Execution state conforms
@@ -66,14 +67,18 @@ interactive, single-session run.
    Build with the evidence), `roast` (reprove the named task), or `brew` (submission-only
    retry). On `PASS` or `PENDING` with `next: taste` → Finish.
 4. **Finish.** Invoke the `finish` skill with the PR number and the state path. It loops
-   Taste until the PR is conflict-free with passing CI on every host, or it blocks.
+   Taste until the PR is conflict-free with passing CI on every host and every
+   review-bot comment answered, or it escalates after three fix rounds. Barrel never
+   ends between Brew and a terminal `finish` result.
 5. **Report.** Once, at the end:
    `PASS — <n>/<n> tasks Roast-verified, PR #<pr> conflict-free with green CI.`
    Then list the completed tasks, the Roast failures found and how each was fixed, the
    checks and artifacts, Open-question recommendations the build relied on, review
    threads still waiting on a human, residual risk, and PR deployment URLs. Send the
    headline through [`reaching the human`](../terreno-shared/reaching-the-human.md) as a
-   notice, not a question.
+   notice, not a question. When `finish` blocked instead, the report starts with
+   `BLOCKED — PR #<pr> still red after <k> fix rounds` and goes out as a blocker. Never
+   report `PASS` for a red PR.
 
 Do not narrate each cycle. The ledger holds it.
 
@@ -101,4 +106,6 @@ remediation or a bounded retry first. Report them as non-human blocks, not quest
 
 - merge the PR, approve your own plan, or build Expansions
 - push during Build (Brew pushes; `finish` pushes after that)
+- end a run with the PR red, unwatched, or carrying an unanswered bot comment without
+  escalating it
 - commit execution state, add AI attribution, or use conventional-commit prefixes
