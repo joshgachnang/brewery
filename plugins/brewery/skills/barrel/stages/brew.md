@@ -13,6 +13,7 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
 [`PR deployments`](../../terreno-shared/pr-deployments.md),
 [`product CI`](../../terreno-shared/product-ci.md),
 [`async review bots`](../../terreno-shared/async-review-bots.md),
+[`push ownership`](../../terreno-shared/push-ownership.md),
 [`independent review procedure`](../../terreno-shared/independent-review.md), and
 [`subagent briefing`](../../terreno-shared/subagent-briefing.md). All GitHub text
 must follow the [`GitHub attention contract`](../../terreno-shared/github-attention-contract.md).
@@ -87,7 +88,9 @@ must follow the [`GitHub attention contract`](../../terreno-shared/github-attent
     Collapse per the lifecycle contract. Close the chat with PR deployment URLs when
     the PR has them. Brew itself never executes Taste inline.
 12. **Hand off.** Exit; `barrel` runs the `finish` skill (Taste until green). Do not
-    end the session by telling the human to run Taste later.
+    end the session by telling the human to run Taste later. A pushed PR is never left
+    unwatched: if `finish` cannot run, escalate per
+    [`push ownership`](../../terreno-shared/push-ownership.md#escalation).
 
 ## Supporting skills
 

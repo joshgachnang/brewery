@@ -262,6 +262,8 @@ Current snapshot of head ${snap.sha}:
 - mergeable: ${snap.mergeable} (${snap.mergeState})
 - checks:
 ${snap.checks.map((c) => `  - ${c.bucket.toUpperCase()} ${c.name}${c.link ? ` ${c.link}` : ""}`).join("\n") || "  (none)"}
+- unanswered bot review threads:
+${(snap.botThreads ?? []).map((t) => `  - ${t.id} ${t.author}${t.path ? ` ${t.path}${t.line ? `:${t.line}` : ""}` : ""}: ${t.body.replace(/\s+/g, " ")}`).join("\n") || "  (none)"}
 
 Act on it:
 - A conflict: merge the latest base and resolve per taste step 9. A conflict that needs a
@@ -269,7 +271,9 @@ Act on it:
 - A branch-caused failure: fix it, run the pre-push gates, push.
 - A failure the branch did not cause (fails on base too, known flake, infrastructure): rerun
   only the failed jobs (\`gh run rerun <id> --failed\`). Never push code for it.
-- Actionable review-bot findings on this head: address them.
+- Every unanswered bot thread above: fix it and resolve the thread, or reply with one
+  sentence (false positive, intended, or out of scope with a follow-up link) and resolve
+  it. Leave one open only as a human decision, with an \`ask\`. Never leave one unanswered.
 Status PASS after acting (or when nothing was actionable), with \`sha\` set to the head you
 leave. BLOCKED for a human decision, with \`ask\`.`;
 

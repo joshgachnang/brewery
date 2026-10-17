@@ -1151,6 +1151,27 @@ describe("finish", () => {
     expect(ctx.state.history.filter((h) => h.stage === "taste")).toHaveLength(1);
   });
 
+  test("reacts to an unanswered bot thread on a green head instead of finishing", async () => {
+    const repo = tempRepo();
+    const { config } = fakeSetup(repo, [{ match: "taste", result: { status: "PASS", action: "replied and resolved" } }]);
+    const ctx = quietCtx(newState({ slug: "pr-7", repo, ip: "", base: "master", phase: "finish" }), config);
+    const withThread = { ...green("a"), botThreads: [{ id: "T1", author: "cursor", path: "a.ts", line: 3, body: "Possible null deref" }] };
+    expect(await finish(ctx, fakeCi([withThread, green("a")]), 7)).toBe("done");
+    expect(ctx.state.history.filter((h) => h.stage === "taste")).toHaveLength(1);
+  });
+
+  test("escalates after three fix rounds that leave the PR red", async () => {
+    const repo = tempRepo();
+    const { config } = fakeSetup(repo, [{ match: "taste", result: { status: "PASS", action: "pushed a fix" } }]);
+    const ctx = quietCtx(newState({ slug: "pr-7", repo, ip: "", base: "master", phase: "finish" }), config);
+    const redFail = (sha: string, name: string): PrSnapshot => ({ ...red(sha), checks: [{ name, bucket: "fail" }] });
+    const ci = fakeCi([redFail("a", "t1"), redFail("b", "t2"), redFail("b", "t2"), redFail("c", "t3"), redFail("c", "t3"), redFail("d", "t4"), redFail("d", "t4"), redFail("e", "t5")]);
+    expect(await finish(ctx, ci, 7)).toBe("waiting");
+    expect(ctx.state.waiting?.kind).toBe("gate");
+    expect(ctx.state.waiting?.asks[0]?.q).toContain("BLOCKED — PR #7 still red after 3 fix rounds");
+    expect(ctx.state.history.filter((h) => h.stage === "taste")).toHaveLength(3);
+  });
+
   test("gates when the same failure survives two reactions", async () => {
     const repo = tempRepo();
     const { config } = fakeSetup(repo, [{ match: "taste", result: { status: "PASS", action: "reran" } }]);

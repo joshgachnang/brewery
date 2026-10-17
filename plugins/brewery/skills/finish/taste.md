@@ -16,8 +16,13 @@ Read the shared [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
 [`documentation contract`](../terreno-shared/documentation-contract.md),
 [`PR deployments`](../terreno-shared/pr-deployments.md),
 [`product CI`](../terreno-shared/product-ci.md),
-[`async review bots`](../terreno-shared/async-review-bots.md), and
+[`async review bots`](../terreno-shared/async-review-bots.md),
+[`push ownership`](../terreno-shared/push-ownership.md), and
 [`GitHub attention contract`](../terreno-shared/github-attention-contract.md).
+
+Taste owns the PR until it is clean or escalated. Never leave it red, pending with no
+watcher, or carrying an unanswered bot comment. After three fix rounds that did not
+make it clean, stop and escalate per push ownership.
 
 ## Preconditions
 
@@ -70,6 +75,9 @@ Read the shared [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
    - terminal/pass, pending/running, branch-caused actionable failure,
      unrelated/flaky/external failure, mechanical conflict, actionable review issue,
      clarification/non-actionable, or human decision.
+   - Every unresolved bot thread or finding is actionable work: fix it, decline it with
+     a one-sentence reply, or raise it as a human decision. "Non-actionable" never
+     leaves a bot thread unanswered.
    - Pending is never passing; old green results never satisfy a new head.
    - Review-bot or product-CI timeout is `PENDING`, not passing.
 8. **Act once on current actionable work.**
@@ -78,7 +86,11 @@ Read the shared [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
      discipline and applicable project skills.
    - For a mechanical conflict, integrate the latest base using repository policy,
      preserve both intended changes, and never rewrite pushed history unless allowed.
-   - Do not push speculative code for unrelated/flaky/external failures.
+   - Answer every unresolved bot thread in this reaction per
+     [`push ownership`](../terreno-shared/push-ownership.md#bot-comments).
+   - Do not push speculative code for unrelated/flaky/external failures. Rerun only
+     the failed jobs instead (`gh run rerun <run-id> --failed`, or the host's
+     rerun-from-failed). A rerun counts as a fix round.
 9. **Before any push, in this order: fetch latest master, re-verify last-run failed tests, run the local pre-push gate, then watch.**
    1. Always fetch the latest `master` (use the PR base if it is not `master`). Merge it
       into this branch only when one of these holds:
@@ -119,9 +131,10 @@ Read the shared [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
       Capture updated evidence/artifacts. Missing mandatory capability is `BLOCKED`.
       Local pre-push failure is `FAIL` until fixed; do not push it.
 10. **Commit/push if changed, then watch.** Follow repository policy. Record the new
-   head. Resolve an addressed thread silently when the diff is self-explanatory. Reply
-   only when a non-obvious decision must be preserved, using no more than three short
-   sentences. After a push, wait again for review bots and then the product-CI wait
+   head. Record the fix round as a Taste `ledger` entry. Resolve an addressed thread
+   silently when the diff is self-explanatory. Reply only when a non-obvious decision
+   must be preserved, using no more than three short sentences. Reply to and resolve
+   each declined bot thread. After a push, wait again for review bots and then the product-CI wait
    loop on the new head (`gh pr checks <pr> --watch`, `gh run watch`,
    `circleci run watch --sha <sha>`), then act on those results once more in this
    invocation. A further push after that second act is `PENDING`. Do not watch product
@@ -138,9 +151,10 @@ Read the shared [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
 13. **Emit and exit.** If step 10 pushed, do this only after its post-push review-bot
     wait, product-CI wait loop, and at most one follow-up act on those results. If step 10 did not push, emit after the initial observe/act path.
    - Every host has terminal/non-failing jobs or a documented not-applicable skip, with
-     no conflicts and no actionable reviews → `PASS`.
-   - No safe current action because of human/access/external/environment gate →
-     `BLOCKED`.
+     no conflicts, no unanswered bot thread, and no actionable human review → `PASS`.
+   - No safe current action because of human/access/external/environment gate, or
+     three fix rounds spent without a clean PR → `BLOCKED`, escalated per
+     [`push ownership`](../terreno-shared/push-ownership.md#escalation).
    - Otherwise `PENDING` with `next: taste` and `wait`: review-bot timeout, product-CI
      wait timeout, leftover pending jobs after timeout, or a second post-fix push. Do
      not emit `PENDING` while actionable Bugbot/CodeQL findings from the post-push wait
@@ -167,15 +181,19 @@ Under standalone entry, when step 13 would emit `PENDING`:
 3. Start the next reaction at step 1 against the current head. Do not reuse
    conclusions from the previous reaction.
 
-Stop only on `PASS`, `BLOCKED`, or `FAIL` without a new evidence-based hypothesis, or
-when a bound is reached:
+Stop only on `PASS` or `BLOCKED`. A `FAIL` with a new evidence-based hypothesis starts
+the next reaction. A `FAIL` without one is `BLOCKED`. Bounds:
 
-- at most 3 fix pushes across all reactions;
+- at most 3 fix rounds (fix pushes plus flaky-job reruns) across all reactions;
 - at most 3 hours of total waiting on CI and review bots.
 
-A reached bound is `BLOCKED` (`kind: external`), naming the head, the jobs still
-pending or failing, and the one action a human should take. Never end with "run Taste
-later". The final chat message gives the terminal verdict and PR deployment URLs.
+A reached bound is `BLOCKED` (`kind: external`) and is escalated per
+[`push ownership`](../terreno-shared/push-ownership.md#escalation): the final message
+starts with `BLOCKED — PR #<n> still red after <k> fix rounds`, then names the head,
+the jobs still pending or failing with log links, what each round changed, unanswered
+bot threads, and the one action a human should take. Send a push notification when the
+harness offers one. Never end with "run Taste later", and never end quietly on a red
+PR. The final chat message gives the terminal verdict and PR deployment URLs.
 
 ## Supporting skills
 
@@ -210,7 +228,7 @@ For the **current head**:
 - GitHub checks alone never satisfy `PASS` when another in-scope host still has
   incomplete or failing jobs
 - no merge conflict exists
-- no actionable review finding remains
+- no actionable review finding remains, and every bot thread is resolved or answered
 - PR is mergeable or only awaiting policy-required human approval
 
 Emit `PASS` with `next: null`.

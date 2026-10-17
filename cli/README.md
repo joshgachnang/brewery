@@ -16,8 +16,9 @@ brewery barrel <slug>            ready tasks (up to parallelTasks), each: create
                                   if tasks overlapped: integrated roast → repair and commit → roast again
                                   branch review: claude + codex in parallel → fix blocking findings
                                   brew: claude opens the PR
-                                  finish: gh waits (no tokens) → claude tastes each red snapshot
-                                  → PR conflict-free and green, exit 0
+                                  finish: gh waits (no tokens) → claude tastes each red snapshot or unanswered bot thread
+                                  → PR conflict-free, green, bot comments answered, exit 0
+                                  (still red after 3 fix rounds → BLOCKED gate to the human)
 ```
 
 ## Install
@@ -51,7 +52,7 @@ the litellm gateway, so they get a real tool-using harness:
   "stages": { "pick": ["codex"], "roast": ["claude", "local"], "cut": ["claude", "codex", "local"] },
   "notify": { "ntfyUrl": "https://ntfy.sh/<topic>" },
   "worktreeSetup": ["bun bootstrap"],
-  "limits": { "pickAttempts": 3, "parallelTasks": 3, "finishPushes": 6, "finishHours": 4 }
+  "limits": { "pickAttempts": 3, "parallelTasks": 3, "finishPushes": 3, "finishHours": 4 }
 }
 ```
 

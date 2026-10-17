@@ -58,6 +58,13 @@ Never hand-roll a sleep loop when the provider CLI or harness supplies a bounded
 watch/subscription hook. If fallback polling is necessary, use the harness sleep
 primitive and record why no hook applied. Do not busy-spin.
 
+## Address every finding
+
+Waiting is not the goal; answering is. Taste handles every bot thread and finding on
+the PR per [`push ownership`](push-ownership.md#bot-comments): fixed and resolved,
+declined with a one-sentence reply and resolved, or left open only as a human
+decision. An unanswered bot thread blocks Taste `PASS`.
+
 ## Bounds
 
 - This wait is only for review bots, never "until all CI is green."

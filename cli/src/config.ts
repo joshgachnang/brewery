@@ -100,7 +100,7 @@ export const DEFAULT_CONFIG: Config = {
     parallelTasks: 3,
     cutRounds: 2,
     reviewRounds: 1,
-    finishPushes: 6,
+    finishPushes: 3,
     finishHours: 4,
     ciWaitMin: 45,
     stepTimeoutMin: 90,

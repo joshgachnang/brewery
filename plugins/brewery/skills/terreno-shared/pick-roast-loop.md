@@ -77,7 +77,8 @@ not loop bookkeeping:
 - Progress lives in execution state (`.terreno/pipeline/<slug>.json`), which is
   git-ignored. Do not commit task-file checkbox edits on their own.
 - Pick and Roast do not push. Brew pushes once after the whole list has Roast `PASS`.
-  Taste pushes at most once per reaction.
+  Taste pushes at most once per reaction. Whoever pushes follows
+  [`push ownership`](push-ownership.md).
 - Do not start the next task while product CI on the pushed head reports a
   branch-caused failure. Fix it first. Never wait on pending CI, and record
   failures the branch did not cause for Taste instead of blocking on them.
