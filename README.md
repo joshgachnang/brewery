@@ -5,13 +5,18 @@ plugin, with a manifest for each tool beside it.
 
 | Plugin | Skills |
 |---|---|
-| `brewery` | `distill`, `cut`, `barrel`, `finish`, `compound`, `cellar`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
+| `brewery` | `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
 
 Copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at `14e3a0c`.
 Everything else in shade's `.claude/skills` stays there, including the unmodified `terreno-*`
 lifecycle copies, which the upstream [terreno marketplace](https://github.com/FlourishHealth/terreno)
 already serves to both tools.
 `terreno-shared/VENDORED.md` explains how the brewery skills relate to upstream terreno.
+
+`tap` is barrel for bugs: give it issue numbers, tracker IDs, or a query ("the better-auth
+issues from the last day") and it triages them, writes a short pre-approved fix IP, builds
+each fix test-first through Pick and Roast, and runs `finish` on the PR. Issues that need a
+product decision are reported instead of built.
 
 `compound` and `cellar` are the learning loop: compound records at most one learning after
 work that struggled, and cellar is the nightly per-repo pass that promotes recurring
