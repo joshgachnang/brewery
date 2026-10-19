@@ -155,7 +155,7 @@ code.
     against a real terreno PR with `BREWERY_APPROVE_TOKEN` prints a verdict (recorded in the
     PR evidence, not a test).
 
-- [ ] **T8** — CI templates and docs
+- [x] **T8** — CI templates and docs
   - Depends on: T6
   - Files: `templates/ci/circleci-approve.yml`, `templates/ci/github-approve.yml`, `cli/README.md`,
     `README.md`, `docs/approve.md`

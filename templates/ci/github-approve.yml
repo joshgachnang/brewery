@@ -1,0 +1,61 @@
+# brewery approve as a GitHub Actions workflow. Runs on pull_request_target so the App
+# credentials are available for pull requests from forks, with the BASE branch checked out:
+# PR code is read through git (gh pr diff, git show <head>:path), never executed.
+#
+# Repository or organization secrets: ANTHROPIC_API_KEY, BREWERY_APP_ID, BREWERY_APP_PRIVATE_KEY.
+# Optional variables: BREWERY_APP_SLUG, BREWERY_APP_INSTALLATION_ID.
+name: brewery approve
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: read
+
+concurrency:
+  group: brewery-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  approve:
+    # Nothing here waits for the PR's other workflows. Pending checks block approval, so
+    # either trigger this from a workflow_run of your CI, or accept that a push gets its
+    # verdict on the rerun after CI finishes.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          fetch-depth: 0
+
+      - name: Fetch the pull request head as a ref
+        run: git fetch origin "pull/${{ github.event.pull_request.number }}/head:pr-head"
+
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.6"
+
+      - name: Install Claude Code and brewery
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          # Pin a tag or commit of joshgachnang/brewery once one is cut; master until then.
+          git clone --depth 1 --branch master https://github.com/joshgachnang/brewery.git "$HOME/brewery"
+          cd "$HOME/brewery/cli" && bun install --frozen-lockfile
+
+      - name: brewery approve
+        # The verdict is posted to the PR; a not-approved verdict is not a workflow failure.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BREWERY_APP_ID: ${{ secrets.BREWERY_APP_ID }}
+          BREWERY_APP_PRIVATE_KEY: ${{ secrets.BREWERY_APP_PRIVATE_KEY }}
+          BREWERY_APP_SLUG: ${{ vars.BREWERY_APP_SLUG }}
+          BREWERY_APP_INSTALLATION_ID: ${{ vars.BREWERY_APP_INSTALLATION_ID }}
+        run: bun "$HOME/brewery/cli/src/cli.ts" approve "${{ github.event.pull_request.number }}" --repo "$PWD"

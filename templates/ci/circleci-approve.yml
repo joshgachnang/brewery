@@ -1,0 +1,65 @@
+# brewery approve as a CircleCI job. Paste the job into your config (or continue-config.yml)
+# and add it to the workflow after the test jobs, so check results for the head exist when it
+# runs. It only acts on pull request pipelines and never fails the pipeline on its own verdict.
+#
+# Project environment variables (Project Settings → Environment Variables):
+#   ANTHROPIC_API_KEY          the model key the read-only agent runs with
+#   BREWERY_APP_ID             the brewery-approve GitHub App id
+#   BREWERY_APP_PRIVATE_KEY    its private key, PEM (literal \n sequences are fine)
+#   BREWERY_APP_SLUG           optional; the App slug when it is not brewery-approve
+#   BREWERY_APP_INSTALLATION_ID optional; skips the installation lookup
+# GH_TOKEN is still needed for the read side (gh pr view, gh pr diff): a GitHub App
+# installation token works there too, or a fine-grained PAT with pull request read.
+version: 2.1
+
+jobs:
+  approve:
+    docker:
+      - image: cimg/node:22.14
+    resource_class: small
+    environment:
+      # Pin a tag or commit of joshgachnang/brewery once one is cut; master until then.
+      BREWERY_REF: master
+    steps:
+      - checkout
+      - run:
+          name: Skip outside pull requests
+          command: |
+            if [ -z "${CIRCLE_PULL_REQUEST:-}" ]; then
+              echo "Not a pull request pipeline; nothing to approve."
+              circleci-agent step halt
+            fi
+      - run:
+          name: Install bun and gh
+          command: |
+            curl -fsSL https://bun.sh/install | bash
+            echo 'export PATH="$HOME/.bun/bin:$PATH"' >> "$BASH_ENV"
+            if ! command -v gh >/dev/null; then
+              curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null
+              sudo apt-get update -qq && sudo apt-get install -y -qq gh
+            fi
+      - run:
+          name: Install Claude Code and brewery
+          command: |
+            npm install -g @anthropic-ai/claude-code
+            git clone --depth 1 --branch "$BREWERY_REF" https://github.com/joshgachnang/brewery.git "$HOME/brewery"
+            cd "$HOME/brewery/cli" && bun install --frozen-lockfile
+      - run:
+          name: brewery approve
+          # The verdict is posted to the PR; a not-approved verdict is not a pipeline failure.
+          command: |
+            # The base branch (change "master" if yours differs). Fork PRs run as pull/N; the
+            # head is already checked out, so only the base needs fetching then.
+            git fetch origin master
+            case "$CIRCLE_BRANCH" in pull/*) ;; *) git fetch origin "$CIRCLE_BRANCH" ;; esac
+            PR="${CIRCLE_PULL_REQUEST##*/}"
+            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR" --repo "$PWD" || echo "brewery approve could not produce a verdict (see above)"
+
+# workflows:
+#   build:
+#     jobs:
+#       - test
+#       - approve:
+#           requires: [test]
+#           context: brewery-approve
