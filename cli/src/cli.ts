@@ -5,7 +5,9 @@ import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
-import { approve, gitReaders } from "./commands/approve.ts";
+import { approve, gitReaders, type Poster } from "./commands/approve.ts";
+import { githubPoster } from "./approve/github.ts";
+import { installationToken } from "./approve/token.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
@@ -18,7 +20,7 @@ import { readReplyFromTty } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";
 import type { Ctx } from "./step.ts";
-import { defaultBase, ensureExcluded, githubCi, repoRoot } from "./vcs.ts";
+import { defaultBase, ensureExcluded, githubCi, repoRoot, sh } from "./vcs.ts";
 
 const HELP = `brewery — plan and ship a feature with separate agents per step.
 
@@ -64,8 +66,18 @@ changes than allowed (no PR), 1 error.`;
 
 const WAITING = 3;
 
-// Replaced by the GitHub App poster in the posting slice; until then only --dry-run runs.
-const githubPoster = async (_repo: string): Promise<undefined> => undefined;
+// The App identity for posting. A dry run only needs the login, for the skip gates.
+const appAuth = async (repo: string, dryRun: boolean): Promise<{ poster?: Poster; appLogin?: string }> => {
+  const env = process.env;
+  if (dryRun) {
+    const slug = env.BREWERY_APP_SLUG;
+    return { appLogin: slug ? (slug.endsWith("[bot]") ? slug : `${slug}[bot]`) : undefined };
+  }
+  const name = (await sh(repo, ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])).out;
+  if (!name) throw new Error("brewery approve: cannot resolve owner/name for this repository (gh repo view)");
+  const auth = await installationToken({ repo: name, env });
+  return { poster: githubPoster({ repo: name, token: auth.token, appLogin: auth.appLogin, log }), appLogin: auth.appLogin };
+};
 
 const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string, string | true> } => {
   const positional: string[] = [];
@@ -219,7 +231,8 @@ const cmdApprove = async (positional: string[], flags: Record<string, string | t
   return withRunLock(state, async () => {
     saveState(state);
     const ctx = makeCtx(state, str(flags.agents), flags.parallel);
-    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: dryRun ? undefined : await githubPoster(repo) }, pr, { dryRun, view });
+    const auth = await appAuth(repo, dryRun);
+    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: auth.poster }, pr, { dryRun, view, appLogin: auth.appLogin });
     if (outcome.verdict) log(`\n${JSON.stringify({ level: outcome.verdict.level, approve: outcome.verdict.approve, reasons: outcome.verdict.reasons, dimensions: outcome.verdict.dimensions, findings: outcome.verdict.findings, gates: outcome.verdict.gates, classification: outcome.verdict.classification }, null, 2)}`);
     log(`\n${outcome.body}`);
     return 0;

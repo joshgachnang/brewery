@@ -137,7 +137,7 @@ code.
     not-approve verdict, and a skip; snapshot of the rendered body; `--dry-run` performs no
     write calls on the fake.
 
-- [ ] **T7** — GitHub posting as the App
+- [x] **T7** — GitHub posting as the App
   - Depends on: T6
   - Files: `cli/src/approve/github.ts`, `cli/src/approve/token.ts`, `cli/test/approve-github.test.ts`
   - `installationToken()`: `BREWERY_APPROVE_TOKEN` if set; else sign a JWT (RS256, `node:crypto`)

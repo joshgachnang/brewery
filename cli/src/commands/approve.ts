@@ -57,12 +57,12 @@ export const skipReason = (context: ApproveContext, appLogin: string | undefined
   return null;
 };
 
-export const approve = async (ctx: Ctx, deps: ApproveDeps, pr: number, opts: { dryRun: boolean; view?: PrView }): Promise<ApproveOutcome> => {
+export const approve = async (ctx: Ctx, deps: ApproveDeps, pr: number, opts: { dryRun: boolean; view?: PrView; appLogin?: string }): Promise<ApproveOutcome> => {
   const { log } = ctx;
   const context = await gatherContext({ ci: deps.ci, repo: ctx.state.repo, pr, view: opts.view, readBase: deps.readBase, readHead: deps.readHead, baseSha: deps.baseSha });
   const head = context.pr.headSha;
   log(`approve #${pr} at ${head.slice(0, 7)} (${context.files.length} files, policy ${context.policy.source})`);
-  const skipped = skipReason(context, deps.poster?.appLogin);
+  const skipped = skipReason(context, opts.appLogin ?? deps.poster?.appLogin);
   if (skipped) {
     const body = renderSkip(head, skipped);
     log(`  skip: ${skipped}`);
