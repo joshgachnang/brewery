@@ -27,12 +27,51 @@ export interface AgentProfile {
   timeoutMin?: number;
 }
 
-export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste", "compound", "cellar"] as const;
+export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste", "compound", "cellar", "approve"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Stages whose agents all run and whose verdicts are merged. Every other stage uses
 // the first available agent in its list.
-export const FAN_OUT: ReadonlySet<Stage> = new Set<Stage>(["cut", "roast", "review"]);
+export const FAN_OUT: ReadonlySet<Stage> = new Set<Stage>(["cut", "roast", "review", "approve"]);
+
+export type RiskLevel = "low" | "medium" | "high";
+
+// One `brewery approve` path rule. A file's categories come from every rule it matches.
+// `floor` raises the PR's minimum level, `ceiling` caps it (only when every changed file
+// matches a ceiling rule), and `never` blocks approval outright.
+export interface PathRule {
+  match: string[];
+  category: string;
+  floor?: RiskLevel;
+  ceiling?: RiskLevel;
+  never?: boolean;
+}
+
+export interface ApproveConfig {
+  // Levels the App may approve. Empty means comment-only (dry-run rollout).
+  approveLevels: RiskLevel[];
+  // Repo-relative rubric markdown, read from the base branch. Absent → the shipped default.
+  rubric: string;
+  // Where implementation plans live, searched in order.
+  planDirs: string[];
+  skipAuthors: string[];
+  skipLabels: string[];
+  maxLines: number;
+  maxFiles: number;
+  // A repo's list replaces this one wholesale.
+  pathRules: PathRule[];
+}
+
+export const DEFAULT_PATH_RULES: PathRule[] = [
+  { match: ["docs/**", "**/*.md"], category: "docs", ceiling: "low" },
+  { match: ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "e2e/**", "**/__snapshots__/**", "**/fixtures/**"], category: "tests", ceiling: "low" },
+  { match: ["**/auth/**", "**/permissions/**", "**/session*"], category: "auth", floor: "high" },
+  { match: ["**/migrations/**", "**/models/**"], category: "migrations", floor: "high" },
+  { match: ["terraform/**", "infra/**", "Dockerfile*", "**/*.env*"], category: "infra", floor: "high" },
+  { match: [".circleci/**", ".github/workflows/**", ".github/scripts/**"], category: "ci", never: true },
+  { match: [".brewery.json", "docs/approval-rubric.md"], category: "policy", never: true },
+  { match: ["**/bun.lock", "**/package.json", "**/yarn.lock"], category: "deps", floor: "medium" },
+];
 
 export interface Limits {
   pickAttempts: number;
@@ -59,6 +98,7 @@ export interface Config {
   // The repo handles PHI (Flourish): nothing derived from CI logs is committed.
   phi: boolean;
   limits: Limits;
+  approve: ApproveConfig;
 }
 
 export const DEFAULT_CONFIG: Config = {
@@ -88,6 +128,7 @@ export const DEFAULT_CONFIG: Config = {
     taste: ["claude"],
     compound: ["claude"],
     cellar: ["claude"],
+    approve: ["claude"],
   },
   skillsDir: join(homedir(), ".claude", "skills"),
   worktreeSetup: [],
@@ -105,11 +146,22 @@ export const DEFAULT_CONFIG: Config = {
     ciWaitMin: 45,
     stepTimeoutMin: 90,
   },
+  approve: {
+    approveLevels: ["low"],
+    rubric: "docs/approval-rubric.md",
+    planDirs: ["docs/implementationPlans", "docs/plans", "docs/tasks"],
+    skipAuthors: ["dependabot[bot]"],
+    skipLabels: ["do-not-merge", "hold"],
+    maxLines: 800,
+    maxFiles: 40,
+    pathRules: DEFAULT_PATH_RULES,
+  },
 };
 
-type PartialConfig = Partial<Omit<Config, "limits" | "stages">> & {
+type PartialConfig = Partial<Omit<Config, "limits" | "stages" | "approve">> & {
   limits?: Partial<Limits>;
   stages?: Partial<Record<Stage, string[]>>;
+  approve?: Partial<ApproveConfig>;
 };
 
 const readJson = (path: string): PartialConfig => {
@@ -130,6 +182,7 @@ const merge = (base: Config, over: PartialConfig): Config => ({
   learn: over.learn ?? base.learn,
   phi: over.phi ?? base.phi,
   limits: { ...base.limits, ...over.limits },
+  approve: { ...base.approve, ...over.approve },
 });
 
 export const userConfigPath = (): string =>
