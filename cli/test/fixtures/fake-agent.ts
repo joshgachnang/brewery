@@ -12,6 +12,8 @@ interface Entry {
   write?: Record<string, string>;
   result?: Record<string, unknown>;
   noResult?: boolean;
+  // Read-only steps: print a claude-style json envelope with this structured output and write no file.
+  structured?: unknown;
   sleepMs?: number;
   signal?: string;
   waitFor?: string[];
@@ -73,7 +75,9 @@ for (const [path, content] of Object.entries(entry.write ?? {})) {
   mkdirSync(dirname(join(process.cwd(), path)), { recursive: true });
   writeFileSync(join(process.cwd(), path), content);
 }
-if (!entry.noResult) {
+if (entry.structured !== undefined) {
+  console.log(JSON.stringify({ type: "result", is_error: false, structured_output: entry.structured }));
+} else if (!entry.noResult) {
   writeFileSync(process.env.BREWERY_RESULT_FILE as string, JSON.stringify(entry.result ?? { status: "PASS", action: "done" }));
 }
 

@@ -30,6 +30,12 @@ separate agent processes, plus the learning loop (`init-docs`, journals, `compou
 nightly `brewery cellar <owner/name>`). It came from shade's `tools/brewery`; see
 `cli/README.md`. `cd cli && bun install && bun test`.
 
+## Approving pull requests
+
+`brewery approve <pr>` reviews a PR against a repo-owned rubric and posts one review as a
+GitHub App, approving low-risk PRs when the repo allows it. CI templates are in
+`templates/ci/`; the how-to and reference are in [`docs/approve.md`](docs/approve.md).
+
 ## Layout
 
 ```

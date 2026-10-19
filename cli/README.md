@@ -222,6 +222,19 @@ lines as they arrive and appends `narration` events for assistant text and brief
 summaries, such as `Read groupQueue.ts` or `Bash: bun test`. It ignores malformed lines,
 tool output, and final result records. `command` profiles emit only step start and end.
 
+## Approving pull requests: `brewery approve <pr>`
+
+One head, one verdict, one review posted as the brewery-approve GitHub App: `APPROVE` when
+the risk level is one the repo allows, `COMMENT` otherwise, plus a `brewery/approve` check
+run. Policy comes from the base branch's `.brewery.json` `approve` block and a rubric
+markdown; path rules set floors and ceilings in code; a clean agent judges plan-backed PRs
+against their plan; the rubric agent scores plan match, architecture, tests, and evidence;
+code clamps the level, applies the gates, and decides. `--dry-run` prints the verdict and
+body without posting. It runs inside the repo's CI after the test jobs
+(`templates/ci/circleci-approve.yml`, `templates/ci/github-approve.yml`). Everything,
+including the GitHub App's permissions and the rollout, is in
+[`docs/approve.md`](../docs/approve.md).
+
 ## Docs layout and learning
 
 `brewery init-docs` adds the standard layout to a repo and points `AGENTS.md`/`CLAUDE.md` at it:

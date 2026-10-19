@@ -5,6 +5,9 @@ import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
+import { approve, gitReaders, type Poster } from "./commands/approve.ts";
+import { githubPoster } from "./approve/github.ts";
+import { installationToken } from "./approve/token.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
@@ -17,7 +20,7 @@ import { readReplyFromTty } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";
 import type { Ctx } from "./step.ts";
-import { defaultBase, ensureExcluded, githubCi, repoRoot } from "./vcs.ts";
+import { defaultBase, ensureExcluded, githubCi, repoRoot, sh } from "./vcs.ts";
 
 const HELP = `brewery — plan and ship a feature with separate agents per step.
 
@@ -35,6 +38,11 @@ Usage:
       Approved IP → pick/roast every task → branch review → brew → finish.
   brewery finish [pr] [--slug s]
       Taste until the PR has no conflicts and all checks pass.
+  brewery approve <pr> [--dry-run] [--base <branch>]
+      Review one PR head against the repo's rubric (.brewery.json approve block, read
+      from the base branch) and post one review as the brewery-approve GitHub App:
+      APPROVE when the risk level is allowed, COMMENT otherwise, plus a check run.
+      --dry-run prints the verdict and the review body without posting.
   brewery cut <ip> [--request "text" | --context file]
       Attack an IP with only the human's words; prints findings.
   brewery cellar <owner/name> [--since <ISO date>] [--dry-run]
@@ -57,6 +65,19 @@ Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar proposed more
 changes than allowed (no PR), 1 error.`;
 
 const WAITING = 3;
+
+// The App identity for posting. A dry run only needs the login, for the skip gates.
+const appAuth = async (repo: string, dryRun: boolean): Promise<{ poster?: Poster; appLogin?: string }> => {
+  const env = process.env;
+  if (dryRun) {
+    const slug = env.BREWERY_APP_SLUG;
+    return { appLogin: slug ? (slug.endsWith("[bot]") ? slug : `${slug}[bot]`) : undefined };
+  }
+  const name = (await sh(repo, ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])).out;
+  if (!name) throw new Error("brewery approve: cannot resolve owner/name for this repository (gh repo view)");
+  const auth = await installationToken({ repo: name, env });
+  return { poster: githubPoster({ repo: name, token: auth.token, appLogin: auth.appLogin, log }), appLogin: auth.appLogin };
+};
 
 const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string, string | true> } => {
   const positional: string[] = [];
@@ -198,6 +219,26 @@ const cmdFinish = async (positional: string[], flags: Record<string, string | tr
   });
 };
 
+const cmdApprove = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  await ensureExcluded(repo);
+  const pr = positional[0] ? Number(positional[0]) : ((await githubCi.prForBranch(repo)) ?? undefined);
+  if (!pr || !Number.isSafeInteger(pr)) throw new Error("usage: brewery approve <pr> [--dry-run] [--base <branch>]");
+  const view = await githubCi.prView(repo, pr);
+  const base = str(flags.base) ?? view.base;
+  const state = newState({ slug: `approve-${pr}`, repo, ip: "", base, phase: "build" });
+  const dryRun = Boolean(flags["dry-run"]);
+  return withRunLock(state, async () => {
+    saveState(state);
+    const ctx = makeCtx(state, str(flags.agents), flags.parallel);
+    const auth = await appAuth(repo, dryRun);
+    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: auth.poster }, pr, { dryRun, view, appLogin: auth.appLogin });
+    if (outcome.verdict) log(`\n${JSON.stringify({ level: outcome.verdict.level, approve: outcome.verdict.approve, reasons: outcome.verdict.reasons, dimensions: outcome.verdict.dimensions, findings: outcome.verdict.findings, gates: outcome.verdict.gates, classification: outcome.verdict.classification }, null, 2)}`);
+    log(`\n${outcome.body}`);
+    return 0;
+  });
+};
+
 const cmdResume = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
   const slug = positional[0];
   if (!slug || positional.length !== 1) throw new Error("usage: brewery resume <slug> [--go]");
@@ -314,6 +355,8 @@ const main = async (): Promise<number> => {
       return cmdBarrel(positional, flags);
     case "finish":
       return cmdFinish(positional, flags);
+    case "approve":
+      return cmdApprove(positional, flags);
     case "cut":
       return cmdCut(positional, flags);
     case "cellar":

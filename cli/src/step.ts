@@ -1,7 +1,7 @@
 // Run one stage: pick its agent(s), give each a fresh process with a written prompt,
 // collect their result files, and record every run in history.
 import { join } from "node:path";
-import { availability, runAgent, type StepResult } from "./agents.ts";
+import { availability, runAgent, type ReadOnly, type StepResult } from "./agents.ts";
 import { FAN_OUT, type Config, type Stage } from "./config.ts";
 import { appendEvent } from "./events.ts";
 import { header } from "./prompts.ts";
@@ -42,6 +42,7 @@ export interface StageOptions {
   task?: string;
   cwd?: string;
   parallel?: boolean;
+  readOnly?: ReadOnly;
 }
 
 export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: StageOptions = {}): Promise<AgentResult[]> => {
@@ -61,11 +62,12 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       name: label,
       profile: config.agents[agent],
       cwd: opts.cwd ?? state.repo,
-      prompt: `${header(opts.cwd ? { ...ctx, state: { ...state, repo: opts.cwd } } : ctx, resultFile)}\n\n${body}`,
+      prompt: `${header(opts.cwd ? { ...ctx, state: { ...state, repo: opts.cwd } } : ctx, resultFile, { readOnly: Boolean(opts.readOnly) })}\n\n${body}`,
       promptFile: `${base}.prompt.md`,
       resultFile,
       logFile: `${base}.log`,
       timeoutMin: config.agents[agent].timeoutMin ?? config.limits.stepTimeoutMin,
+      readOnly: opts.readOnly,
       onNarration: (text) => appendEvent(state, { kind: "narration", seq, text }),
     });
     ctx.log(`  ${label}: ${outcome.result.status} in ${outcome.seconds}s — ${outcome.result.action}`);

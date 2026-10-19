@@ -29,6 +29,7 @@ const STEP_STAGE: Record<string, TerrenoStage> = {
   brew: "brew",
   taste: "taste",
   compound: "taste",
+  approve: "roast",
 };
 
 export interface LedgerEntry {
