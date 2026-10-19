@@ -4,10 +4,10 @@
 #
 # Project environment variables (Project Settings → Environment Variables):
 #   ANTHROPIC_API_KEY          the model key the read-only agent runs with
-#   BREWERY_APP_ID             the brewery-approve GitHub App id
-#   BREWERY_APP_PRIVATE_KEY    its private key, PEM (literal \n sequences are fine)
-#   BREWERY_APP_SLUG           optional; the App slug when it is not brewery-approve
-#   BREWERY_APP_INSTALLATION_ID optional; skips the installation lookup
+#   TERRENO_APP_ID             the terreno-approval-agent GitHub App id
+#   TERRENO_APP_PRIVATE_KEY    its private key, PEM (literal \n sequences are fine)
+#   TERRENO_APP_SLUG           optional; the App slug when it is not terreno-approval-agent
+#   TERRENO_APP_INSTALLATION_ID optional; skips the installation lookup
 # GH_TOKEN is still needed for the read side (gh pr view, gh pr diff): a GitHub App
 # installation token works there too, or a fine-grained PAT with pull request read.
 version: 2.1
@@ -62,4 +62,4 @@ jobs:
 #       - test
 #       - approve:
 #           requires: [test]
-#           context: brewery-approve
+#           context: terreno-approve

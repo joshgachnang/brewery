@@ -46,8 +46,8 @@ describe("read-only launch mode", () => {
       HOME: "/home/x",
       GH_TOKEN: "gho_secret",
       GITHUB_TOKEN: "ghs_secret",
-      BREWERY_APP_PRIVATE_KEY: "-----BEGIN",
-      BREWERY_APPROVE_TOKEN: "t",
+      TERRENO_APP_PRIVATE_KEY: "-----BEGIN",
+      TERRENO_APPROVE_TOKEN: "t",
       ANTHROPIC_API_KEY: "sk-ant",
       LITELLM_API_KEY: "ll",
       CLAUDECODE: "1",
@@ -57,7 +57,7 @@ describe("read-only launch mode", () => {
     expect(env.PATH).toBe("/bin");
     expect(env.ANTHROPIC_API_KEY).toBe("sk-ant");
     expect(env.LITELLM_API_KEY).toBe("ll");
-    for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "BREWERY_APP_PRIVATE_KEY", "BREWERY_APPROVE_TOKEN", "CLAUDECODE", "RANDOM_SECRET"]) {
+    for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "TERRENO_APP_PRIVATE_KEY", "TERRENO_APPROVE_TOKEN", "CLAUDECODE", "RANDOM_SECRET"]) {
       expect(env).not.toHaveProperty(key);
     }
   });

@@ -61,11 +61,11 @@ describe("gatesFor", () => {
     expect(gatesFor(context(docsOnly), DEFAULT_CONFIG.approve)).toEqual({ checks: "pass", botThreads: 0, humanChangesRequested: false, size: "ok" });
   });
   test("a failing or pending check is reported, ignoring the approver's own check", () => {
-    const failing = context(docsOnly, {}, { checks: [{ name: "test", bucket: "fail" }, { name: "brewery/approve", bucket: "pending" }] });
+    const failing = context(docsOnly, {}, { checks: [{ name: "test", bucket: "fail" }, { name: "terreno/approve", bucket: "pending" }] });
     expect(gatesFor(failing, DEFAULT_CONFIG.approve).checks).toBe("fail");
     const pending = context(docsOnly, {}, { checks: [{ name: "lint", bucket: "pending" }] });
     expect(gatesFor(pending, DEFAULT_CONFIG.approve).checks).toBe("pending");
-    const onlyOwn = context(docsOnly, {}, { checks: [{ name: "brewery/approve", bucket: "pending" }] });
+    const onlyOwn = context(docsOnly, {}, { checks: [{ name: "terreno/approve", bucket: "pending" }] });
     expect(gatesFor(onlyOwn, DEFAULT_CONFIG.approve).checks).toBe("pass");
   });
   test("a human's latest review decides changes-requested; bots and superseded reviews do not", () => {

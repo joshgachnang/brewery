@@ -36,7 +36,7 @@ export const githubPoster = (input: { repo: string; token: string; appLogin: str
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
     Authorization: `Bearer ${input.token}`,
-    "User-Agent": "brewery-approve",
+    "User-Agent": "terreno-approve",
     "Content-Type": "application/json",
   };
   const call = async <T>(method: string, path: string, body?: unknown): Promise<{ ok: boolean; status: number; data: T | null; text: string }> => {

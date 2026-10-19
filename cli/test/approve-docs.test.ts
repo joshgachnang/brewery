@@ -11,11 +11,11 @@ describe("approve docs and CI templates", () => {
     const doc = read("docs/approve.md");
     for (const key of Object.keys(DEFAULT_CONFIG.approve)) expect(doc).toContain(`\`${key}\``);
     for (const rule of DEFAULT_CONFIG.approve.pathRules) expect(doc).toContain(rule.category);
-    for (const env of ["BREWERY_APP_ID", "BREWERY_APP_PRIVATE_KEY", "BREWERY_APP_SLUG", "BREWERY_APP_INSTALLATION_ID", "BREWERY_APPROVE_TOKEN", "ANTHROPIC_API_KEY"]) {
+    for (const env of ["TERRENO_APP_ID", "TERRENO_APP_PRIVATE_KEY", "TERRENO_APP_SLUG", "TERRENO_APP_INSTALLATION_ID", "TERRENO_APPROVE_TOKEN", "ANTHROPIC_API_KEY"]) {
       expect(doc).toContain(env);
     }
     for (const permission of ["Pull requests", "Checks", "Contents", "Metadata"]) expect(doc).toContain(permission);
-    expect(doc).toContain("brewery/approve");
+    expect(doc).toContain("terreno/approve");
     expect(doc).toContain("--dry-run");
   });
 

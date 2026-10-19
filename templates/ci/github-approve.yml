@@ -2,8 +2,8 @@
 # credentials are available for pull requests from forks, with the BASE branch checked out:
 # PR code is read through git (gh pr diff, git show <head>:path), never executed.
 #
-# Repository or organization secrets: ANTHROPIC_API_KEY, BREWERY_APP_ID, BREWERY_APP_PRIVATE_KEY.
-# Optional variables: BREWERY_APP_SLUG, BREWERY_APP_INSTALLATION_ID.
+# Repository or organization secrets: ANTHROPIC_API_KEY, TERRENO_APP_ID, TERRENO_APP_PRIVATE_KEY.
+# Optional variables: TERRENO_APP_SLUG, TERRENO_APP_INSTALLATION_ID.
 name: brewery approve
 
 on:
@@ -16,7 +16,7 @@ permissions:
   checks: read
 
 concurrency:
-  group: brewery-approve-${{ github.event.pull_request.number }}
+  group: terreno-approve-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -54,8 +54,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          BREWERY_APP_ID: ${{ secrets.BREWERY_APP_ID }}
-          BREWERY_APP_PRIVATE_KEY: ${{ secrets.BREWERY_APP_PRIVATE_KEY }}
-          BREWERY_APP_SLUG: ${{ vars.BREWERY_APP_SLUG }}
-          BREWERY_APP_INSTALLATION_ID: ${{ vars.BREWERY_APP_INSTALLATION_ID }}
+          TERRENO_APP_ID: ${{ secrets.TERRENO_APP_ID }}
+          TERRENO_APP_PRIVATE_KEY: ${{ secrets.TERRENO_APP_PRIVATE_KEY }}
+          TERRENO_APP_SLUG: ${{ vars.TERRENO_APP_SLUG }}
+          TERRENO_APP_INSTALLATION_ID: ${{ vars.TERRENO_APP_INSTALLATION_ID }}
         run: bun "$HOME/brewery/cli/src/cli.ts" approve "${{ github.event.pull_request.number }}" --repo "$PWD"

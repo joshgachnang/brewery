@@ -40,7 +40,7 @@ Usage:
       Taste until the PR has no conflicts and all checks pass.
   brewery approve <pr> [--dry-run] [--base <branch>]
       Review one PR head against the repo's rubric (.brewery.json approve block, read
-      from the base branch) and post one review as the brewery-approve GitHub App:
+      from the base branch) and post one review as the terreno-approval-agent GitHub App:
       APPROVE when the risk level is allowed, COMMENT otherwise, plus a check run.
       --dry-run prints the verdict and the review body without posting.
   brewery cut <ip> [--request "text" | --context file]
@@ -70,7 +70,7 @@ const WAITING = 3;
 const appAuth = async (repo: string, dryRun: boolean): Promise<{ poster?: Poster; appLogin?: string }> => {
   const env = process.env;
   if (dryRun) {
-    const slug = env.BREWERY_APP_SLUG;
+    const slug = env.TERRENO_APP_SLUG;
     return { appLogin: slug ? (slug.endsWith("[bot]") ? slug : `${slug}[bot]`) : undefined };
   }
   const name = (await sh(repo, ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])).out;
