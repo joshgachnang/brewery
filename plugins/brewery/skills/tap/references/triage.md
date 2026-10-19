@@ -76,12 +76,16 @@ An issue is `decide` when the fix would:
 - touch PHI handling, retention, or logging of member data
 - break or change a public API, schema, or wire format other code depends on
 - need a destructive migration, a data backfill, or production data changes
-- be a feature request or redesign rather than a defect
+- be a feature request or redesign whose behavior the issue does not settle
 
 Restoring documented or tested behavior is a fix even in auth, permissions, or data code.
 A crash, a wrong status code, a broken flow that used to work, or a mismatch with the docs
 is a fix. When unsure, ask "would a reviewer who reads only the issue know what the fixed
 behavior should be?" Yes is `fix`. No is `decide`.
+
+Labels do not set the disposition. A `feature` or `enhancement` issue with a settled
+proposal is `fix`: it names the API and the behavior, and none of the choices above stay
+open. Only the open choices make it `decide`.
 
 A Sentry error with a clear stack trace usually reproduces at the throwing seam: call
 that function with an input of the failing shape. Fixing only the symptom (a `try`/`catch`

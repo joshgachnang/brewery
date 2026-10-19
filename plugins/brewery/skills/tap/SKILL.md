@@ -90,6 +90,10 @@ No input → stop and ask for one. Never default to "all open issues".
    each tracker's reference form. The `Why` section lists each fixed issue with its
    closing keyword per [`triage`](references/triage.md#closing-issues), and one line on
    what each issue reported. Issues the run did not fix are not mentioned in the PR.
+   To fold fixup commits, rebase onto the merge base, not the base branch:
+   `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash "$(git merge-base HEAD origin/<base>)"`.
+   `git rebase --autosquash origin/<base>` also moves the branch onto the latest base,
+   which taste.md allows only on conflict or base drift.
 7. **Finish.** Invoke the `finish` skill with the PR number and state path. Tap never ends
    between Brew and a terminal `finish` result. With several areas, finish one PR before
    building the next, so a red PR is never left unwatched while new work starts.
