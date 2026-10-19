@@ -6,6 +6,7 @@ import type { Ask, Finding } from "./agents.ts";
 import { activeRules, RULES_PATH } from "./docs.ts";
 import type { Ctx } from "./step.ts";
 import { refreshNotes } from "./state.ts";
+import type { PlanRef } from "./approve/context.ts";
 import type { PrSnapshot } from "./vcs.ts";
 
 const skill = (ctx: Ctx, path: string): string => join(ctx.config.skillsDir, path);
@@ -68,11 +69,11 @@ CI, and every contact with the human.
 Rules for this step:
 - Do only the step below, then exit. Do not start another stage, loop to the next task,
   or invoke a skill or command that does (barrel, finish, planning-loop, pick-roast-loop).
-- The human is not available. Never ask a question in chat or with a question tool. Put
-  a human decision in \`ask\` (question, recommended answer, options) with status BLOCKED.
+- The human is not available. Never ask a question in chat or with a question tool.${opts.readOnly ? "" : ` Put
+  a human decision in \`ask\` (question, recommended answer, options) with status BLOCKED.`}
 - Never add AI attribution to commits, PRs, or comments. No conventional-commit prefixes.
 - Never put PHI, customer data, or secrets in your result.
-${opts.readOnly ? readOnlyResult : fileResult(resultFile)}${answers}${notes}${learned}`;
+${opts.readOnly ? readOnlyResult : `${fileResult(resultFile)}${answers}${notes}${learned}`}`;
 };
 
 export const distillBody = (ctx: Ctx, request: string, ipPath: string): string => `## Step: distill (write the IP)
@@ -317,3 +318,31 @@ prevented these failures in any repo; describe them, do not edit skill files)`
 }. Leave the tree unchanged and say why in \`summary\` when nothing clears the bar.
 
 ${evidence}`;
+
+// The plan judge's whole world. Nothing from the PR body or the rubric belongs here.
+export const judgeBody = (plans: PlanRef[], scope: string[], diff: string): string => `## Step: approve (plan judge)
+
+You are judging whether a code change delivers the implementation plan it claims to
+implement. You see only the plan, the task scope claimed, and the diff. Read repository
+files only to confirm what the diff shows. Do not infer intent from anything else.
+
+Scope claimed: ${scope.length ? scope.join(", ") : "not stated; treat every unchecked task as in scope"}.
+
+Report, citing task ids and file paths:
+- status: "aligned" when every claimed task's behavior and acceptance criteria are in the diff
+  and nothing beyond the plan was built; "drift" otherwise.
+- missing: claimed tasks or acceptance criteria the diff does not deliver.
+- unrequested: behavior in the diff that no claimed task asks for. Refactors the plan does not
+  name count. Tests and docs for claimed work do not.
+- planEdited: true when the diff changes the plan file itself.
+- evidenceGaps: acceptance criteria whose named verification method (test, probe, artifact)
+  is absent from the diff.
+- summary: two or three sentences a reviewer can act on.
+
+${plans.map((p) => `### Plan: ${p.path}${p.editedInPr ? " (changed in this diff)" : ""}\n\n${p.text}`).join("\n\n")}
+
+### Diff
+
+\`\`\`diff
+${diff}
+\`\`\``;

@@ -58,6 +58,8 @@ export interface ApproveConfig {
   skipLabels: string[];
   maxLines: number;
   maxFiles: number;
+  // Dollar budget per read-only agent step.
+  budgetUsd: number;
   // A repo's list replaces this one wholesale.
   pathRules: PathRule[];
 }
@@ -154,6 +156,7 @@ export const DEFAULT_CONFIG: Config = {
     skipLabels: ["do-not-merge", "hold"],
     maxLines: 800,
     maxFiles: 40,
+    budgetUsd: 5,
     pathRules: DEFAULT_PATH_RULES,
   },
 };

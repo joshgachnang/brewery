@@ -100,7 +100,13 @@ describe("read-only launch mode", () => {
       config: DEFAULT_CONFIG,
       log: () => {},
     };
+    ctx.state.answers.push({ q: "Q?", a: "ANSWER-SENTINEL", at: "now" });
+    ctx.state.notes = ["NOTE-SENTINEL"];
     const text = header(ctx, "/repo/.terreno/x.result.json", { readOnly: true });
+    expect(text).not.toContain("ANSWER-SENTINEL");
+    expect(text).not.toContain("NOTE-SENTINEL");
+    expect(text).not.toContain("status BLOCKED");
+    expect(header(ctx, "/repo/.terreno/x.result.json")).toContain("ANSWER-SENTINEL");
     expect(text).toContain("read-only");
     expect(text).toContain("final answer");
     expect(text).not.toContain("write your result as JSON to");

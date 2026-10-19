@@ -87,7 +87,7 @@ code.
     Details block with YAML) each resolve the same plan path; a body with no plan → `[]`;
     a verification table with a `⚠️` row parses to `notTested`.
 
-- [ ] **T4** — IP judge step
+- [x] **T4** — IP judge step
   - Depends on: T2, T3
   - Files: `cli/src/approve/judge.ts`, `cli/src/prompts.ts`, `cli/src/approve/schemas.ts`,
     `cli/test/approve-judge.test.ts`

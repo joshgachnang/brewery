@@ -27,7 +27,7 @@ export const tempRepo = (): string => {
 };
 
 // Point every agent at the fake, and brewery's config/index at the temp dir.
-export const fakeSetup = (dir: string, plan: unknown[]): { planPath: string; config: Config } => {
+export const fakeSetup = (dir: string, plan: unknown[], stages: Record<string, string[]> = {}): { planPath: string; config: Config } => {
   const planPath = join(dir, "..", `${dir.split("/").pop()}-plan.json`);
   writeFileSync(planPath, JSON.stringify(plan));
   const profile = (name: string): Config["agents"][string] => ({
@@ -50,6 +50,8 @@ export const fakeSetup = (dir: string, plan: unknown[]): { planPath: string; con
         taste: ["alpha"],
         compound: ["alpha"],
         cellar: ["alpha"],
+        approve: ["alpha"],
+        ...stages,
       },
       // Never ping the real webhook from tests.
       notify: { ntfyUrl: "" },
