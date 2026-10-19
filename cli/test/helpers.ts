@@ -70,6 +70,9 @@ export const fakeCi = (snapshots: PrSnapshot[], pr = 7, log = ""): Ci & { waits:
   const ci = {
     waits: 0,
     prForBranch: async (): Promise<number> => pr,
+    prView: async (): Promise<never> => { throw new Error("fakeCi.prView not scripted"); },
+    prFiles: async (): Promise<never> => { throw new Error("fakeCi.prFiles not scripted"); },
+    prDiff: async (): Promise<never> => { throw new Error("fakeCi.prDiff not scripted"); },
     prUrl: async (_cwd: string, number: number): Promise<string> => `https://example.test/pr/${number}`,
     snapshot: async (): Promise<PrSnapshot> => snapshots[Math.min(i++, snapshots.length - 1)],
     waitForChecks: async (): Promise<void> => {

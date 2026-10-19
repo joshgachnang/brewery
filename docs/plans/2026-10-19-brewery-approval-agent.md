@@ -68,7 +68,7 @@ code.
     parent is absent from the child; the scripted fake agent in `cli/test/helpers.ts` gains a
     read-only fixture that emits a structured result.
 
-- [ ] **T3** — PR context and plan discovery
+- [x] **T3** — PR context and plan discovery
   - Depends on: none
   - Files: `cli/src/approve/context.ts`, `cli/src/vcs.ts`, `cli/test/approve-context.test.ts`,
     `cli/test/fixtures/approve/`

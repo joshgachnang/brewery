@@ -131,8 +131,44 @@ export const unansweredBotThreads = (nodes: ThreadNode[]): BotThread[] =>
       return { id: t.id, author: first.author?.login ?? "", path: first.path, line: first.line ?? undefined, body: first.body.slice(0, 300) };
     });
 
+export interface PrReview {
+  // GraphQL node id from `gh pr view --json reviews` (PRR_...), what a dismissal takes.
+  id: string;
+  author: string;
+  state: string;
+  body: string;
+  isBot: boolean;
+  commit?: string;
+}
+
+export interface PrView {
+  number: number;
+  title: string;
+  body: string;
+  author: string;
+  authorIsBot: boolean;
+  isDraft: boolean;
+  labels: string[];
+  base: string;
+  headSha: string;
+  reviews: PrReview[];
+  checks: Check[];
+  botThreads: BotThread[];
+}
+
+export interface ChangedFile {
+  path: string;
+  additions: number;
+  deletions: number;
+}
+
 export interface Ci {
   prForBranch: (cwd: string) => Promise<number | null>;
+  // `brewery approve` reads: the PR with its reviews, checks, and unanswered bot threads;
+  // the changed files with stats; the unified diff.
+  prView: (cwd: string, pr: number) => Promise<PrView>;
+  prFiles: (cwd: string, pr: number) => Promise<ChangedFile[]>;
+  prDiff: (cwd: string, pr: number) => Promise<string>;
   prUrl: (cwd: string, pr: number) => Promise<string>;
   snapshot: (cwd: string, pr: number) => Promise<PrSnapshot>;
   waitForChecks: (cwd: string, pr: number, timeoutMin: number) => Promise<void>;
@@ -142,10 +178,71 @@ export interface Ci {
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+const botThreadsFor = async (cwd: string, pr: number): Promise<BotThread[]> => {
+  const threads = await sh(cwd, [
+    "gh", "api", "graphql", "-f", `query=${BOT_THREADS_QUERY}`, "-F", "owner={owner}", "-F", "repo={repo}", "-F", `pr=${pr}`,
+    "--jq", ".data.repository.pullRequest.reviewThreads.nodes",
+  ]);
+  if (threads.code !== 0) throw new Error(`gh api graphql reviewThreads ${pr}: ${threads.err}`);
+  return threads.out.startsWith("[") ? unansweredBotThreads(JSON.parse(threads.out) as ThreadNode[]) : [];
+};
+
+const checksFor = async (cwd: string, pr: number): Promise<Check[]> => {
+  const checks = await sh(cwd, ["gh", "pr", "checks", String(pr), "--json", "name,bucket,link"]);
+  // exit 8 = checks pending, 1 with "no checks reported" = none yet; both still print JSON or nothing
+  return checks.out.startsWith("[") ? (JSON.parse(checks.out) as Check[]) : [];
+};
+
 export const githubCi: Ci = {
   prForBranch: async (cwd) => {
     const res = await sh(cwd, ["gh", "pr", "view", "--json", "number", "-q", ".number"]);
     return res.code === 0 && res.out ? Number(res.out) : null;
+  },
+  prView: async (cwd, pr) => {
+    const res = await sh(cwd, [
+      "gh", "pr", "view", String(pr), "--json",
+      "number,title,body,author,isDraft,labels,baseRefName,headRefOid,reviews",
+    ]);
+    if (res.code !== 0) throw new Error(`gh pr view ${pr}: ${res.err}`);
+    const view = JSON.parse(res.out) as {
+      number: number; title: string; body: string; author: { login: string; is_bot?: boolean }; isDraft: boolean;
+      labels: { name: string }[]; baseRefName: string; headRefOid: string;
+      reviews: { id?: string; author: { login: string; is_bot?: boolean }; state: string; body: string; commit?: { oid: string } }[];
+    };
+    const [checks, botThreads] = await Promise.all([checksFor(cwd, pr), botThreadsFor(cwd, pr)]);
+    const bot = (login: string, flag?: boolean): boolean => Boolean(flag) || login.endsWith("[bot]") || login.startsWith("app/");
+    return {
+      number: view.number,
+      title: view.title,
+      body: view.body ?? "",
+      author: view.author?.login ?? "",
+      authorIsBot: bot(view.author?.login ?? "", view.author?.is_bot),
+      isDraft: Boolean(view.isDraft),
+      labels: (view.labels ?? []).map((l) => l.name),
+      base: view.baseRefName,
+      headSha: view.headRefOid,
+      reviews: (view.reviews ?? []).map((r) => ({
+        id: r.id ?? "",
+        author: r.author?.login ?? "",
+        state: r.state,
+        body: r.body ?? "",
+        isBot: bot(r.author?.login ?? "", r.author?.is_bot),
+        commit: r.commit?.oid,
+      })),
+      checks,
+      botThreads,
+    };
+  },
+  prFiles: async (cwd, pr) => {
+    const res = await sh(cwd, ["gh", "pr", "view", String(pr), "--json", "files", "--jq", ".files"]);
+    if (res.code !== 0) throw new Error(`gh pr view ${pr} files: ${res.err}`);
+    const files = JSON.parse(res.out || "[]") as { path: string; additions: number; deletions: number }[];
+    return files.map((f) => ({ path: f.path, additions: f.additions ?? 0, deletions: f.deletions ?? 0 }));
+  },
+  prDiff: async (cwd, pr) => {
+    const res = await sh(cwd, ["gh", "pr", "diff", String(pr)], 120_000);
+    if (res.code !== 0) throw new Error(`gh pr diff ${pr}: ${res.err}`);
+    return res.out;
   },
   prUrl: async (cwd, pr) => {
     const res = await sh(cwd, ["gh", "pr", "view", String(pr), "--json", "url", "-q", ".url"]);
@@ -162,20 +259,13 @@ export const githubCi: Ci = {
       if (view?.mergeable !== "UNKNOWN") break;
       await sleep(10_000);
     }
-    const checks = await sh(cwd, ["gh", "pr", "checks", String(pr), "--json", "name,bucket,link"]);
-    // exit 8 = checks pending, 1 with "no checks reported" = none yet; both still print JSON or nothing
-    const list = checks.out.startsWith("[") ? (JSON.parse(checks.out) as Check[]) : [];
-    const threads = await sh(cwd, [
-      "gh", "api", "graphql", "-f", `query=${BOT_THREADS_QUERY}`, "-F", "owner={owner}", "-F", "repo={repo}", "-F", `pr=${pr}`,
-      "--jq", ".data.repository.pullRequest.reviewThreads.nodes",
-    ]);
-    if (threads.code !== 0) throw new Error(`gh api graphql reviewThreads ${pr}: ${threads.err}`);
+    const [list, botThreads] = await Promise.all([checksFor(cwd, pr), botThreadsFor(cwd, pr)]);
     return {
       sha: view?.headRefOid ?? "",
       mergeable: view?.mergeable ?? "UNKNOWN",
       mergeState: view?.mergeStateStatus ?? "",
       checks: list,
-      botThreads: threads.out.startsWith("[") ? unansweredBotThreads(JSON.parse(threads.out) as ThreadNode[]) : [],
+      botThreads,
     };
   },
   waitForChecks: async (cwd, pr, timeoutMin) => {
