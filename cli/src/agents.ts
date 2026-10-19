@@ -38,6 +38,8 @@ export interface StepResult {
   structural?: boolean;
   // compound: the repo-relative learning written or updated, or null when skipped
   learning?: string | null;
+  // read-only steps: the JSON-schema answer from stdout
+  structured?: unknown;
   tally?: { edited: number; moved: number; rebutted: number };
 }
 
@@ -51,7 +53,20 @@ export interface RunRequest {
   logFile: string;
   timeoutMin: number;
   onNarration?: (text: string) => void;
+  // A verifier step: no edits, no hooks, an allowlisted environment, and a JSON-schema
+  // answer on stdout instead of a result file. Used by `brewery approve`.
+  readOnly?: ReadOnly;
 }
+
+export interface ReadOnly {
+  schema: object;
+  budgetUsd?: number;
+}
+
+export const READ_ONLY_TOOLS = "Read,Grep,Glob,Bash(git diff:*),Bash(git show:*),Bash(git log:*)";
+const EDIT_TOOLS = "Edit,Write,NotebookEdit";
+// Everything a read-only child may see. Credentials for GitHub and the App never appear.
+const READ_ONLY_ENV_KEYS = ["PATH", "HOME", "TMPDIR", "USER", "SHELL", "LANG", "TERM", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
 
 export interface RunOutcome {
   result: StepResult;
@@ -61,16 +76,23 @@ export interface RunOutcome {
 
 const tomlString = (value: string): string => JSON.stringify(value);
 
-export const agentArgv = (profile: AgentProfile, cwd: string): string[] => {
+export const agentArgv = (profile: AgentProfile, cwd: string, readOnly?: ReadOnly): string[] => {
   switch (profile.type) {
     case "claude":
       return [
         "claude",
         "-p",
-        "--dangerously-skip-permissions",
-        "--output-format",
-        "stream-json",
-        "--verbose",
+        ...(readOnly
+          ? [
+              "--bare",
+              "--permission-mode", "dontAsk",
+              "--allowedTools", READ_ONLY_TOOLS,
+              "--disallowedTools", EDIT_TOOLS,
+              "--output-format", "json",
+              "--json-schema", JSON.stringify(readOnly.schema),
+              ...(readOnly.budgetUsd ? ["--max-budget-usd", String(readOnly.budgetUsd)] : []),
+            ]
+          : ["--dangerously-skip-permissions", "--output-format", "stream-json", "--verbose"]),
         ...(profile.model ? ["--model", profile.model] : []),
         ...(profile.args ?? []),
       ];
@@ -94,7 +116,7 @@ export const agentArgv = (profile: AgentProfile, cwd: string): string[] => {
         "codex",
         "exec",
         "--json",
-        "--dangerously-bypass-approvals-and-sandbox",
+        ...(readOnly ? ["--sandbox", "read-only"] : ["--dangerously-bypass-approvals-and-sandbox"]),
         "--skip-git-repo-check",
         "-C",
         cwd,
@@ -110,11 +132,23 @@ export const agentArgv = (profile: AgentProfile, cwd: string): string[] => {
   }
 };
 
+export const readOnlyEnv = (profile: AgentProfile, parent: Record<string, string | undefined>): Record<string, string> => {
+  const env: Record<string, string> = {};
+  for (const key of [...READ_ONLY_ENV_KEYS, ...(profile.provider ? [profile.provider.envKey] : [])]) {
+    const value = parent[key];
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
+};
+
 const childEnv = (profile: AgentProfile, req: RunRequest): Record<string, string> => {
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    // A nested claude must not think it is running inside the parent session.
-    if (value !== undefined && key !== "CLAUDECODE" && !key.startsWith("CLAUDE_CODE_")) env[key] = value;
+  if (req.readOnly) Object.assign(env, readOnlyEnv(profile, process.env));
+  else {
+    for (const [key, value] of Object.entries(process.env)) {
+      // A nested claude must not think it is running inside the parent session.
+      if (value !== undefined && key !== "CLAUDECODE" && !key.startsWith("CLAUDE_CODE_")) env[key] = value;
+    }
   }
   return {
     ...env,
@@ -122,6 +156,30 @@ const childEnv = (profile: AgentProfile, req: RunRequest): Record<string, string
     BREWERY_PROMPT_FILE: req.promptFile,
     BREWERY_RESULT_FILE: req.resultFile,
   };
+};
+
+// `claude -p --output-format json` prints one envelope; with --json-schema the answer is
+// in `structured_output`. Codex and command agents may print the same envelope.
+export const resultFromStdout = (stdout: string): StepResult => {
+  const lines = stdout.trim().split("\n").reverse();
+  for (const line of lines) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const envelope = record(parsed);
+    if (!envelope) continue;
+    if (envelope.is_error === true) {
+      const why = typeof envelope.result === "string" ? envelope.result : "agent reported an error";
+      return { status: "FAIL", action: `Rerun: ${why}`, fail: [{ need: "a structured answer", want: "structured_output", got: why, ev: "stdout" }] };
+    }
+    if (envelope.structured_output !== undefined && envelope.structured_output !== null) {
+      return { status: "PASS", action: "returned structured output", structured: envelope.structured_output };
+    }
+  }
+  return { status: "FAIL", action: "Rerun: no structured output on stdout", fail: [{ need: "a structured answer", want: "structured_output", got: stdout.slice(-300), ev: "stdout" }] };
 };
 
 const STATUSES: ReadonlySet<string> = new Set(["PASS", "FAIL", "BLOCKED", "PENDING"]);
@@ -216,7 +274,7 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
   writeFileSync(req.promptFile, req.prompt);
   writeFileSync(req.logFile, `# ${req.name} in ${req.cwd}\n# prompt: ${req.promptFile}\n\n`);
   const started = Date.now();
-  const proc = Bun.spawn(agentArgv(req.profile, req.cwd), {
+  const proc = Bun.spawn(agentArgv(req.profile, req.cwd, req.readOnly), {
     cwd: req.cwd,
     env: childEnv(req.profile, req),
     stdin: Bun.file(req.promptFile),
@@ -224,11 +282,13 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
     stderr: "pipe",
     timeout: req.timeoutMin * 60_000,
   });
+  let stdoutText = "";
   const pump = async (stream: ReadableStream<Uint8Array>, narrate: boolean): Promise<void> => {
     const decoder = new TextDecoder();
     let pending = "";
     const consume = (text: string): void => {
       appendFileSync(req.logFile, text);
+      if (narrate && req.readOnly) stdoutText += text;
       if (!narrate || !req.onNarration) return;
       pending += text;
       let boundary = pending.indexOf("\n");
@@ -249,7 +309,9 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
   const seconds = Math.round((Date.now() - started) / 1000);
   const parsed = readResult(req.resultFile);
   const result: StepResult =
-    typeof parsed === "string"
+    typeof parsed === "string" && req.readOnly
+      ? resultFromStdout(stdoutText)
+      : typeof parsed === "string"
       ? {
           status: "FAIL",
           action: `Rerun ${req.name}: ${parsed}`,

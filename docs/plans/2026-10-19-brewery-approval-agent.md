@@ -51,7 +51,7 @@ code.
     high; `.brewery.json` in diff → never; model `low` with floor `medium` → `medium`; a
     blocking finding at `low` → not approved; `brewery agents` lists `approve`.
 
-- [ ] **T2** — Read-only agent launch mode
+- [x] **T2** — Read-only agent launch mode
   - Depends on: none
   - Files: `cli/src/agents.ts`, `cli/src/step.ts`, `cli/test/unit.test.ts`
   - `RunRequest.readOnly?: {schema: object}`: claude argv becomes `claude -p --bare

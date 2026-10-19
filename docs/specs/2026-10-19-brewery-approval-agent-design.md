@@ -206,7 +206,7 @@ mode is added to `agents.ts`, selected per step:
 
 | Agent | Read-only argv |
 | --- | --- |
-| claude | `claude -p --bare --permission-mode dontAsk --allowedTools Read,Grep,Glob,Bash(git diff:*),Bash(git show:*),Bash(git log:*) --disallowedTools Edit,Write,NotebookEdit --output-format json --json-schema <schema> --max-turns 40` |
+| claude | `claude -p --bare --permission-mode dontAsk --allowedTools Read,Grep,Glob,Bash(git diff:*),Bash(git show:*),Bash(git log:*) --disallowedTools Edit,Write,NotebookEdit --output-format json --json-schema <schema> --max-budget-usd <n>` |
 | codex | `codex exec --json --sandbox read-only -C <cwd> -` |
 | command | unchanged; the profile is trusted to be read-only |
 
@@ -339,7 +339,7 @@ architectural review.
 - Prompt injection through the diff or body can still talk the rubric agent down within the
   floor/ceiling band; the band, the gates, and the clean IP judge bound the damage, and the
   dry-run period measures it.
-- Cost: two agent steps per head. A `maxTurns` and the read-only tool set bound it; fan-out
-  doubles it and is off by default.
+- Cost: two agent steps per head. A per-step dollar budget and the read-only tool set bound
+  it; fan-out doubles it and is off by default.
 - GitHub may not let the App dismiss its own review on a branch that restricts dismissals to
   people; the body then says the approval is stale, and the check run turns `neutral`.

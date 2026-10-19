@@ -30,7 +30,22 @@ const taskSplitting = `Task splitting rules:
   route or tool indexes. brewery never builds two tasks with a shared file at once.
 - Split any task that needs more than one roast-able behaviour.`;
 
-export const header = (ctx: Ctx, resultFile: string): string => {
+const fileResult = (resultFile: string): string => `- Before exiting, write your result as JSON to:
+    ${resultFile}
+  Shape: {"status": "PASS" | "FAIL" | "BLOCKED" | "PENDING", "action": "<next concrete action>",
+          "summary": "<what you did>", "ask": [{"q": "", "rec": "", "opts": [""]}],
+          "fail": [{"need": "", "want": "", "got": "", "ev": ""}],
+          "block": [{"kind": "human|environment|access|external", "why": "", "ev": ""}]}
+  plus any step-specific keys named below. Omit keys you do not use. Writing this file is
+  mandatory, including on failure.
+`;
+
+const readOnlyResult = `- This is a read-only step. You cannot edit files or write a result file. Read what you
+  need, then give your final answer as one JSON object that matches the schema this step
+  was launched with. Nothing else goes in the final answer.
+`;
+
+export const header = (ctx: Ctx, resultFile: string, opts: { readOnly?: boolean } = {}): string => {
   refreshNotes(ctx.state);
   const answers = ctx.state.answers.length
     ? `\nPrior human answers. Treat these as settled decisions; do not re-ask them.\n${ctx.state.answers
@@ -56,16 +71,8 @@ Rules for this step:
 - The human is not available. Never ask a question in chat or with a question tool. Put
   a human decision in \`ask\` (question, recommended answer, options) with status BLOCKED.
 - Never add AI attribution to commits, PRs, or comments. No conventional-commit prefixes.
-- Never put PHI, customer data, or secrets in your result file.
-- Before exiting, write your result as JSON to:
-    ${resultFile}
-  Shape: {"status": "PASS" | "FAIL" | "BLOCKED" | "PENDING", "action": "<next concrete action>",
-          "summary": "<what you did>", "ask": [{"q": "", "rec": "", "opts": [""]}],
-          "fail": [{"need": "", "want": "", "got": "", "ev": ""}],
-          "block": [{"kind": "human|environment|access|external", "why": "", "ev": ""}]}
-  plus any step-specific keys named below. Omit keys you do not use. Writing this file is
-  mandatory, including on failure.
-${answers}${notes}${learned}`;
+- Never put PHI, customer data, or secrets in your result.
+${opts.readOnly ? readOnlyResult : fileResult(resultFile)}${answers}${notes}${learned}`;
 };
 
 export const distillBody = (ctx: Ctx, request: string, ipPath: string): string => `## Step: distill (write the IP)
