@@ -216,12 +216,14 @@ export const gatherContext = async (input: {
   ci: Pick<Ci, "prView" | "prFiles" | "prDiff">;
   repo: string;
   pr: number;
+  // A PR view the caller already fetched; saves a second round trip.
+  view?: PrView;
   planDirs?: string[];
   readBase: (path: string) => Promise<string | null>;
   readHead: (path: string) => Promise<string | null>;
   baseSha: () => Promise<string>;
 }): Promise<ApproveContext> => {
-  const pr = await input.ci.prView(input.repo, input.pr);
+  const pr = input.view ?? (await input.ci.prView(input.repo, input.pr));
   const approve = approveFromJson(await input.readBase(".brewery.json"));
   const rubric = await input.readBase(approve.rubric);
   const [files, diff, sha] = await Promise.all([input.ci.prFiles(input.repo, input.pr), input.ci.prDiff(input.repo, input.pr), input.baseSha()]);

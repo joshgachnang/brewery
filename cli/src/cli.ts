@@ -5,6 +5,7 @@ import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
+import { approve, gitReaders } from "./commands/approve.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
@@ -35,6 +36,11 @@ Usage:
       Approved IP → pick/roast every task → branch review → brew → finish.
   brewery finish [pr] [--slug s]
       Taste until the PR has no conflicts and all checks pass.
+  brewery approve <pr> [--dry-run] [--base <branch>]
+      Review one PR head against the repo's rubric (.brewery.json approve block, read
+      from the base branch) and post one review as the brewery-approve GitHub App:
+      APPROVE when the risk level is allowed, COMMENT otherwise, plus a check run.
+      --dry-run prints the verdict and the review body without posting.
   brewery cut <ip> [--request "text" | --context file]
       Attack an IP with only the human's words; prints findings.
   brewery cellar <owner/name> [--since <ISO date>] [--dry-run]
@@ -57,6 +63,9 @@ Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar proposed more
 changes than allowed (no PR), 1 error.`;
 
 const WAITING = 3;
+
+// Replaced by the GitHub App poster in the posting slice; until then only --dry-run runs.
+const githubPoster = async (_repo: string): Promise<undefined> => undefined;
 
 const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string, string | true> } => {
   const positional: string[] = [];
@@ -198,6 +207,25 @@ const cmdFinish = async (positional: string[], flags: Record<string, string | tr
   });
 };
 
+const cmdApprove = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  await ensureExcluded(repo);
+  const pr = positional[0] ? Number(positional[0]) : ((await githubCi.prForBranch(repo)) ?? undefined);
+  if (!pr || !Number.isSafeInteger(pr)) throw new Error("usage: brewery approve <pr> [--dry-run] [--base <branch>]");
+  const view = await githubCi.prView(repo, pr);
+  const base = str(flags.base) ?? view.base;
+  const state = newState({ slug: `approve-${pr}`, repo, ip: "", base, phase: "build" });
+  const dryRun = Boolean(flags["dry-run"]);
+  return withRunLock(state, async () => {
+    saveState(state);
+    const ctx = makeCtx(state, str(flags.agents), flags.parallel);
+    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: dryRun ? undefined : await githubPoster(repo) }, pr, { dryRun, view });
+    if (outcome.verdict) log(`\n${JSON.stringify({ level: outcome.verdict.level, approve: outcome.verdict.approve, reasons: outcome.verdict.reasons, dimensions: outcome.verdict.dimensions, findings: outcome.verdict.findings, gates: outcome.verdict.gates, classification: outcome.verdict.classification }, null, 2)}`);
+    log(`\n${outcome.body}`);
+    return 0;
+  });
+};
+
 const cmdResume = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
   const slug = positional[0];
   if (!slug || positional.length !== 1) throw new Error("usage: brewery resume <slug> [--go]");
@@ -314,6 +342,8 @@ const main = async (): Promise<number> => {
       return cmdBarrel(positional, flags);
     case "finish":
       return cmdFinish(positional, flags);
+    case "approve":
+      return cmdApprove(positional, flags);
     case "cut":
       return cmdCut(positional, flags);
     case "cellar":

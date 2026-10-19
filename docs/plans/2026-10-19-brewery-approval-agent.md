@@ -119,7 +119,7 @@ code.
     low; fan-out low+medium → medium; blocking finding → `approve: false`); a flow test with
     two fake agents proves strictest-wins; an invalid score (4) is rejected before merge.
 
-- [ ] **T6** — `brewery approve` command and review rendering
+- [x] **T6** — `brewery approve` command and review rendering
   - Depends on: T5
   - Files: `cli/src/commands/approve.ts`, `cli/src/cli.ts`, `cli/src/approve/render.ts`,
     `cli/test/approve-flow.test.ts`
