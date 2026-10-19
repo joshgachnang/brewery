@@ -101,7 +101,7 @@ code.
     and not the body text (assert on a sentinel string in the body); schema validation rejects
     an unknown `status`.
 
-- [ ] **T5** — Rubric step, verdict merge, default rubric
+- [x] **T5** — Rubric step, verdict merge, default rubric
   - Depends on: T1, T4
   - Files: `cli/src/approve/review.ts`, `cli/src/prompts.ts`, `cli/src/approve/schemas.ts`,
     `cli/templates/approval-rubric.md`, `cli/test/approve-review.test.ts`
