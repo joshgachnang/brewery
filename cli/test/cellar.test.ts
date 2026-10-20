@@ -18,6 +18,7 @@ const fakeForge = (failed: FailedRun[], merged: MergedPr[], logs: Record<number,
     failedRuns: async () => failed,
     runLog: async (_name, id) => logs[id] ?? "",
     mergedPrs: async () => merged,
+    reviewedPrs: async () => [],
     createPr: async (_cwd, pr) => {
       prs.push(pr);
       return "https://github.com/acme/widgets/pull/42";

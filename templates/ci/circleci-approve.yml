@@ -54,7 +54,9 @@ jobs:
             git fetch origin master
             case "$CIRCLE_BRANCH" in pull/*) ;; *) git fetch origin "$CIRCLE_BRANCH" ;; esac
             PR="${CIRCLE_PULL_REQUEST##*/}"
-            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR" --repo "$PWD" || echo "brewery approve could not produce a verdict (see above)"
+            # --wait-checks: wait for the other checks on this head (limits.ciWaitMin), and
+            # skip the head without spending a model when any failed or is still pending.
+            bun "$HOME/brewery/cli/src/cli.ts" approve "$PR" --repo "$PWD" --wait-checks || echo "brewery approve could not produce a verdict (see above)"
 
 # workflows:
 #   build:

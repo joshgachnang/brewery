@@ -58,4 +58,4 @@ jobs:
           TERRENO_APP_PRIVATE_KEY: ${{ secrets.TERRENO_APP_PRIVATE_KEY }}
           TERRENO_APP_SLUG: ${{ vars.TERRENO_APP_SLUG }}
           TERRENO_APP_INSTALLATION_ID: ${{ vars.TERRENO_APP_INSTALLATION_ID }}
-        run: bun "$HOME/brewery/cli/src/cli.ts" approve "${{ github.event.pull_request.number }}" --repo "$PWD"
+        run: bun "$HOME/brewery/cli/src/cli.ts" approve "${{ github.event.pull_request.number }}" --wait-checks --repo "$PWD"

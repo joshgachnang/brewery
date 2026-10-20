@@ -33,7 +33,7 @@ const context = (plans: ApproveContext["plans"]): ApproveContext => ({
   body: splitBody(view.body),
   scope: ["T2"],
   plans,
-  policy: { approve: { approveLevels: ["low"], rubric: "", planDirs: [], skipAuthors: [], skipLabels: [], maxLines: 1, maxFiles: 1, budgetUsd: 1, pathRules: [] }, rubric: null, source: "master@x" },
+  policy: { approve: { approveLevels: ["low"], rubric: "", planDirs: [], skipAuthors: [], skipLabels: [], maxLines: 1, maxFiles: 1, budgetUsd: 1, pathRules: [], selfChecks: [] }, rubric: null, source: "master@x" },
   evidence: { media: [], testFiles: [] },
 });
 

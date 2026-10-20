@@ -51,6 +51,7 @@ export const fakeSetup = (dir: string, plan: unknown[], stages: Record<string, s
         compound: ["alpha"],
         cellar: ["alpha"],
         approve: ["alpha"],
+        calibrate: ["alpha"],
         ...stages,
       },
       // Never ping the real webhook from tests.

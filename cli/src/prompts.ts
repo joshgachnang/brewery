@@ -321,6 +321,27 @@ prevented these failures in any repo; describe them, do not edit skill files)`
 
 ${evidence}`;
 
+export const calibrateBody = (ctx: Ctx, name: string, since: string, rubricPath: string, evidence: string): string => `## Step: calibrate (learn the approval rubric for ${name} from reviews since ${since})
+
+Read and follow ${skill(ctx, "calibrate/SKILL.md")}. You are in a fresh worktree of the default
+branch of ${name}, on a new branch.${ctx.config.phi ? "\nThis repo handles PHI: never quote data from the evidence; describe it by shape." : ""}
+brewery commits what you leave, pushes, and opens one PR. Do not commit, push, or open a PR.
+
+You may change only: ${rubricPath} (the approval rubric), .brewery.json (the approve
+block's pathRules and skip lists), and files under docs/learnings/. A change anywhere else
+means no PR. At most ${MAX_RUBRIC_RULES} new rubric lines per pass; over that, nothing ships.
+
+Result: status PASS, \`summary\` (two or three sentences for the PR description),
+\`changes\` (one line per rubric or path-rule change, each citing the PR numbers and who
+said it), and \`proposals\` (markdown: rules that are true of any repo, written as lines
+for brewery's default rubric; describe them, do not edit brewery). Leave the tree
+unchanged and say why in \`summary\` when nothing clears the bar.
+
+${evidence}`;
+
+// New bullet lines a calibrate pass may add to the rubric.
+export const MAX_RUBRIC_RULES = 8;
+
 const fence = (text: string, lang = ""): string => {
   // A fence longer than any run of backticks inside keeps the content from closing it.
   const longest = Math.max(2, ...[...text.matchAll(/`+/g)].map((m) => m[0].length));
