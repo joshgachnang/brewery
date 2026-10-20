@@ -18,7 +18,8 @@ jobs:
       - image: cimg/node:22.14
     resource_class: small
     environment:
-      # Pin a tag or commit of joshgachnang/brewery once one is cut; master until then.
+      # A branch, tag, or commit sha of joshgachnang/brewery. This job holds the App key, so
+      # pin a commit and bump it deliberately; master is the floor for a first try.
       BREWERY_REF: master
     steps:
       - checkout
@@ -43,16 +44,21 @@ jobs:
           name: Install Claude Code and brewery
           command: |
             sudo npm install -g @anthropic-ai/claude-code
-            git clone --depth 1 --branch "$BREWERY_REF" https://github.com/joshgachnang/brewery.git "$HOME/brewery"
+            # Fetched by ref so BREWERY_REF can be a sha (clone --branch takes only branches and tags).
+            git init -q "$HOME/brewery"
+            git -C "$HOME/brewery" fetch -q --depth 1 https://github.com/joshgachnang/brewery.git "$BREWERY_REF"
+            git -C "$HOME/brewery" checkout -q FETCH_HEAD
             cd "$HOME/brewery/cli" && bun install --frozen-lockfile
       - run:
           name: brewery approve
           # The verdict is posted to the PR; a not-approved verdict is not a pipeline failure.
           command: |
-            # The base branch (change "master" if yours differs). Fork PRs run as pull/N; the
-            # head is already checked out, so only the base needs fetching then.
+            # The base branch (change "master" if yours differs). The working tree becomes
+            # the base from here on: nothing from the PR tree (bunfig.toml, .claude/, scripts)
+            # runs while the App key is in the environment. The checked-out head stays in
+            # the object store and brewery reads it with `git show <sha>:`.
             git fetch origin master
-            case "$CIRCLE_BRANCH" in pull/*) ;; *) git fetch origin "$CIRCLE_BRANCH" ;; esac
+            git checkout --force origin/master
             PR="${CIRCLE_PULL_REQUEST##*/}"
             # --wait-checks: wait for the other checks on this head (limits.ciWaitMin), and
             # skip the head without spending a model when any failed or is still pending.
