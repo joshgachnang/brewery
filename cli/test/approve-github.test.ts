@@ -53,12 +53,12 @@ describe("App token", () => {
 
   test("minting resolves the slug and installation, then posts for a token", async () => {
     const gh = fakeGitHub({
-      "GET https://api.github.com/app": { json: { slug: "brewery-approve" } },
+      "GET https://api.github.com/app": { json: { slug: "terreno-approve" } },
       "GET https://api.github.com/repos/acme/widgets/installation": { json: { id: 777 } },
       "POST https://api.github.com/app/installations/777/access_tokens": { json: { token: "ghs_minted" } },
     });
-    const auth = await installationToken({ repo: "acme/widgets", env: { BREWERY_APP_ID: "12345", BREWERY_APP_PRIVATE_KEY: pem }, fetch: gh, now: 1_700_000_000 });
-    expect(auth).toEqual({ token: "ghs_minted", appLogin: "brewery-approve[bot]" });
+    const auth = await installationToken({ repo: "acme/widgets", env: { TERRENO_APP_ID: "12345", TERRENO_APP_PRIVATE_KEY: pem }, fetch: gh, now: 1_700_000_000 });
+    expect(auth).toEqual({ token: "ghs_minted", appLogin: "terreno-approve[bot]" });
     expect(gh.calls.map((c) => `${c.method} ${c.url}`)).toEqual([
       "GET https://api.github.com/app",
       "GET https://api.github.com/repos/acme/widgets/installation",
@@ -69,18 +69,18 @@ describe("App token", () => {
 
   test("a known slug and installation id skip the lookups; a pre-minted token skips everything", async () => {
     const gh = fakeGitHub({ "POST https://api.github.com/app/installations/9/access_tokens": { json: { token: "ghs_x" } } });
-    const auth = await installationToken({ repo: "a/b", env: { BREWERY_APP_ID: "1", BREWERY_APP_PRIVATE_KEY: pem, BREWERY_APP_SLUG: "my-app", BREWERY_APP_INSTALLATION_ID: "9" }, fetch: gh });
+    const auth = await installationToken({ repo: "a/b", env: { TERRENO_APP_ID: "1", TERRENO_APP_PRIVATE_KEY: pem, TERRENO_APP_SLUG: "my-app", TERRENO_APP_INSTALLATION_ID: "9" }, fetch: gh });
     expect(auth).toEqual({ token: "ghs_x", appLogin: "my-app[bot]" });
     expect(gh.calls).toHaveLength(1);
     const direct = fakeGitHub();
-    expect(await installationToken({ repo: "a/b", env: { BREWERY_APPROVE_TOKEN: "ghp_local" }, fetch: direct })).toEqual({ token: "ghp_local", appLogin: "brewery-approve[bot]" });
+    expect(await installationToken({ repo: "a/b", env: { TERRENO_APPROVE_TOKEN: "ghp_local" }, fetch: direct })).toEqual({ token: "ghp_local", appLogin: "terreno-approval-agent[bot]" });
     expect(direct.calls).toHaveLength(0);
-    await expect(installationToken({ repo: "a/b", env: {}, fetch: direct })).rejects.toThrow("BREWERY_APP_ID");
+    await expect(installationToken({ repo: "a/b", env: {}, fetch: direct })).rejects.toThrow("TERRENO_APP_ID");
   });
 
   test("a failed GitHub call names the request and status", async () => {
     const gh = fakeGitHub({ "GET https://api.github.com/app": { status: 401, json: { message: "Bad credentials" } } });
-    await expect(installationToken({ repo: "a/b", env: { BREWERY_APP_ID: "1", BREWERY_APP_PRIVATE_KEY: pem }, fetch: gh })).rejects.toThrow("GET https://api.github.com/app → 401");
+    await expect(installationToken({ repo: "a/b", env: { TERRENO_APP_ID: "1", TERRENO_APP_PRIVATE_KEY: pem }, fetch: gh })).rejects.toThrow("GET https://api.github.com/app → 401");
   });
 });
 
@@ -103,26 +103,26 @@ const verdict = (approve: boolean, over: Partial<Verdict> = {}): Verdict => ({
   ...over,
 });
 
-const body = (sha: string): string => `<!-- brewery-approve:${sha} -->\n**Risk: low — approved.** fine\n`;
+const body = (sha: string): string => `<!-- terreno-approve:${sha} -->\n**Risk: low — approved.** fine\n`;
 
 describe("GitHub poster", () => {
   test("approves with a review on the head and a successful check run", async () => {
     const gh = fakeGitHub({ "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [] } });
-    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "brewery-approve[bot]", fetch: gh });
+    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "terreno-approve[bot]", fetch: gh });
     await poster.post({ context: context(), verdict: verdict(true), body: body("abc123") });
     const review = gh.calls.find((c) => c.method === "POST" && c.url.endsWith("/pulls/7/reviews"));
     expect(review?.body).toEqual({ commit_id: "abc123", event: "APPROVE", body: body("abc123") });
     expect(review?.auth).toBe("Bearer t");
     const check = gh.calls.find((c) => c.url.endsWith("/check-runs"));
-    expect(check?.body).toEqual({ name: "brewery/approve", head_sha: "abc123", status: "completed", conclusion: "success", output: { title: "Risk: low — approved", summary: "Looks fine." } });
+    expect(check?.body).toEqual({ name: "terreno/approve", head_sha: "abc123", status: "completed", conclusion: "success", output: { title: "Risk: low — approved", summary: "Looks fine." } });
     expect(poster.last).toEqual({ reviewed: "posted", event: "APPROVE", dismissed: [], dismissFailed: [], check: { conclusion: "success", title: "Risk: low — approved" } });
   });
 
   test("an existing review with this head's marker is not posted twice", async () => {
     const gh = fakeGitHub({
-      "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [{ id: 1, user: { login: "brewery-approve" }, state: "APPROVED", body: body("abc123") }] },
+      "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [{ id: 1, user: { login: "terreno-approve" }, state: "APPROVED", body: body("abc123") }] },
     });
-    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "brewery-approve[bot]", fetch: gh });
+    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "terreno-approve[bot]", fetch: gh });
     await poster.post({ context: context(), verdict: verdict(true), body: body("abc123") });
     expect(gh.calls.filter((c) => c.method === "POST" && c.url.endsWith("/reviews"))).toHaveLength(0);
     expect(poster.last.reviewed).toBe("already");
@@ -133,13 +133,13 @@ describe("GitHub poster", () => {
     const gh = fakeGitHub({
       "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": {
         json: [
-          { id: 1, user: { login: "brewery-approve" }, state: "APPROVED", body: body("old111") },
+          { id: 1, user: { login: "terreno-approve" }, state: "APPROVED", body: body("old111") },
           { id: 2, user: { login: "kim" }, state: "APPROVED", body: "lgtm" },
         ],
       },
     });
-    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "brewery-approve[bot]", fetch: gh });
-    await poster.post({ context: context("new222"), verdict: verdict(false), body: "<!-- brewery-approve:new222 -->\n**Risk: medium — not approved.** x\n" });
+    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "terreno-approve[bot]", fetch: gh });
+    await poster.post({ context: context("new222"), verdict: verdict(false), body: "<!-- terreno-approve:new222 -->\n**Risk: medium — not approved.** x\n" });
     const review = gh.calls.find((c) => c.method === "POST" && c.url.endsWith("/pulls/7/reviews"));
     expect(review?.body).toMatchObject({ event: "COMMENT", commit_id: "new222" });
     const dismissal = gh.calls.find((c) => c.method === "PUT");
@@ -152,11 +152,11 @@ describe("GitHub poster", () => {
 
   test("a dismissal the branch forbids is recorded in the check summary, not thrown", async () => {
     const gh = fakeGitHub({
-      "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [{ id: 5, user: { login: "brewery-approve[bot]" }, state: "APPROVED", body: body("old111") }] },
+      "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [{ id: 5, user: { login: "terreno-approve[bot]" }, state: "APPROVED", body: body("old111") }] },
       "PUT https://api.github.com/repos/acme/widgets/pulls/7/reviews/5/dismissals": { status: 403, json: { message: "forbidden" } },
     });
-    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "brewery-approve[bot]", fetch: gh });
-    await poster.post({ context: context("new222"), verdict: verdict(false), body: "<!-- brewery-approve:new222 -->\nx\n" });
+    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "terreno-approve[bot]", fetch: gh });
+    await poster.post({ context: context("new222"), verdict: verdict(false), body: "<!-- terreno-approve:new222 -->\nx\n" });
     expect(poster.last.dismissFailed).toEqual(["5: 403"]);
     const check = gh.calls.find((c) => c.url.endsWith("/check-runs"));
     expect((check?.body as { output: { summary: string } }).output.summary).toContain("Could not dismiss the App's earlier approval (5: 403)");
@@ -164,19 +164,19 @@ describe("GitHub poster", () => {
 
   test("an approval does not dismiss anything and a failed review post throws", async () => {
     const gh = fakeGitHub({
-      "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [{ id: 1, user: { login: "brewery-approve" }, state: "APPROVED", body: body("old111") }] },
+      "GET https://api.github.com/repos/acme/widgets/pulls/7/reviews": { json: [{ id: 1, user: { login: "terreno-approve" }, state: "APPROVED", body: body("old111") }] },
       "POST https://api.github.com/repos/acme/widgets/pulls/7/reviews": { status: 422, json: { message: "Can not approve your own pull request" } },
     });
-    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "brewery-approve[bot]", fetch: gh });
+    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "terreno-approve[bot]", fetch: gh });
     await expect(poster.post({ context: context("new222"), verdict: verdict(true), body: body("new222") })).rejects.toThrow("422");
     expect(gh.calls.filter((c) => c.method === "PUT")).toHaveLength(0);
   });
 
   test("a skip writes only a skipped check run", async () => {
     const gh = fakeGitHub();
-    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "brewery-approve[bot]", fetch: gh });
+    const poster = githubPoster({ repo: "acme/widgets", token: "t", appLogin: "terreno-approve[bot]", fetch: gh });
     await poster.skip({ context: context(), reason: "draft pull request", body: "" });
     expect(gh.calls).toHaveLength(1);
-    expect(gh.calls[0].body).toMatchObject({ name: "brewery/approve", head_sha: "abc123", conclusion: "skipped", output: { title: "Skipped: draft pull request" } });
+    expect(gh.calls[0].body).toMatchObject({ name: "terreno/approve", head_sha: "abc123", conclusion: "skipped", output: { title: "Skipped: draft pull request" } });
   });
 });

@@ -3,7 +3,7 @@
 import type { ApproveContext } from "./context.ts";
 import type { Verdict } from "./review.ts";
 
-export const MARKER_PREFIX = "<!-- brewery-approve:";
+export const MARKER_PREFIX = "<!-- terreno-approve:";
 export const marker = (headSha: string): string => `${MARKER_PREFIX}${headSha} -->`;
 export const markerSha = (body: string): string | null => new RegExp(`${MARKER_PREFIX}([0-9a-f]+) -->`).exec(body)?.[1] ?? null;
 
@@ -57,7 +57,7 @@ export const renderBody = (verdict: Verdict, context: ApproveContext): string =>
   }
   if (verdict.rationale) lines.push(verdict.rationale.trim(), "");
   const g = verdict.gates;
-  const checks = context.pr.checks.filter((c) => c.name !== "brewery/approve");
+  const checks = context.pr.checks.filter((c) => c.name !== "terreno/approve");
   lines.push(
     `Checks: ${g.checks} (${checks.length}) · Bot threads: ${g.botThreads} unresolved · Human changes requested: ${g.humanChangesRequested ? "yes" : "no"} · Size: ${g.size}`,
     bandText(verdict),

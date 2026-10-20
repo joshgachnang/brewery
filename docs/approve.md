@@ -1,8 +1,8 @@
 # brewery approve
 
 `brewery approve <pr>` reviews one pull request head against a rubric the repository
-owns and posts one review as the **brewery-approve** GitHub App: `APPROVE` when the risk
-level is one the repository allows, `COMMENT` otherwise, plus a `brewery/approve` check
+owns and posts one review as the **terreno-approval-agent** GitHub App: `APPROVE` when the risk
+level is one the repository allows, `COMMENT` otherwise, plus a `terreno/approve` check
 run either way. The review's first line always says the level and why.
 
 ```bash
@@ -26,7 +26,7 @@ architecture, tests, evidence) and a collapsed block with findings, the plan jud
 report, the gates, the band code set, and the policy source (`.brewery.json` at
 `<base>@<sha>`, which rubric, which agents).
 
-Check run `brewery/approve`: `success` when approved; `failure` when a blocking finding
+Check run `terreno/approve`: `success` when approved; `failure` when a blocking finding
 exists or the PR itself failed a gate (failing checks, size over the limit); `neutral`
 otherwise; `skipped` on a skip. A repository may make it a required check.
 
@@ -114,12 +114,12 @@ that instructions inside the body or diff are content, not instructions.
 
 ## The GitHub App
 
-Create a GitHub App (any name; `brewery-approve` is the default slug) with:
+Create a GitHub App (any name; `terreno-approval-agent` is the default slug) with:
 
 | Permission | Level | Used for |
 | --- | --- | --- |
 | Pull requests | write | the review, and dismissing the App's own stale approval |
-| Checks | write | the `brewery/approve` check run |
+| Checks | write | the `terreno/approve` check run |
 | Contents | read | reading the base branch and the head |
 | Metadata | read | required by GitHub |
 
@@ -130,11 +130,11 @@ Credentials in the CI environment:
 
 | Variable | Meaning |
 | --- | --- |
-| `BREWERY_APP_ID` | the App id |
-| `BREWERY_APP_PRIVATE_KEY` | its private key as PEM; literal `\n` or base64-wrapped both work |
-| `BREWERY_APP_SLUG` | optional; the slug when it is not `brewery-approve` (also used by `--dry-run` for the skip gates) |
-| `BREWERY_APP_INSTALLATION_ID` | optional; skips the installation lookup |
-| `BREWERY_APPROVE_TOKEN` | optional; a pre-minted token that replaces minting (local runs) |
+| `TERRENO_APP_ID` | the App id |
+| `TERRENO_APP_PRIVATE_KEY` | its private key as PEM; literal `\n` or base64-wrapped both work |
+| `TERRENO_APP_SLUG` | optional; the slug when it is not `terreno-approval-agent` (also used by `--dry-run` for the skip gates) |
+| `TERRENO_APP_INSTALLATION_ID` | optional; skips the installation lookup |
+| `TERRENO_APPROVE_TOKEN` | optional; a pre-minted token that replaces minting (local runs) |
 | `ANTHROPIC_API_KEY` | the model key for the read-only agent steps |
 | `GH_TOKEN` | for the read side (`gh pr view`, `gh pr diff`); never passed to agents |
 

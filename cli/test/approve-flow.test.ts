@@ -37,7 +37,7 @@ const recorder = (): Poster & { calls: { kind: string; event?: string; reason?: 
   const calls: { kind: string; event?: string; reason?: string; body: string }[] = [];
   return {
     calls,
-    appLogin: "brewery-approve[bot]",
+    appLogin: "terreno-approve[bot]",
     post: async ({ verdict: v, body }) => {
       calls.push({ kind: "post", event: v.approve ? "APPROVE" : "COMMENT", body });
     },
@@ -81,7 +81,7 @@ describe("brewery approve", () => {
     expect(out.verdict?.approve).toBe(true);
     expect(out.posted).toBe(true);
     expect(poster.calls).toEqual([{ kind: "post", event: "APPROVE", body: out.body }]);
-    expect(out.body.startsWith("<!-- brewery-approve:abcdef1234567 -->\n**Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
+    expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n**Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
     expect(out.body).toContain("| Plan match | 3/3 | T1 delivered; nothing beyond the plan |");
     expect(out.body).toContain("| Tests | 2/3 | no test needed |");
     expect(out.body).toContain("Plan: aligned — T1 delivered.");
@@ -138,7 +138,7 @@ describe("brewery approve", () => {
     const out = await approve(ctx, deps(view({ isDraft: true }), docs, poster), 12, { dryRun: false });
     expect(out.skipped).toBe("draft pull request");
     expect(out.verdict).toBeNull();
-    expect(out.body).toBe("<!-- brewery-approve:abcdef1234567 -->\n**Skipped.** draft pull request\n");
+    expect(out.body).toBe("<!-- terreno-approve:abcdef1234567 -->\n**Skipped.** draft pull request\n");
     expect(poster.calls).toEqual([{ kind: "skip", reason: "draft pull request", body: out.body }]);
     expect(existsSync(join(runDir(ctx.dir, "approve-16"), "steps"))).toBe(false);
   });
@@ -157,15 +157,15 @@ describe("skipReason", () => {
     ({ pr, policy: { approve: { skipLabels: ["hold"], skipAuthors: ["dependabot[bot]"] } } }) as never;
 
   test("drafts, labels, authors, the App itself, human change requests, and an existing approval at this head", () => {
-    expect(skipReason(base(view()), "brewery-approve[bot]")).toBeNull();
+    expect(skipReason(base(view()), "terreno-approve[bot]")).toBeNull();
     expect(skipReason(base(view({ labels: ["hold"] })), undefined)).toBe('label "hold"');
     expect(skipReason(base(view({ author: "dependabot[bot]" })), undefined)).toBe("author dependabot[bot] is skipped by policy");
-    expect(skipReason(base(view({ author: "brewery-approve", authorIsBot: true })), "brewery-approve[bot]")).toBe("the approver cannot review its own pull request");
+    expect(skipReason(base(view({ author: "terreno-approve", authorIsBot: true })), "terreno-approve[bot]")).toBe("the approver cannot review its own pull request");
     expect(skipReason(base(view({ reviews: [{ id: "1", author: "kim", state: "CHANGES_REQUESTED", body: "", isBot: false }] })), undefined)).toBe("kim requested changes");
-    const approved = view({ reviews: [{ id: "2", author: "brewery-approve", state: "APPROVED", body: "<!-- brewery-approve:abcdef1234567 -->\nok", isBot: true }] });
-    expect(skipReason(base(approved), "brewery-approve[bot]")).toBe("already approved at abcdef1");
-    const stale = view({ reviews: [{ id: "2", author: "brewery-approve", state: "APPROVED", body: "<!-- brewery-approve:0000000 -->\nok", isBot: true }] });
-    expect(skipReason(base(stale), "brewery-approve[bot]")).toBeNull();
+    const approved = view({ reviews: [{ id: "2", author: "terreno-approve", state: "APPROVED", body: "<!-- terreno-approve:abcdef1234567 -->\nok", isBot: true }] });
+    expect(skipReason(base(approved), "terreno-approve[bot]")).toBe("already approved at abcdef1");
+    const stale = view({ reviews: [{ id: "2", author: "terreno-approve", state: "APPROVED", body: "<!-- terreno-approve:0000000 -->\nok", isBot: true }] });
+    expect(skipReason(base(stale), "terreno-approve[bot]")).toBeNull();
   });
 });
 

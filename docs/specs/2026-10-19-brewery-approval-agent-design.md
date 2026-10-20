@@ -92,7 +92,7 @@ it could not produce a verdict (no config, no token, agent failure).
 | 6 IP judge | Clean agent. Prompt holds only the plan, the task scope the PR claims, and the diff. Returns conformance JSON | agent (`stages.approve`) |
 | 7 Rubric | Agent gets the rubric, the diff, the PR body, checks, evidence inventory, the IP judge's report, and the classification. Returns the verdict JSON. Read-only tools, turn budget | agent (`stages.approve`) |
 | 8 Merge | `level = max(modelLevel, floor)` then `min(level, ceiling)`; fan-out takes the strictest level and the union of findings; `approve = level ∈ approveLevels ∧ no blocking finding ∧ gates` | code |
-| 9 Post | Review `APPROVE` or `COMMENT` with the rendered body; check run `brewery/approve`; dismiss the App's prior approval when the new verdict is not approve | code, App token |
+| 9 Post | Review `APPROVE` or `COMMENT` with the rendered body; check run `terreno/approve`; dismiss the App's prior approval when the new verdict is not approve | code, App token |
 
 `--dry-run` stops after step 8 and prints the verdict JSON and the rendered body.
 
@@ -155,7 +155,7 @@ after the agent returns and overwrite anything the agent wrote.
 ### Review body
 
 ```markdown
-<!-- brewery-approve:<headSha> -->
+<!-- terreno-approve:<headSha> -->
 **Risk: low — approved.** Test-and-docs-only change with a green CI run and a matching plan.
 
 | Dimension | Score | Why |
@@ -187,7 +187,7 @@ review already post inline, and the attention contract says a PR must be readabl
 
 ### Check run
 
-`brewery/approve` on the head: `success` when approved, `neutral` when not approved without a
+`terreno/approve` on the head: `success` when approved, `neutral` when not approved without a
 blocking finding, `failure` when a blocking finding exists or a gate fails because of the PR
 (failing checks, size). Title `Risk: <level> — approved | not approved`, summary = rationale.
 A repo can make it a required check; terreno should not until the dry-run period ends.
@@ -305,9 +305,9 @@ without a permission check; a migration without a rollback note; a test that ass
   `CIRCLE_PULL_REQUEST` for the number; secrets are CircleCI project env vars that the agent's
   environment allowlist excludes.
 - The App needs *Pull requests: write*, *Checks: write*, *Contents: read*, *Metadata: read*.
-  The CLI mints an installation token from `BREWERY_APP_ID` + `BREWERY_APP_PRIVATE_KEY`
-  (+ optional `BREWERY_APP_INSTALLATION_ID`, else discovered by repo) and uses it only for the
-  post step. `BREWERY_APPROVE_TOKEN` short-circuits minting for local dry runs.
+  The CLI mints an installation token from `TERRENO_APP_ID` + `TERRENO_APP_PRIVATE_KEY`
+  (+ optional `TERRENO_APP_INSTALLATION_ID`, else discovered by repo) and uses it only for the
+  post step. `TERRENO_APPROVE_TOKEN` short-circuits minting for local dry runs.
 
 ### CI templates
 
@@ -319,8 +319,8 @@ test jobs, `filters` to PR pipelines) and `templates/ci/github-approve.yml` (a w
 
 ## Rollout (terreno)
 
-1. Josh creates the GitHub App (`brewery-approve`), installs it on `TerrenoLabs/terreno`, and
-   adds `BREWERY_APP_ID`, `BREWERY_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY` to the CircleCI
+1. Josh creates the GitHub App (`terreno-approval-agent`), installs it on `TerrenoLabs/terreno`, and
+   adds `TERRENO_APP_ID`, `TERRENO_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY` to the CircleCI
    project.
 2. Terreno PR: `.brewery.json` `approve` block with `approveLevels: []`, the job in
    `continue-config.yml`. Every PR gets a comment review and a check run; nothing approves.

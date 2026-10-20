@@ -128,7 +128,7 @@ describe("gatherContext", () => {
     labels: [],
     base: "master",
     headSha: "775ed94aa1e0dd103a98f9965b93390bbd3db2c3",
-    reviews: [{ id: "PRR_1", author: "brewery-approve[bot]", state: "APPROVED", body: "<!-- brewery-approve:old -->", isBot: true }],
+    reviews: [{ id: "PRR_1", author: "terreno-approve[bot]", state: "APPROVED", body: "<!-- terreno-approve:old -->", isBot: true }],
     checks: [{ name: "test", bucket: "pass" }],
     botThreads: [],
   };

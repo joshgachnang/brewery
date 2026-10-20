@@ -224,8 +224,8 @@ tool output, and final result records. `command` profiles emit only step start a
 
 ## Approving pull requests: `brewery approve <pr>`
 
-One head, one verdict, one review posted as the brewery-approve GitHub App: `APPROVE` when
-the risk level is one the repo allows, `COMMENT` otherwise, plus a `brewery/approve` check
+One head, one verdict, one review posted as the terreno-approval-agent GitHub App: `APPROVE` when
+the risk level is one the repo allows, `COMMENT` otherwise, plus a `terreno/approve` check
 run. Policy comes from the base branch's `.brewery.json` `approve` block and a rubric
 markdown; path rules set floors and ceilings in code; a clean agent judges plan-backed PRs
 against their plan; the rubric agent scores plan match, architecture, tests, and evidence;

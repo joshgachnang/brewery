@@ -22,7 +22,7 @@ describe("approve config", () => {
   });
 
   test("a repo's approve block merges field by field and replaces pathRules wholesale", () => {
-    const dir = mkdtempSync(join(tmpdir(), "brewery-approve-config-"));
+    const dir = mkdtempSync(join(tmpdir(), "terreno-approve-config-"));
     writeFileSync(
       join(dir, ".brewery.json"),
       JSON.stringify({ approve: { approveLevels: [], pathRules: [{ match: ["src/**"], category: "source", floor: "medium" }] } }),

@@ -11,7 +11,7 @@ import { DIMENSIONS, VERDICT_SCHEMA, validateVerdict, type Dimension, type Dimen
 
 export { DEFAULT_RUBRIC };
 
-export const CHECK_NAME = "brewery/approve";
+export const CHECK_NAME = "terreno/approve";
 
 const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
 

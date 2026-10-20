@@ -4,7 +4,7 @@ Status: approved 2026-10-19
 
 `brewery approve <pr>` reviews one pull request head against a repo-owned rubric and posts one
 review as a dedicated GitHub App: `APPROVE` when the risk level is in the repo's
-`approveLevels`, otherwise `COMMENT`, plus a `brewery/approve` check run either way. Plan-backed
+`approveLevels`, otherwise `COMMENT`, plus a `terreno/approve` check run either way. Plan-backed
 PRs are judged first by a clean agent that sees only the plan and the diff. Deterministic path
 rules set floors and ceilings on the level before the model scores; gates (green checks, no
 unresolved bot threads, no human change request, size, no policy edits) block approval in code.
@@ -61,7 +61,7 @@ code.
     passes through.
   - Read-only steps get an allowlisted child environment (`PATH`, `HOME`, `TMPDIR`, `USER`,
     `SHELL`, `ANTHROPIC_API_KEY`, the codex provider's `envKey`, `BREWERY_PROMPT_FILE`,
-    `BREWERY_RESULT_FILE`) and never `GH_TOKEN`, `GITHUB_TOKEN`, or `BREWERY_APP_*`.
+    `BREWERY_RESULT_FILE`) and never `GH_TOKEN`, `GITHUB_TOKEN`, or `TERRENO_APP_*`.
   - Claude's `--output-format json` puts the structured result in `structured_output`; `readResult`
     accepts that envelope when the result file is absent, so the agent need not write a file.
   - Verify: `agentArgv` snapshot tests for both modes; an env test proving a `GH_TOKEN` in the
@@ -127,7 +127,7 @@ code.
     from base → skip gates → classify → context → judge → rubric → merge → render. State and
     step files live in `.terreno/brewery/approve-<pr>/` so prompts and results are inspectable;
     events go to the run's `events.jsonl`.
-  - `render(verdict)` produces the body from the design: marker `<!-- brewery-approve:<sha> -->`,
+  - `render(verdict)` produces the body from the design: marker `<!-- terreno-approve:<sha> -->`,
     bold first line `Risk: <level> — approved|not approved.` plus one sentence, the dimension
     table, and a collapsed findings-and-gates block naming the policy source.
   - `--dry-run` prints the verdict JSON and the body and exits 0 without GitHub writes.
@@ -140,19 +140,19 @@ code.
 - [x] **T7** — GitHub posting as the App
   - Depends on: T6
   - Files: `cli/src/approve/github.ts`, `cli/src/approve/token.ts`, `cli/test/approve-github.test.ts`
-  - `installationToken()`: `BREWERY_APPROVE_TOKEN` if set; else sign a JWT (RS256, `node:crypto`)
-    from `BREWERY_APP_ID` + `BREWERY_APP_PRIVATE_KEY`, resolve the installation for the repo
-    (`GET /repos/{owner}/{repo}/installation`) unless `BREWERY_APP_INSTALLATION_ID` is set, and
+  - `installationToken()`: `TERRENO_APPROVE_TOKEN` if set; else sign a JWT (RS256, `node:crypto`)
+    from `TERRENO_APP_ID` + `TERRENO_APP_PRIVATE_KEY`, resolve the installation for the repo
+    (`GET /repos/{owner}/{repo}/installation`) unless `TERRENO_APP_INSTALLATION_ID` is set, and
     `POST /app/installations/{id}/access_tokens`. Token is used only in this module.
   - `postReview`: find the App's review with this head's marker → no-op; else
     `POST /pulls/{n}/reviews` with `event: APPROVE|COMMENT` and the body. When the verdict is not
     approve and the App has an active `APPROVED` review on an older head, `PUT …/dismissals`
     with the new first line; on 403 record "could not dismiss" in the check-run summary.
-  - `postCheck`: `POST /repos/{owner}/{repo}/check-runs` name `brewery/approve`, head SHA,
+  - `postCheck`: `POST /repos/{owner}/{repo}/check-runs` name `terreno/approve`, head SHA,
     conclusion per the design, title and summary from the verdict.
   - Verify: unit tests with a fake fetch for token minting (JWT claims `iss`, `iat`, `exp`),
     idempotence on an existing marker, dismissal path, and the 403 fallback; a live `--dry-run`
-    against a real terreno PR with `BREWERY_APPROVE_TOKEN` prints a verdict (recorded in the
+    against a real terreno PR with `TERRENO_APPROVE_TOKEN` prints a verdict (recorded in the
     PR evidence, not a test).
 
 - [x] **T8** — CI templates and docs
@@ -175,9 +175,9 @@ code.
   - Depends on: T7, T8
   - Files: in `TerrenoLabs/terreno`: `.brewery.json`, `.circleci/continue-config.yml`,
     `docs/approval-rubric.md`
-  - Human gate: Josh creates the `brewery-approve` GitHub App (Pull requests: write, Checks:
+  - Human gate: Josh creates the `terreno-approval-agent` GitHub App (Pull requests: write, Checks:
     write, Contents: read, Metadata: read), installs it on `TerrenoLabs/terreno`, and adds
-    `BREWERY_APP_ID`, `BREWERY_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY` to the CircleCI project.
+    `TERRENO_APP_ID`, `TERRENO_APP_PRIVATE_KEY`, `ANTHROPIC_API_KEY` to the CircleCI project.
   - Terreno PR adds the `approve` block with `approveLevels: []`, a rubric file seeded from the
     default plus terreno's reviewer rules (`.cursor/agents/terreno-reviewer.md`: APIError,
     findExactlyOne, logger, testIDs, Luxon, generated SDK only), and the CircleCI job.
