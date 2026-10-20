@@ -40,7 +40,8 @@ export const gatesFor = (context: ApproveContext, approve: ApproveConfig): Gates
     checks,
     botThreads: context.pr.botThreads.length,
     humanChangesRequested: [...latestByHuman.values()].includes("CHANGES_REQUESTED"),
-    size: lines > approve.maxLines || context.files.length > approve.maxFiles ? "over" : "ok",
+    // A limit of 0 turns that half of the size gate off.
+    size: (approve.maxLines > 0 && lines > approve.maxLines) || (approve.maxFiles > 0 && context.files.length > approve.maxFiles) ? "over" : "ok",
   };
 };
 
