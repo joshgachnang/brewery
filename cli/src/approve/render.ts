@@ -11,6 +11,12 @@ const LABELS: Record<string, string> = { ipMatch: "Plan match", architecture: "A
 
 const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
 
+// A dimension's reasons as one paragraph: each reason a sentence, in the agent's order.
+const paragraph = (reasons: string[]): string => {
+  const sentences = reasons.map((r) => r.replace(/\s+/g, " ").trim()).filter(Boolean).map((r) => (/[.!?]$/.test(r) ? r : `${r}.`));
+  return sentences.join(" ") || "—";
+};
+
 const bandText = (verdict: Verdict): string => {
   const c = verdict.classification;
   const parts = [`Floor: ${c.floor ?? "none"}`, `Ceiling: ${c.ceiling ?? "none"}`];
@@ -32,12 +38,11 @@ export const renderBody = (verdict: Verdict, context: ApproveContext): string =>
   if (!verdict.approve && verdict.reasons.length > 1) {
     lines.push("Also: " + verdict.reasons.slice(1).join("; ") + ".", "");
   }
-  lines.push("| Dimension | Score | Why |", "| --- | --- | --- |");
   for (const [key, label] of Object.entries(LABELS)) {
     const d = verdict.dimensions[key as keyof Verdict["dimensions"]];
-    lines.push(`| ${label} | ${d.score}/3 | ${cell(d.reasons.join("; ") || "—")} |`);
+    lines.push(`#### ${label} ${d.score}/3`, "", paragraph(d.reasons), "");
   }
-  lines.push("", `<details><summary>Findings (${verdict.findings.length}), plan, and gates</summary>`, "");
+  lines.push(`<details><summary>Findings (${verdict.findings.length}), plan, and gates</summary>`, "");
   if (verdict.findings.length) {
     for (const f of verdict.findings) {
       const who = verdict.agents.length > 1 ? ` _(${f.agents.join(", ")})_` : "";

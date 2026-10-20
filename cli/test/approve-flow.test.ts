@@ -82,8 +82,9 @@ describe("brewery approve", () => {
     expect(out.posted).toBe(true);
     expect(poster.calls).toEqual([{ kind: "post", event: "APPROVE", body: out.body }]);
     expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n**Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
-    expect(out.body).toContain("| Plan match | 3/3 | T1 delivered; nothing beyond the plan |");
-    expect(out.body).toContain("| Tests | 2/3 | no test needed |");
+    expect(out.body).toContain("#### Plan match 3/3\n\nT1 delivered. Nothing beyond the plan.\n");
+    expect(out.body).not.toContain("| Dimension |");
+    expect(out.body).toContain("#### Tests 2/3\n\nno test needed.\n");
     expect(out.body).toContain("Plan: aligned — T1 delivered.");
     expect(out.body).toContain("Checks: pass (1) · Bot threads: 0 unresolved · Human changes requested: no · Size: ok");
     expect(out.body).toContain("Floor: none · Ceiling: low · Categories: docs");
@@ -207,7 +208,7 @@ describe("renderBody", () => {
       ctx,
     );
     expect(body).toContain("**Risk: medium — not approved.** risk medium is above the configured approval levels (low)\n\nAlso: 2 unresolved bot review threads.\n");
-    expect(body).toContain("| Architecture | 2/3 | — |");
+    expect(body).toContain("#### Architecture 2/3\n\n—\n");
     expect(body).toContain("Plan: none referenced.");
     expect(body).toContain("rubric `docs/r.md`, agents claude, failed: codex (no structured output)");
   });
