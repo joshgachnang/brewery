@@ -33,15 +33,24 @@ const ROW_STATUS: [RegExp, VerificationRow["status"]][] = [
   [/🧭|instructions/i, "instructions"],
 ];
 
+// A row is `| Status | Scope | Evidence |`, but the status mark may sit in any cell: a
+// `| Check | Result |` table with ✅ in the result column is the same claim.
 const parseVerification = (text: string): VerificationRow[] => {
   const rows: VerificationRow[] = [];
   for (const line of text.split(/\r?\n/)) {
     if (!line.trim().startsWith("|")) continue;
     const cells = line.trim().slice(1, -1).split("|").map((c) => c.trim());
-    if (cells.length < 3 || /^-+$/.test(cells[0]) || /^status$/i.test(cells[0])) continue;
-    const status = ROW_STATUS.find(([re]) => re.test(cells[0]))?.[1];
-    if (!status) continue;
-    rows.push({ status, scope: cells[1], evidence: cells.slice(2).join(" | ") });
+    if (cells.length < 2 || cells.every((c) => /^:?-+:?$/.test(c)) || /^(status|check)$/i.test(cells[0])) continue;
+    const statusAt = cells.findIndex((cell) => ROW_STATUS.some(([re]) => re.test(cell)));
+    if (statusAt < 0) continue;
+    const status = ROW_STATUS.find(([re]) => re.test(cells[statusAt]))?.[1] as VerificationRow["status"];
+    const rest = cells.filter((_, i) => i !== statusAt);
+    if (statusAt === 0) {
+      rows.push({ status, scope: rest[0] ?? "", evidence: rest.slice(1).join(" | ") });
+    } else {
+      // Status mid-row: the cells before it are the scope, the status cell itself is the evidence.
+      rows.push({ status, scope: cells.slice(0, statusAt).join(" | "), evidence: cells.slice(statusAt).join(" | ") });
+    }
   }
   return rows;
 };
