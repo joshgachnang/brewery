@@ -35,14 +35,18 @@ otherwise; `skipped` on a skip. A repository may make it a required check.
 1. **Band (code).** Every changed file is matched against `pathRules`. The highest
    `floor` of any file is the minimum level. A `ceiling` applies only when every file
    matches a ceiling rule; then the loosest per-file ceiling caps the level. A `never`
-   file blocks approval outright. A plan edited in the same PR raises the floor to
-   medium.
+   file blocks approval outright. A file that matches both a floor and a lower ceiling
+   takes the floor: a ceiling never lowers a level below a floor. A plan edited in the
+   same PR raises the floor to medium.
 2. **Plan judge (clean agent).** When the PR references an implementation plan, an agent
    that sees only the plan, the claimed task scope, and the diff reports aligned or
    drift, missing and unrequested work, and evidence gaps.
 3. **Rubric (agent).** The agent gets the rubric, the band, the PR body marked as claims,
    checks, unresolved bot threads, the evidence inventory, the judge's report, and the
-   diff, and returns a level, the four scores, findings, and a rationale.
+   diff, and returns a level, the four scores, findings, and a rationale. The body's
+   `## Verification` table is read row by row: `| Status | Scope | Evidence |` with ✅,
+   ⚠️ (not tested), or 🧭 (instructions) in the first cell, or a `| Check | Result |`
+   table with the mark in the result cell. A row without a mark is not a claim.
 4. **Merge and gates (code).** The level is clamped into the band. With fan-out, the
    strictest level wins and findings are unioned. Approval also needs: no failing or
    pending check on the head (other than the approver's own), no unresolved review thread

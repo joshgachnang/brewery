@@ -30,6 +30,14 @@ describe("splitBody", () => {
     expect(body.stageResult).toEqual({ v: "2", stage: "brew", status: "PASS", ip: "deploy-to-gcp", sha: "775ed94aa1e0dd103a98f9965b93390bbd3db2c3", done: ["2.1 Roast PASS", "2.2 Roast PASS"], next: "taste", action: "Watch CI and review bots; react" });
   });
 
+  test("a Check | Result table with the status mark in the result column parses as rows", () => {
+    const body = "## Verification\n\n| Check | Result |\n| --- | --- |\n| `bun test` | ✅ 4 pass |\n| The model step | ⚠️ Not tested locally: no credential |\n| Plain prose row | nothing here |\n";
+    expect(splitBody(body).verification).toEqual([
+      { status: "tested", scope: "`bun test`", evidence: "✅ 4 pass" },
+      { status: "notTested", scope: "The model step", evidence: "⚠️ Not tested locally: no credential" },
+    ]);
+  });
+
   test("a last-position Verification table and sections containing a capital Z parse", () => {
     const last = splitBody("## Why\nZero downtime deploy.\n\n## Verification\n| Status | Scope | Evidence |\n| --- | --- | --- |\n| ⚠️ Not tested | Live apply | Deferred |\n");
     expect(last.why).toBe("Zero downtime deploy.");
