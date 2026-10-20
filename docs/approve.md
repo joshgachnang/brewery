@@ -21,8 +21,8 @@ Design: [`docs/specs/2026-10-19-brewery-approval-agent-design.md`](specs/2026-10
 | `Risk: <level> — not approved.` | The reasons follow, first one on that line, the rest after "Also:". A human reviews. |
 | `Skipped.` | No model ran: draft, skip label, skipped author, the App's own PR, a human change request, or already approved at this head. Only the check run is written. |
 
-The body then has a table of four dimensions scored 0–3 with reasons (plan match,
-architecture, tests, evidence) and a collapsed block with findings, the plan judge's
+The body then has a heading per dimension with its score 0–3 (plan match,
+architecture, tests, evidence), each followed by a paragraph of reasons, and a collapsed block with findings, the plan judge's
 report, the gates, the band code set, and the policy source (`.brewery.json` at
 `<base>@<sha>`, which rubric, which agents).
 
