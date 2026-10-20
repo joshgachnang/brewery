@@ -79,14 +79,19 @@ A finding here is blocking when it is certain and should-fix when it is likely.
 
 ## Signals that move the level
 
-- Raise one level: more than ~400 changed lines or ~20 files; more than two packages
-  touched; deletions outnumber additions in source; a `TODO`, `FIXME`, or commented-out
-  code added; explicit `any` added; PR body missing `Why`, `What changed`, or
-  `Verification`; `WIP` in the title; the plan edited in the same PR to match the code.
+- Raise one level: more than two packages touched; deletions outnumber additions in
+  source; a `TODO`, `FIXME`, or commented-out code added; explicit `any` added; PR body
+  missing `Why`, `What changed`, or `Verification`; `WIP` in the title; the plan edited
+  in the same PR to match the code.
 - Never low: new logic without a test; a `⚠️ Not tested` row; an unresolved bot thread;
-  a revert; a bot-authored PR.
-- Can stay low despite size: pure renames and moves; regenerated SDK or snapshots with
-  the generating change in the same PR; dependency patch bumps.
+  a revert.
+- Size never moves the level. Changed lines and file counts say nothing about risk on
+  their own: judge what the lines do. Pure renames and moves, regenerated SDK or
+  snapshots with the generating change in the same PR, dependency patch bumps, and
+  mechanical sweeps are low however large; a ten-line change to auth is not.
+- A bot-authored PR (a dependency bot, a cloud coding agent) is judged by the same rules
+  and can be low. The author is context, not a level: hold it to the evidence it shows,
+  the same as a human.
 
 ## Blocking findings
 
