@@ -80,6 +80,14 @@ describe("gatesFor", () => {
     const open = context(docsOnly, {}, { reviews: [{ id: "1", author: "kim", state: "CHANGES_REQUESTED", body: "", isBot: false }] });
     expect(gatesFor(open, DEFAULT_CONFIG.approve).humanChangesRequested).toBe(true);
   });
+  test("a limit of 0 turns the size gate off", () => {
+    const big = [{ path: "a.ts", additions: 5000, deletions: 0 }];
+    expect(gatesFor(context(big), { ...DEFAULT_CONFIG.approve, maxLines: 0 }).size).toBe("ok");
+    const many = Array.from({ length: 60 }, (_, i) => ({ path: `f${i}.ts`, additions: 1, deletions: 0 }));
+    expect(gatesFor(context(many), { ...DEFAULT_CONFIG.approve, maxFiles: 0 }).size).toBe("ok");
+    expect(gatesFor(context(many), { ...DEFAULT_CONFIG.approve, maxLines: 0 }).size).toBe("over");
+  });
+
   test("size is over when lines or files exceed the limits", () => {
     expect(gatesFor(context([{ path: "a.ts", additions: 801, deletions: 0 }]), DEFAULT_CONFIG.approve).size).toBe("over");
     const many = Array.from({ length: 41 }, (_, i) => ({ path: `f${i}.ts`, additions: 1, deletions: 0 }));

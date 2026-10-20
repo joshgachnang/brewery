@@ -99,8 +99,8 @@ by. The `approve` block of `.brewery.json`:
 | `planDirs` | `["docs/implementationPlans", "docs/plans", "docs/tasks"]` | Where plans live. Found from body paths, the stage-result `ip:` slug, changed plan files, and a `docs/tasks/<slug>.md` sibling. |
 | `skipAuthors` | `["dependabot[bot]"]` | PR authors that get a skip. |
 | `skipLabels` | `["do-not-merge", "hold"]` | PR labels that get a skip. |
-| `maxLines` | `800` | Changed lines above which the size gate blocks approval. |
-| `maxFiles` | `40` | Changed files above which the size gate blocks approval. |
+| `maxLines` | `800` | Changed lines above which the size gate blocks approval. `0` turns the line limit off. |
+| `maxFiles` | `40` | Changed files above which the size gate blocks approval. `0` turns the file limit off. |
 | `budgetUsd` | `5` | Dollar budget per agent step (two steps per head, times the agents in `stages.approve`). |
 | `pathRules` | the list below | Ordered rules; a file takes every category it matches. A repo's list replaces the default wholesale. |
 | `selfChecks` | `["terreno/approve", "ci/circleci: approve", "approve"]` | Check names that belong to the approver (its check run, the CI job it runs in). Never pending, never failing, for the gates and for `--wait-checks`. |
