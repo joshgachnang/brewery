@@ -183,12 +183,16 @@ The installation token is minted in the post step and used only there.
 
 - `templates/ci/circleci-approve.yml`: a job to paste into `.circleci/config.yml` (or
   `continue-config.yml`), with `requires` on the test jobs and a halt outside pull
-  request pipelines.
+  request pipelines. After checkout it resets the working tree to the base branch, so
+  nothing from the PR tree (a `bunfig.toml` preload, `.claude/` hooks, CI scripts) runs
+  in the job that holds the App key; the head stays in the object store and brewery
+  reads it with `git show <sha>:`.
 - `templates/ci/github-approve.yml`: a workflow on `pull_request_target` that checks out
   the base, fetches the head as a ref, and runs the command. The PR's code is read, not
   run.
 
-Both clone brewery at `master`; pin a tag or commit once one is cut.
+Both fetch brewery at `BREWERY_REF`, which takes a branch, tag, or commit sha. The job
+holds the App key, so pin a commit and bump it deliberately.
 
 ## Rollout
 
