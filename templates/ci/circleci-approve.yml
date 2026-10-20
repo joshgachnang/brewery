@@ -42,7 +42,7 @@ jobs:
       - run:
           name: Install Claude Code and brewery
           command: |
-            npm install -g @anthropic-ai/claude-code
+            sudo npm install -g @anthropic-ai/claude-code
             git clone --depth 1 --branch "$BREWERY_REF" https://github.com/joshgachnang/brewery.git "$HOME/brewery"
             cd "$HOME/brewery/cli" && bun install --frozen-lockfile
       - run:
