@@ -1,7 +1,7 @@
 // The review body and check run a verdict turns into. One review per head, found again
 // by the marker; the first line carries the level and the decision.
 import type { ApproveContext } from "./context.ts";
-import type { Verdict } from "./review.ts";
+import { otherChecks, type Verdict } from "./review.ts";
 
 export const MARKER_PREFIX = "<!-- terreno-approve:";
 export const marker = (headSha: string): string => `${MARKER_PREFIX}${headSha} -->`;
@@ -57,7 +57,7 @@ export const renderBody = (verdict: Verdict, context: ApproveContext): string =>
   }
   if (verdict.rationale) lines.push(verdict.rationale.trim(), "");
   const g = verdict.gates;
-  const checks = context.pr.checks.filter((c) => c.name !== "terreno/approve");
+  const checks = otherChecks(context);
   lines.push(
     `Checks: ${g.checks} (${checks.length}) · Bot threads: ${g.botThreads} unresolved · Human changes requested: ${g.humanChangesRequested ? "yes" : "no"} · Size: ${g.size}`,
     bandText(verdict),

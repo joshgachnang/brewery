@@ -27,7 +27,7 @@ export interface AgentProfile {
   timeoutMin?: number;
 }
 
-export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste", "compound", "cellar", "approve"] as const;
+export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste", "compound", "cellar", "approve", "calibrate"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Stages whose agents all run and whose verdicts are merged. Every other stage uses
@@ -62,6 +62,9 @@ export interface ApproveConfig {
   budgetUsd: number;
   // A repo's list replaces this one wholesale.
   pathRules: PathRule[];
+  // Check names that belong to the approver itself (its check run and the CI job it runs
+  // in). They never count as pending or failing, so a job can judge the head it runs on.
+  selfChecks: string[];
 }
 
 export const DEFAULT_PATH_RULES: PathRule[] = [
@@ -131,6 +134,7 @@ export const DEFAULT_CONFIG: Config = {
     compound: ["claude"],
     cellar: ["claude"],
     approve: ["claude"],
+    calibrate: ["claude"],
   },
   skillsDir: join(homedir(), ".claude", "skills"),
   worktreeSetup: [],
@@ -158,6 +162,7 @@ export const DEFAULT_CONFIG: Config = {
     maxFiles: 40,
     budgetUsd: 5,
     pathRules: DEFAULT_PATH_RULES,
+    selfChecks: ["terreno/approve", "ci/circleci: approve", "approve"],
   },
 };
 

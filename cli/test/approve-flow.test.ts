@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { checkRun, markerSha, renderBody } from "../src/approve/render.ts";
-import { approve, gitReaders, skipReason, type ApproveDeps, type Poster } from "../src/commands/approve.ts";
+import { approve, gitReaders, skipReason, waitForOtherChecks, type ApproveDeps, type Poster } from "../src/commands/approve.ts";
 import { newState, runDir } from "../src/state.ts";
 import type { ChangedFile, PrView } from "../src/vcs.ts";
 import { fakeSetup, quietCtx, run, tempRepo } from "./helpers.ts";
@@ -212,3 +212,64 @@ describe("renderBody", () => {
     expect(body).toContain("rubric `docs/r.md`, agents claude, failed: codex (no structured output)");
   });
 });
+
+describe("brewery approve: CI gate", () => {
+  test("a failing check skips the head before any model runs", async () => {
+    const ctx = setup("approve-gate-red", []);
+    const poster = recorder();
+    const red = view({ checks: [{ name: "test", bucket: "fail" }, { name: "lint", bucket: "pass" }, { name: "ci/circleci: approve", bucket: "pending" }] });
+    const out = await approve(ctx, deps(red, docs, poster), 12, { dryRun: false });
+    expect(out.skipped).toBe("checks failing on this head: test");
+    expect(poster.calls).toEqual([{ kind: "skip", reason: "checks failing on this head: test", body: out.body }]);
+    expect(existsSync(join(runDir(ctx.dir, "approve-gate-red"), "steps"))).toBe(false);
+  });
+
+  test("with checks required, a pending check skips; the approver's own job and check run never count", async () => {
+    const ctx = setup("approve-gate-pending", [
+      { match: "approve (plan judge)", structured: judge },
+      { match: "approve (rubric)", structured: verdict("low") },
+    ]);
+    const own = [{ name: "ci/circleci: approve", bucket: "pending" as const }, { name: "terreno/approve", bucket: "pending" as const }];
+    const pending = view({ checks: [{ name: "test", bucket: "pending" }, ...own] });
+    expect(skipReason(await contextOf(pending), undefined, { requireChecks: true })).toBe("checks still pending on this head: test");
+    expect(skipReason(await contextOf(pending), undefined)).toBeNull();
+    const out = await approve(ctx, deps(view({ checks: [{ name: "test", bucket: "pass" }, ...own] }), docs, recorder()), 12, { dryRun: false, requireChecks: true });
+    expect(out.skipped).toBeNull();
+    expect(out.verdict?.approve).toBe(true);
+    expect(out.verdict?.gates.checks).toBe("pass");
+  });
+
+  test("waitForOtherChecks polls until the other checks finish and ignores the approver's own", async () => {
+    const views = [
+      view({ checks: [{ name: "test", bucket: "pending" }, { name: "ci/circleci: approve", bucket: "pending" }] }),
+      view({ checks: [{ name: "test", bucket: "pending" }, { name: "ci/circleci: approve", bucket: "pending" }] }),
+      view({ checks: [{ name: "test", bucket: "pass" }, { name: "ci/circleci: approve", bucket: "pending" }] }),
+    ];
+    let i = 0;
+    const slept: number[] = [];
+    const ci = { prView: async () => views[Math.min(i++, views.length - 1)] };
+    const waited = await waitForOtherChecks(ci, "/repo", 12, { selfChecks: ["ci/circleci: approve"] }, { minutes: 5, intervalMs: 7, sleep: async (ms) => { slept.push(ms); } });
+    expect(slept).toEqual([7, 7]);
+    expect(waited.headChanged).toBe(false);
+    expect(waited.view.checks[0].bucket).toBe("pass");
+  });
+
+  test("waitForOtherChecks stops when the head moves, and at the deadline", async () => {
+    const moved = [view({ checks: [{ name: "test", bucket: "pending" }] }), view({ headSha: "fedcba9876543", checks: [{ name: "test", bucket: "pending" }] })];
+    let i = 0;
+    const ci = { prView: async () => moved[Math.min(i++, moved.length - 1)] };
+    const out = await waitForOtherChecks(ci, "/repo", 12, { selfChecks: [] }, { minutes: 5, intervalMs: 1, sleep: async () => {} });
+    expect(out.headChanged).toBe(true);
+    let j = 0;
+    const stuck = { prView: async () => { j++; return view({ checks: [{ name: "test", bucket: "pending" }] }); } };
+    const late = await waitForOtherChecks(stuck, "/repo", 12, { selfChecks: [] }, { minutes: 0, intervalMs: 1, sleep: async () => {} });
+    expect(late.headChanged).toBe(false);
+    expect(j).toBe(1);
+  });
+});
+
+const contextOf = async (pr: PrView): Promise<Parameters<typeof skipReason>[0]> => {
+  const { gatherContext } = await import("../src/approve/context.ts");
+  const d = deps(pr, docs);
+  return gatherContext({ ci: d.ci, repo: "/repo", pr: pr.number, view: pr, readBase: d.readBase, readHead: d.readHead, baseSha: d.baseSha });
+};

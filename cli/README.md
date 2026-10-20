@@ -230,10 +230,21 @@ run. Policy comes from the base branch's `.brewery.json` `approve` block and a r
 markdown; path rules set floors and ceilings in code; a clean agent judges plan-backed PRs
 against their plan; the rubric agent scores plan match, architecture, tests, and evidence;
 code clamps the level, applies the gates, and decides. `--dry-run` prints the verdict and
-body without posting. It runs inside the repo's CI after the test jobs
-(`templates/ci/circleci-approve.yml`, `templates/ci/github-approve.yml`). Everything,
+body without posting. It runs inside the repo's CI (`templates/ci/circleci-approve.yml`,
+`templates/ci/github-approve.yml`) with `--wait-checks`, which waits for every other check
+on the head and skips a red or still-pending head without spending a model. Everything,
 including the GitHub App's permissions and the rollout, is in
 [`docs/approve.md`](../docs/approve.md).
+
+## Learning the rubric from humans: `brewery calibrate <owner/name>`
+
+One repo per call. It reads what humans said on PRs since the last pass (first pass: 30 days):
+review verdicts, inline comments with their hunks, conversation comments, and what the
+approval agent said about the same head. `--notes <file>` adds pasted comments or opinions;
+`--reviewer a,b` keeps only those logins. The `calibrate` skill runs in a fresh worktree and
+may edit only the rubric, `.brewery.json`, and `docs/learnings/`; brewery opens one PR. More
+than 8 new rubric lines, or a change elsewhere, means no PR (exit 4). Rules true of any repo
+come back as proposals for `cli/templates/approval-rubric.md`. `--dry-run` prints the evidence.
 
 ## Docs layout and learning
 

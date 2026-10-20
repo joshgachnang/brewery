@@ -33,7 +33,7 @@ export interface CellarOutcome {
   evidence?: string;
 }
 
-const stateDir = (): string => process.env.BREWERY_CELLAR_DIR ?? join(homedir(), ".local", "state", "brewery", "cellar");
+export const stateDir = (): string => process.env.BREWERY_CELLAR_DIR ?? join(homedir(), ".local", "state", "brewery", "cellar");
 const stampPath = (name: string): string => join(stateDir(), `${name.replace("/", "__")}.json`);
 
 const readStamp = (name: string): string | undefined =>

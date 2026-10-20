@@ -5,9 +5,10 @@ import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
-import { approve, gitReaders, type Poster } from "./commands/approve.ts";
+import { approve, basePolicy, gitReaders, waitForOtherChecks, type Poster } from "./commands/approve.ts";
 import { githubPoster } from "./approve/github.ts";
 import { installationToken } from "./approve/token.ts";
+import { calibrate } from "./commands/calibrate.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
@@ -38,11 +39,17 @@ Usage:
       Approved IP → pick/roast every task → branch review → brew → finish.
   brewery finish [pr] [--slug s]
       Taste until the PR has no conflicts and all checks pass.
-  brewery approve <pr> [--dry-run] [--base <branch>]
+  brewery approve <pr> [--dry-run] [--base <branch>] [--wait-checks [min]]
       Review one PR head against the repo's rubric (.brewery.json approve block, read
       from the base branch) and post one review as the terreno-approval-agent GitHub App:
       APPROVE when the risk level is allowed, COMMENT otherwise, plus a check run.
-      --dry-run prints the verdict and the review body without posting.
+      --dry-run prints the verdict and the review body without posting. --wait-checks
+      waits (default limits.ciWaitMin) for every other check on the head to finish
+      and skips the head, model unspent, when any failed or is still pending.
+  brewery calibrate <owner/name> [--since <ISO date>] [--reviewer login,...] [--notes file] [--dry-run]
+      Read what humans said in PR reviews since the last pass (and any pasted notes),
+      and open one PR that turns the recurring ones into approval rubric rules and
+      path rules. Prints generic proposals for brewery's default rubric.
   brewery cut <ip> [--request "text" | --context file]
       Attack an IP with only the human's words; prints findings.
   brewery cellar <owner/name> [--since <ISO date>] [--dry-run]
@@ -61,8 +68,8 @@ Common flags:
   --parallel N             Max concurrent task builds for this run (1 = sequential)
 
 Config: ${userConfigPath()} and <repo>/.brewery.json.
-Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar proposed more
-changes than allowed (no PR), 1 error.`;
+Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar or calibrate proposed
+more changes than allowed (no PR), 1 error.`;
 
 const WAITING = 3;
 
@@ -91,7 +98,7 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
     const [name, inline] = arg.slice(2).split("=", 2);
     const next = argv[i + 1];
     if (inline !== undefined) flags[name] = inline;
-    else if (["go", "no-wait", "here", "dry-run"].includes(name) || next === undefined || next.startsWith("--")) flags[name] = true;
+    else if (["go", "no-wait", "here", "dry-run"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
     else flags[name] = argv[++i];
   }
   return { positional, flags };
@@ -224,15 +231,24 @@ const cmdApprove = async (positional: string[], flags: Record<string, string | t
   await ensureExcluded(repo);
   const pr = positional[0] ? Number(positional[0]) : ((await githubCi.prForBranch(repo)) ?? undefined);
   if (!pr || !Number.isSafeInteger(pr)) throw new Error("usage: brewery approve <pr> [--dry-run] [--base <branch>]");
-  const view = await githubCi.prView(repo, pr);
+  let view = await githubCi.prView(repo, pr);
   const base = str(flags.base) ?? view.base;
   const state = newState({ slug: `approve-${pr}`, repo, ip: "", base, phase: "build" });
   const dryRun = Boolean(flags["dry-run"]);
+  const waitFlag = flags["wait-checks"];
   return withRunLock(state, async () => {
     saveState(state);
     const ctx = makeCtx(state, str(flags.agents), flags.parallel);
+    if (waitFlag !== undefined) {
+      const policy = await basePolicy(gitReaders(repo, base, view.headSha));
+      const minutes = typeof waitFlag === "string" ? Number(waitFlag) : ctx.config.limits.ciWaitMin;
+      if (!Number.isFinite(minutes) || minutes < 0) throw new Error(`brewery approve: --wait-checks wants minutes, got "${waitFlag}"`);
+      const waited = await waitForOtherChecks(githubCi, repo, pr, policy, { minutes, log });
+      if (waited.headChanged) return 0;
+      view = waited.view;
+    }
     const auth = await appAuth(repo, dryRun);
-    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: auth.poster }, pr, { dryRun, view, appLogin: auth.appLogin });
+    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: auth.poster }, pr, { dryRun, view, appLogin: auth.appLogin, requireChecks: waitFlag !== undefined });
     if (outcome.verdict) log(`\n${JSON.stringify({ level: outcome.verdict.level, approve: outcome.verdict.approve, reasons: outcome.verdict.reasons, dimensions: outcome.verdict.dimensions, findings: outcome.verdict.findings, gates: outcome.verdict.gates, classification: outcome.verdict.classification }, null, 2)}`);
     log(`\n${outcome.body}`);
     return 0;
@@ -283,6 +299,19 @@ const cmdCellar = async (positional: string[], flags: Record<string, string | tr
   if (!positional[0]) throw new Error("usage: brewery cellar <owner/name> [--since <ISO date>] [--dry-run]");
   const outcome = await cellar(positional[0], githubForge, { since: str(flags.since), dryRun: Boolean(flags["dry-run"]), log });
   return outcome.status === "too-many" ? 4 : 0;
+};
+
+const cmdCalibrate = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
+  if (!positional[0]) throw new Error("usage: brewery calibrate <owner/name> [--since <ISO date>] [--reviewer login,...] [--notes file] [--dry-run]");
+  const notesFile = str(flags.notes);
+  const outcome = await calibrate(positional[0], githubForge, {
+    since: str(flags.since),
+    reviewers: (str(flags.reviewer) ?? "").split(",").map((r) => r.trim().replace(/^@/, "")).filter(Boolean),
+    notes: notesFile ? readFileSync(notesFile, "utf8") : undefined,
+    dryRun: Boolean(flags["dry-run"]),
+    log,
+  });
+  return outcome.status === "too-many" || outcome.status === "disallowed" ? 4 : 0;
 };
 
 const cmdInitDocs = async (flags: Record<string, string | true>): Promise<number> => {
@@ -361,6 +390,8 @@ const main = async (): Promise<number> => {
       return cmdCut(positional, flags);
     case "cellar":
       return cmdCellar(positional, flags);
+    case "calibrate":
+      return cmdCalibrate(positional, flags);
     case "init-docs":
       return cmdInitDocs(flags);
     case "status":

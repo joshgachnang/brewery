@@ -15,8 +15,15 @@ export const CHECK_NAME = "terreno/approve";
 
 const RANK: Record<RiskLevel, number> = { low: 0, medium: 1, high: 2 };
 
+// The approver's own check run and the CI job it runs in are not evidence about the PR.
+export const isSelfCheck = (name: string, approve: Pick<ApproveConfig, "selfChecks">): boolean =>
+  name === CHECK_NAME || (approve.selfChecks ?? []).includes(name);
+
+export const otherChecks = (context: Pick<ApproveContext, "pr" | "policy">): ApproveContext["pr"]["checks"] =>
+  context.pr.checks.filter((c) => !isSelfCheck(c.name, context.policy.approve));
+
 export const gatesFor = (context: ApproveContext, approve: ApproveConfig): Gates => {
-  const others = context.pr.checks.filter((c) => c.name !== CHECK_NAME);
+  const others = context.pr.checks.filter((c) => !isSelfCheck(c.name, approve));
   const checks: Gates["checks"] = others.some((c) => c.bucket === "fail" || c.bucket === "cancel")
     ? "fail"
     : others.some((c) => c.bucket === "pending")

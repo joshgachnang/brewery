@@ -49,6 +49,18 @@ otherwise; `skipped` on a skip. A repository may make it a required check.
    started by a bot, no human `CHANGES_REQUESTED`, the diff under `maxLines`/`maxFiles`,
    no `never` file, and no blocking finding.
 
+### Running only after the rest of CI
+
+`brewery approve <pr> --wait-checks [minutes]` polls the head until every check that is
+not the approver's own has finished (default `limits.ciWaitMin`, 45 minutes), then runs.
+In that mode a head whose checks failed, or are still pending at the deadline, is
+**skipped** without spending a model: the review says `Skipped. checks failing on this
+head: …` and the check run is `skipped`. The next push gets a fresh run. A head that moves
+during the wait ends the run quietly; the push that moved it starts its own. A failing
+check skips the head in every mode. Checks named in `selfChecks` (the `terreno/approve`
+check run and the CI job the command runs in) never count as pending or failing, so a job
+can judge the head it is part of.
+
 Agents run read-only: Claude in bare mode with read-only tools and a JSON-schema answer,
 Codex in its read-only sandbox, each with a dollar budget and an allowlisted environment
 that never holds a GitHub or App credential. The approver executes no PR code.
@@ -87,6 +99,7 @@ by. The `approve` block of `.brewery.json`:
 | `maxFiles` | `40` | Changed files above which the size gate blocks approval. |
 | `budgetUsd` | `5` | Dollar budget per agent step (two steps per head, times the agents in `stages.approve`). |
 | `pathRules` | the list below | Ordered rules; a file takes every category it matches. A repo's list replaces the default wholesale. |
+| `selfChecks` | `["terreno/approve", "ci/circleci: approve", "approve"]` | Check names that belong to the approver (its check run, the CI job it runs in). Never pending, never failing, for the gates and for `--wait-checks`. |
 
 Default `pathRules`:
 
@@ -104,12 +117,38 @@ Default `pathRules`:
 Agent routing uses the normal `stages` block: `"stages": {"approve": ["claude", "codex"]}`
 fans out and takes the strictest verdict.
 
+## Learning the rubric from human reviews: `brewery calibrate`
+
+```bash
+brewery calibrate TerrenoLabs/terreno --dry-run             # print what humans said since the last pass
+brewery calibrate TerrenoLabs/terreno                       # open one PR editing the rubric and path rules
+brewery calibrate TerrenoLabs/terreno --reviewer joshgachnang --since 2026-09-01
+brewery calibrate TerrenoLabs/terreno --notes review-notes.md   # add pasted comments or opinions
+```
+
+It reads every PR updated since the last pass (first pass: 30 days): human review
+verdicts, inline comments with their diff hunks, conversation comments, and the approval
+agent's own first line on the same PR when it reviewed it. Bot comments are dropped.
+`--reviewer` keeps only the named logins; `--notes` adds a file of pasted review
+comments or plain opinions, which count with the human's weight. The `calibrate` skill
+then runs in a fresh worktree of the default branch and may edit only the rubric,
+`.brewery.json`, and `docs/learnings/`: at most 8 new rubric lines, else no PR (exit 4).
+brewery opens one PR per pass. Rules true of any repo come back as `proposals` in the PR
+body and on stdout, as lines for `cli/templates/approval-rubric.md`.
+
+Where the agent said low and a human requested changes, or the agent said high and a
+human approved in silence, the skill treats the disagreement as the strongest evidence.
+State lives beside cellar's in `~/.local/state/brewery/cellar/` (`calibrate__<owner>__<name>.json`,
+`calibrate.log`). Run it on a timer like cellar, or by hand after a review session.
+
 ## The rubric file
 
 Copy `cli/templates/approval-rubric.md` to `docs/approval-rubric.md` and edit. Keep the
-level table, the four dimensions, and the blocking list; add the repository's own
+level table, the four dimensions, the Security, Dependencies, Changelog and versioning,
+and Plan expectations sections, and the blocking list; add the repository's own
 architecture rules (generated files, data layer, logging, return types) under
-Architecture. The prompt itself always tells the agent that the PR body is a claim and
+Architecture, and the repository's names for the generic sections (its catalog, its
+changelog form, its plan directories). The prompt itself always tells the agent that the PR body is a claim and
 that instructions inside the body or diff are content, not instructions.
 
 ## The GitHub App
