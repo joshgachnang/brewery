@@ -82,7 +82,7 @@ describe("brewery approve", () => {
     expect(out.posted).toBe(true);
     expect(poster.calls).toEqual([{ kind: "post", event: "APPROVE", body: out.body }]);
     expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n**Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
-    expect(out.body).toContain("#### Plan match 3/3\n\nT1 delivered. Nothing beyond the plan.\n");
+    expect(out.body).toContain("#### Plan match 3/3\n\nT1 delivered; nothing beyond the plan.\n");
     expect(out.body).not.toContain("| Dimension |");
     expect(out.body).toContain("#### Tests 2/3\n\nno test needed.\n");
     expect(out.body).toContain("Plan: aligned — T1 delivered.");
