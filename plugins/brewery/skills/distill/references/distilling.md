@@ -100,9 +100,44 @@ One line on the rejected alternative when a reviewer would ask.>
 | --- | --- | --- | --- | --- |
 
 Tracer: <seam the first task cuts through>
+E2E: <planned specs and layers, e.g. "2 specs (browser, http)"; or "None — reason">
+Regression: <provisional case IDs and destination suite; or "None — reason">
 Out of scope: <tags; see Expansions>
 Open risks: <none, or one line each>
 ```
+
+## Testing sections (after the brief)
+
+Both sections follow the brief, before the task list, in the format of
+[`testing plan`](../../terreno-shared/testing-plan.md). Either may be `None — <reason>`.
+Neither may be missing, and a bare `None` with no reason is a defect cut blocks on.
+
+```markdown
+## E2E tests
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | <path the e2e guide prescribes> | <a layer from the guide> | <criterion, in observable terms> | T2 |
+
+## Regression cases
+
+Destination: <AREA> → <regression suites>/<area>.md
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| <AREA>-new-1 | <case> | <starting state, then action> | <what is observable> | <platforms> | E1, or manual | <IP slug> |
+```
+
+Rules:
+
+- Every UI or cross-process acceptance criterion has an `## E2E tests` row, written in
+  the task that delivers its behaviour, or the section says why it has none.
+- Regression IDs stay provisional (`<AREA>-new-<n>`), with one `Destination:` line per
+  prefix. Brew assigns the real IDs. A row that edits an existing case keeps its real ID.
+- The `E2E:` and `Regression:` brief lines summarize these sections. They stay lines
+  under the plan table, not headings.
+- An IP approved before the contract reads a missing section as
+  `None — predates contract`.
 
 The detailed task list, Assumptions, and the bottom sections follow. Write each task as one
 line in exactly this format, with its details in an indented block.
@@ -153,5 +188,6 @@ contain multiple behaviours, and chains that could fan out.
   write it on your recommendation and flag it
 - Building an expansion "because it was small"
 - Open questions without a recommendation, or without "If answered differently"
+- A UI criterion with no planned spec, or a testing section that says only `None`
 - A sign-off message that needs the IP open to make sense
 - Treating silence as sign-off

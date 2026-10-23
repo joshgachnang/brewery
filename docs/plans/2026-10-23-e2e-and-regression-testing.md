@@ -48,7 +48,7 @@ Destination: `docs/regression/brewery.md`. T3 creates it.
 
 ## Tasks
 
-- [ ] **T1** — distill, cut and tap require both sections, plus a layout test
+- [x] **T1** — distill, cut and tap require both sections, plus a layout test
   - Depends on: none
   - Files: plugins/brewery/skills/distill/SKILL.md, plugins/brewery/skills/distill/references/distilling.md, plugins/brewery/skills/cut/SKILL.md, plugins/brewery/skills/tap/references/triage.md, plugins/brewery/skills/terreno-shared/testing-plan.md, cli/test/layout.test.ts
   - Delivers:

@@ -125,6 +125,24 @@ Selected: <the tap input, verbatim>, resolved <ISO timestamp> (window <start> to
 | #15 | <title> | duplicate-of #12 | same as #12 | T1 |
 | ENG-40 | <title> | decide | <one line> | none |
 
+## E2E tests
+
+None — <reason>, or:
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | <path the e2e guide prescribes> | <a layer from the guide> | <the fixed behavior> | T1 |
+
+## Regression cases
+
+None — <reason>, or:
+
+Destination: <AREA> → <regression suites>/<area>.md
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| <AREA>-new-1 | <the reported flow> | <starting state, then the reporter's action> | <the fixed behavior, observable> | <platforms> | <proof test>, or manual | <IP slug> |
+
 ## Tasks
 
 - [ ] **T1** — Fix <symptom> (#12, #15)
@@ -156,6 +174,13 @@ Status: approved <date> (tap: <issue refs>)
 Rules:
 
 - `Depends on:` is `none` unless two fixes write the same file. Then order them.
+- `## E2E tests` and `## Regression cases` follow
+  [`testing plan`](../../terreno-shared/testing-plan.md) and are never missing. Most fixes
+  are proved by the task's Proof test, so `## E2E tests` is usually
+  `None — <reason>` (`None — proved by the unit test in T1`). Plan a spec only when the
+  defect sits in a UI or cross-process flow the Proof test cannot reach. Add one
+  regression row when a human would re-check the broken flow before a release. When the
+  suite already has a case for the flow, edit that row under its real ID instead.
 - Every `fix` and `duplicate-of` issue maps to exactly one task. Every other issue appears
   in "Not fixed in this run".
 - No Expansions section: tap builds nothing beyond the reported defects. A cleanup or
