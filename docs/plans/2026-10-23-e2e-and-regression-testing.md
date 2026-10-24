@@ -23,7 +23,7 @@ and tap up to the contract, then resyncs the vendored files once the terreno PR 
 | --- | --- | --- | --- | --- |
 | T1 | distill, cut and tap require both sections, plus a layout test | none | distill, cut, tap, cli/test | `bun test` in `cli/` |
 | T2 | Resync the vendored references and forked stages from terreno master | T1 | terreno-shared, barrel/stages, finish | `bun test` plus a per-row diff |
-| T3 | Walk the distill regression case and record it | T2 | docs/regression/brewery.md | recorded run |
+| T3 | Add the brewery regression suite (a human walks it) | T2 | docs/regression/brewery.md | well-formed file; human walk before merge |
 
 Tracer: T1.
 E2E: the layout test in T1 (the CLI has no UI).
@@ -76,8 +76,9 @@ Destination: `docs/regression/brewery.md`. T3 creates it.
 - [ ] **T3** — Walk the distill regression case and record it
   - Depends on: T2
   - Files: docs/regression/brewery.md
-  - Delivers: Creates the suite file in terreno's format, with BREW-001, then walks it once and stamps `Last full run`. The evidence goes in the PR description.
-  - Acceptance: BREW-001 meets its Expected. If it fails, the task is `FAIL` and goes back to T1.
+  - Owner: the agent creates the file; a human walks the case (terreno D8: only a human walks regression cases).
+  - Delivers: Creates the suite file in terreno's format with BREW-001 and `Last full run: never`. The PR lists BREW-001 under ⚠️ Not tested, and Josh walks it before merging.
+  - Acceptance: The file is well formed under the suite format. BREW-001 meets its Expected when the human walks it, and a failure goes back to T1.
 
 ## Assumptions
 
