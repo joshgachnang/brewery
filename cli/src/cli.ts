@@ -3,6 +3,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
+import { buildBoard, gatherBoard, renderBoard } from "./board.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
 import { approve, basePolicy, gitReaders, waitForOtherChecks, type Poster } from "./commands/approve.ts";
@@ -57,6 +58,8 @@ Usage:
       pass, and open one PR with learnings, rules, or checks. Meant for a nightly timer.
   brewery init-docs            Add docs/{decisions,journal,learnings}/ and point AGENTS.md/CLAUDE.md at them
   brewery status [slug]        Runs, phases, and what is waiting on you
+  brewery board [--merges N] [--json]
+      This repo's board from its IPs and runs: in progress, blocked, next up, recent merges.
   brewery agents               Agent profiles, availability, and stage routing
   brewery help
 
@@ -98,7 +101,7 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
     const [name, inline] = arg.slice(2).split("=", 2);
     const next = argv[i + 1];
     if (inline !== undefined) flags[name] = inline;
-    else if (["go", "no-wait", "here", "dry-run"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
+    else if (["go", "no-wait", "here", "dry-run", "json"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
     else flags[name] = argv[++i];
   }
   return { positional, flags };
@@ -349,6 +352,16 @@ const cmdStatus = (positional: string[]): number => {
   return 0;
 };
 
+const cmdBoard = async (flags: Record<string, string | true>): Promise<number> => {
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  const merges = str(flags.merges) ? Number(str(flags.merges)) : 10;
+  if (!Number.isSafeInteger(merges) || merges < 0) throw new Error("brewery board: --merges needs a non-negative integer");
+  const config = loadConfig(repo);
+  const board = buildBoard(await gatherBoard(repo, { base: await defaultBase(repo), planDirs: config.approve.planDirs, merges }));
+  log(flags.json ? JSON.stringify(board, null, 2) : renderBoard(board));
+  return 0;
+};
+
 const cmdAgents = async (flags: Record<string, string | true>): Promise<number> => {
   const repo = str(flags.repo) ?? process.cwd();
   const config = loadConfig(repo, str(flags.agents));
@@ -396,6 +409,8 @@ const main = async (): Promise<number> => {
       return cmdInitDocs(flags);
     case "status":
       return cmdStatus(positional);
+    case "board":
+      return cmdBoard(flags);
     case "agents":
       return cmdAgents(flags);
     case undefined:

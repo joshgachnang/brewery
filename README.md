@@ -5,7 +5,7 @@ plugin, with a manifest for each tool beside it.
 
 | Plugin | Skills |
 |---|---|
-| `brewery` | `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
+| `brewery` | `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
 
 Copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at `14e3a0c`.
 Everything else in shade's `.claude/skills` stays there, including the unmodified `terreno-*`
@@ -29,6 +29,12 @@ learnings to rules and checks. They came from dotfiles; the design is in
 separate agent processes, plus the learning loop (`init-docs`, journals, `compound`, and the
 nightly `brewery cellar <owner/name>`). It came from shade's `tools/brewery`; see
 `cli/README.md`. `cd cli && bun install && bun test`.
+
+## The board
+
+`brewery board` (or `/brewery:board`) prints one repo's board from its IPs and run state:
+in progress, blocked (waiting on you, unapproved, or behind unlanded `Depends on:` tasks),
+next up (ready tasks, oldest plan first), and recent merges. `--json` for scripts and agents.
 
 ## Approving pull requests
 
