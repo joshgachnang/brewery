@@ -15,6 +15,14 @@ export interface TaskState {
   attempts: number;
   commit?: string;
   evidence?: string;
+  // How many times each step has run for this task, for escalation.
+  runs?: { test?: number; pick?: number };
+  // The tests the test step wrote, the command that runs them, and the commit that holds them.
+  tests?: { files: string[]; command?: string; sha: string; untestable?: string; red?: string };
+  // Set when the tests must be written again (Roast found them wrong or thin), with the evidence.
+  retest?: string;
+  // Changes Pick declared to those tests, carried to Roast.
+  testChanges?: { file: string; why: string }[];
 }
 
 export interface HistoryEntry {
@@ -45,6 +53,8 @@ export interface RunState {
   request?: string;
   seq: number;
   tasks: Record<string, TaskState>;
+  // Started by `brewery pour`: an approval, by brewery or by a later answer, goes on to build.
+  oneShot?: boolean;
   pr?: number;
   waiting?: { kind: "signoff" | "gate"; asks: Ask[]; message: string; since: string; task?: string };
   answers: Answer[];

@@ -1,5 +1,6 @@
 > Vendored from TerrenoLabs/terreno `plugins/terreno-claude/skills/2-pick/SKILL.md`
-> (see `../../terreno-shared/VENDORED.md`). Driven by the `barrel` skill; not invoked on its own.
+> (see `../../terreno-shared/VENDORED.md`), with brewery's tests-first steps 5–7. Driven by
+> the `barrel` skill; not invoked on its own.
 
 
 # Pick — build
@@ -13,8 +14,9 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
 [`PR deployments`](../../terreno-shared/pr-deployments.md),
 [`pick-roast loop`](../../terreno-shared/pick-roast-loop.md),
 [`testing guidance`](../../terreno-shared/testing.md),
-[`mocking guidance`](../../terreno-shared/mocking.md), and
-[`subagent briefing`](../../terreno-shared/subagent-briefing.md).
+[`mocking guidance`](../../terreno-shared/mocking.md),
+[`subagent briefing`](../../terreno-shared/subagent-briefing.md), and the
+[`test stage`](test.md).
 
 ## Preconditions
 
@@ -50,15 +52,24 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    guidance. Do not load the whole catalog.
 4. **Focus retries.** Convert prior failure evidence into a hypothesis and the smallest
    safe change. Record attempted approaches; do not repeat one without new evidence.
-5. **Specify.** State one caller-visible behavior and the highest public seam that proves
-   it. List its edge cases before writing code: empty, missing, and error inputs;
-   loading and disabled states; boundaries; permissions; web versus native. Take them
-   from the acceptance criteria and repository test rules. Each one becomes a test in
-   this slice, so Roast proves them instead of discovering them.
-6. **Encode.** Add one failing test and run the repository's closest test command. Confirm
-   it fails for the intended product reason.
-7. **Fulfill.** Implement the minimum code that passes. Prefer real integrations and
-   narrow injected fakes at true external boundaries.
+5. **Specify.** Write all of this task's tests before any implementation, following the
+   [test stage](test.md). Under `brewery barrel` a separate `test` step has already done
+   it, and brewery confirmed the tests fail; skip to Fulfill. Interactively, dispatch the
+   `brewery:test-writer` subagent with a **test briefing**: the task's criteria and test
+   brief (Seam, Interface, Cases, Blast radius, Test skills), the IP's brief and
+   Decisions, and the path of `test.md`. It gets no patch, because there is none yet,
+   and you do not describe your planned implementation. Without that subagent, use a fresh
+   general-purpose subagent with the same briefing, or write the tests yourself before
+   touching product code.
+6. **Encode.** Run the tests and confirm every one fails for the reason its case
+   describes, not a typo, import, or setup error. A test that passes now does not test
+   the new behavior: send it back to the writer with that evidence. After two rejected
+   attempts, re-dispatch the writer with `model: opus` and the earlier failures.
+7. **Fulfill.** Implement the minimum code that makes the tests pass. Prefer real
+   integrations and narrow injected fakes at true external boundaries. The tests are the
+   contract: do not weaken, skip, or delete them. A test that is genuinely wrong may be
+   changed with a one-line reason per file, which Roast reviews. Run suites through the
+   `brewery:test-runner` subagent when the output would be long.
 8. **Clean the Kitchen.** Once the vertical slice is green, refactor names/structure,
    remove debug/dead code, and rerun the affected repository-prescribed checks.
 9. **Review independently.** Build one task-scoped briefing (criteria, file list, this
@@ -98,8 +109,9 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
     the current context cannot safely continue. `BLOCKED` exits the loop. Pick owns
     the inner loop. Do not rely on Roast to start the next Pick.
 
-Repeat Specify → Encode → Fulfill for learned behaviors inside this one slice. Do not
-batch all tests first. Do not expand into the next task until Roast PASS.
+Write every test for this task before its implementation, and none for later tasks. A
+behavior discovered while building that is inside this task's criteria gets a test first,
+then code. Do not expand into the next task until Roast PASS.
 
 ## Supporting skills
 

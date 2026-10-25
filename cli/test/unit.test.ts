@@ -38,6 +38,7 @@ describe("planning prompts", () => {
       expect(prompt).toContain("tasks that share a file depend on each other");
       expect(prompt).toContain("Prefer wide over deep");
       expect(prompt).toContain("Split any task that needs more than one roast-able behaviour");
+      expect(prompt).toContain("test brief (Seam, Interface, Cases with literal expected");
     });
   }
 
@@ -221,6 +222,21 @@ describe("config and agents", () => {
     expect(agentArgv(DEFAULT_CONFIG.agents["claude-sonnet"], "/repo")).toEqual(expect.arrayContaining(["--model", "sonnet"]));
     expect(DEFAULT_CONFIG.limits.reviewRounds).toBe(1);
     expect(DEFAULT_CONFIG.notify.ntfyUrl).toBe("https://shade-api.nang.io/webhooks/notifications");
+  });
+
+  test("tests are written first with sonnet, and a stuck test or pick step escalates to opus", () => {
+    expect(DEFAULT_CONFIG.stages.test).toEqual(["claude-sonnet"]);
+    expect(DEFAULT_CONFIG.escalate).toEqual({ test: ["claude-opus"], pick: ["claude-opus"] });
+    expect(agentArgv(DEFAULT_CONFIG.agents["claude-opus"], "/repo")).toEqual(expect.arrayContaining(["--model", "opus"]));
+    expect(DEFAULT_CONFIG.limits.testFirst).toBe(true);
+    expect(DEFAULT_CONFIG.limits.escalateAfter).toBe(2);
+  });
+
+  test("an escalation route naming an unknown agent is rejected", () => {
+    process.env.BREWERY_CONFIG = join(tmpdir(), "brewery-no-such-config.json");
+    const repo = mkdtempSync(join(tmpdir(), "brewery-escalate-"));
+    writeFileSync(join(repo, ".brewery.json"), JSON.stringify({ escalate: { pick: ["nope"] } }));
+    expect(() => loadConfig(repo)).toThrow('escalation for pick names unknown agent "nope"');
   });
 
   test("parses --agents routing", () => {

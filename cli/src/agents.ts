@@ -9,6 +9,8 @@ export interface Ask {
   q: string;
   rec: string;
   opts?: string[];
+  // A wrong guess would change the destination or most of the plan (distilling.md).
+  fundamental?: boolean;
 }
 
 export interface Finding {
@@ -41,6 +43,15 @@ export interface StepResult {
   // read-only steps: the JSON-schema answer from stdout
   structured?: unknown;
   tally?: { edited: number; moved: number; rebutted: number };
+  // test: the repo-relative test files written, the command that runs only them, and
+  // why the task has nothing to test when `tests` is empty
+  tests?: string[];
+  command?: string;
+  untestable?: string;
+  // pick: every change to a test the test step wrote, with the reason
+  testChanges?: { file: string; why: string }[];
+  // roast: the failure is in the tests themselves, so the test step runs again
+  retest?: boolean;
 }
 
 export interface RunRequest {
@@ -76,8 +87,26 @@ export interface RunOutcome {
 
 const tomlString = (value: string): string => JSON.stringify(value);
 
-export const agentArgv = (profile: AgentProfile, cwd: string, readOnly?: ReadOnly): string[] => {
+export const agentArgv = (profile: AgentProfile, cwd: string, readOnly?: ReadOnly, promptFile?: string): string[] => {
   switch (profile.type) {
+    case "cursor":
+      // Cursor's CLI takes the prompt as an argument, not stdin, and has no read-only mode
+      // that returns schema-checked JSON. Point it at the prompt file instead of passing the
+      // prompt itself, which keeps long prompts out of argv.
+      if (readOnly) throw new Error("brewery: cursor cannot run read-only steps (approve, calibrate); route them to claude");
+      return [
+        profile.bin ?? "agent",
+        "-p",
+        "--force",
+        "--trust",
+        "--output-format",
+        "stream-json",
+        "--workspace",
+        cwd,
+        ...(profile.model ? ["--model", profile.model] : []),
+        ...(profile.args ?? []),
+        `Your instructions for this step are in ${promptFile ?? "$BREWERY_PROMPT_FILE"}. Read that whole file and follow it exactly.`,
+      ];
     case "claude":
       return [
         "claude",
@@ -224,6 +253,27 @@ export const parseNarrationLine = (type: AgentProfile["type"], line: string): st
       return text ? [text] : [];
     });
   }
+  if (type === "cursor") {
+    // Streaming deltas carry no model_call_id; the buffered flush before each tool call does.
+    if (event.type === "assistant" && event.model_call_id) {
+      const message = record(event.message);
+      if (!Array.isArray(message?.content)) return [];
+      return message.content.flatMap((raw: unknown) => {
+        const text = record(raw)?.type === "text" ? oneLine(record(raw)?.text) : "";
+        return text ? [text] : [];
+      });
+    }
+    if (event.type === "tool_call" && event.subtype === "started") {
+      const call = record(event.tool_call);
+      const write = record(call?.writeToolCall);
+      const read = record(call?.readToolCall);
+      const path = record((write ?? read)?.args)?.path;
+      if (typeof path === "string") return [`${write ? "Edit" : "Read"} ${path.split("/").pop()}`];
+      const name = call ? Object.keys(call)[0]?.replace(/ToolCall$/, "") : undefined;
+      return name ? [name] : [];
+    }
+    return [];
+  }
   if (type === "codex") {
     const item = record(event.item);
     if (!item) return [];
@@ -274,7 +324,7 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
   writeFileSync(req.promptFile, req.prompt);
   writeFileSync(req.logFile, `# ${req.name} in ${req.cwd}\n# prompt: ${req.promptFile}\n\n`);
   const started = Date.now();
-  const proc = Bun.spawn(agentArgv(req.profile, req.cwd, req.readOnly), {
+  const proc = Bun.spawn(agentArgv(req.profile, req.cwd, req.readOnly, req.promptFile), {
     cwd: req.cwd,
     env: childEnv(req.profile, req),
     stdin: Bun.file(req.promptFile),

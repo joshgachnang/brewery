@@ -56,10 +56,15 @@ interactive, single-session run.
    fan out independent work and keep dependency chains short. Tasks that share a file
    depend on each other, so their writes are ordered.
 8. **Specify proof.** Every acceptance criterion is observable and names its verification
-   method. "Manual check" is not one.
+   method. "Manual check" is not one. Give every task a test brief (Seam, Interface,
+   Cases, Blast radius, Test skills) per [`distilling`](references/distilling.md#the-test-brief):
+   its tests are written before its implementation by a writer who sees only the brief.
+   For a task that changes state, trace the blast radius and put each consumer's case at
+   its layer.
 9. **Write** the IP: the brief on top, then the tracer first and the small, parallel-ready task
    list (criteria, blockers, verification, docs, supporting skills). Every task carries
-   `Depends on:` (`none` or task IDs) and `Files:` (the files or seams it touches). Follow
+   `Depends on:` (`none` or task IDs), `Files:` (the files or seams it touches), and its
+   test brief. Follow
    the task list with the bottom sections from [`distilling`](references/distilling.md): Open questions,
    Expansions, Decisions, Sign-off. Build the plan on the recommendations. Set
    `Status: draft`.

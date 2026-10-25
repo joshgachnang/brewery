@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Josh's agent skills: the brewery pipeline.",
-    "version": "0.4.1",
+    "version": "0.5.0",
     "pluginRoot": "plugins"
   },
   "plugins": [

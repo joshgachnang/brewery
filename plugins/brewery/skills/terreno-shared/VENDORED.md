@@ -10,14 +10,20 @@ lifecycle-contract, and pick-roast-loop updated):
 | Here | Upstream | Changes |
 | --- | --- | --- |
 | `*.md`, `*.json` in this directory | `references/` | none |
-| `testing.md`, `mocking.md` | `skills/2-pick/references/` | none |
-| `../barrel/stages/pick.md` | `skills/2-pick/SKILL.md` | frontmatter dropped, links, Roast is followed from `roast.md` |
-| `../barrel/stages/roast.md` | `skills/3-roast/SKILL.md` | frontmatter dropped, links |
+| `mocking.md` | `skills/2-pick/references/` | none |
+| `testing.md` | `skills/2-pick/references/testing.md` | tests first per task (replaces the "all imagined tests" red flag), blast radius; the Terreno testing-skills line from TerrenoLabs/terreno#1614 (open) |
+| `../barrel/stages/pick.md` | `skills/2-pick/SKILL.md` | frontmatter dropped, links, Roast is followed from `roast.md`, steps 5–7 write all of the task's tests first through `test.md` |
+| `../barrel/stages/roast.md` | `skills/3-roast/SKILL.md` | frontmatter dropped, links, step 3 checks the tests against the task's test brief and returns `retest` |
 | `../barrel/stages/brew.md` | `skills/4-brew/SKILL.md` | frontmatter dropped, links, hand-off goes to `finish` |
 | `../finish/taste.md` | `skills/5-taste/SKILL.md` | frontmatter dropped, links, `finish` owns the repeat loop |
 | `../distill/references/distilling.md` | `skills/1-grow/references/grilling.md` | rewritten: triage instead of full grilling |
 
-Only `reaching-the-human.md` is original to this directory.
+Only `reaching-the-human.md` is original to this directory. `../barrel/stages/test.md` and
+`../../../agents/` (`test-writer`, `test-runner`) are original to brewery.
+
+Upstream terreno Pick does red-green one test at a time and forbids batching the tests
+first. brewery writes every test for a task first, in a separate context that never sees
+the implementation, so its tests come from the task's brief rather than its code.
 
 Name mapping: lifecycle docs say Grow/Pick/Roast/Brew/Taste and `terreno-*-loop`. Here Grow
 is `distill`, the Pick→Brew outer loop is `barrel`, and Taste-until-green is `finish`.

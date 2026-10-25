@@ -1,5 +1,6 @@
 > Vendored from TerrenoLabs/terreno `plugins/terreno-claude/skills/3-roast/SKILL.md`
-> (see `../../terreno-shared/VENDORED.md`). Driven by the `barrel` skill; not invoked on its own.
+> (see `../../terreno-shared/VENDORED.md`), with brewery's test-integrity checks in step 3.
+> Driven by the `barrel` skill; not invoked on its own.
 
 
 # Roast — prove
@@ -39,7 +40,14 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    files and criteria. Repository-mandatory capabilities are hard requirements.
 3. **Build the matrix.** Map every in-scope criterion **for the current task** to one or
    more objective methods and the evidence required. Include promised regressions,
-   compatibility, and non-scope that this task could break.
+   compatibility, and non-scope that this task could break. Check the tests written first
+   for this task against its test brief: every `Cases` entry and criterion has a test,
+   expected values are the brief's literals, and each `Blast radius` consumer has its case
+   at the assigned layer. Review every change Pick made to those tests, with its reason. A
+   missing case, a wrong expected value, a test that cannot fail, or a change that weakens a
+   criterion is `FAIL`; mark it `retest: true` when the defect is in the tests rather than
+   the code, so the test stage writes them again. An `untestable` claim that a test could
+   disprove is the same.
 4. **Inspect and execute.** Review this task's patch and run concrete checks in this
    invocation: repository-prescribed tests, integration/system behavior, lint/type/build
    checks, runtime/API/database probes, regression reproductions, or real UI interaction.

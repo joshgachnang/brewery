@@ -52,8 +52,12 @@ export const fakeSetup = (dir: string, plan: unknown[], stages: Record<string, s
         cellar: ["alpha"],
         approve: ["alpha"],
         calibrate: ["alpha"],
+        test: ["alpha"],
         ...stages,
       },
+      // Flow tests script pick directly; the test-first suite turns the test stage on.
+      escalate: {},
+      limits: { testFirst: false },
       // Never ping the real webhook from tests.
       notify: { ntfyUrl: "" },
     }),

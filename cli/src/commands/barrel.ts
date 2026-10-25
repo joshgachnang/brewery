@@ -2,15 +2,15 @@
 // separate agent processes; brewery commits between them so Roast judges a fixed tree.
 import type { Ask, Finding } from "../agents.ts";
 import { isApproved, markTask, parseTasks, readyTasks, sharesFiles, taskGraphProblems, readIp, writeIp } from "../ip.ts";
-import { integratedRoastBody, integrationFixBody, brewBody, pickBody, reviewBody, reviewFixBody, roastBody, roastReviewFixBody } from "../prompts.ts";
+import { integratedRoastBody, integrationFixBody, brewBody, pickBody, reviewBody, reviewFixBody, roastBody, roastReviewFixBody, testBody } from "../prompts.ts";
 import { runDir, saveState, type TaskState } from "../state.ts";
 import { appendEvent } from "../events.ts";
 import { evidenceText, mergeVerdicts, runStage, type Ctx } from "../step.ts";
 import { addWorktree, removeWorktreeStrict, anyChanges, commitAll, currentBranch, ensureExcluded, git, headSha, sh, trackedChanges, type Ci } from "../vcs.ts";
 import { finish, type Outcome } from "./finish.ts";
 import { asksFrom, gate } from "./gate.ts";
-import { dirname, join, relative } from "node:path";
-import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
+import { existsSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
 
 const ensureBranch = async (ctx: Ctx): Promise<void> => {
   const { state } = ctx;
@@ -129,6 +129,129 @@ const taskContext = (ctx: Ctx, cwd: string): Ctx => {
   };
 };
 
+// A task's own tests are fast-tier, but a cold database or bundler can still take minutes.
+const TEST_COMMAND_TIMEOUT_MS = 15 * 60_000;
+
+const runTests = async (cwd: string, command: string): Promise<{ code: number; output: string }> => {
+  const ran = await sh(cwd, ["bash", "-lc", command], TEST_COMMAND_TIMEOUT_MS);
+  return { code: ran.code, output: `${ran.out}\n${ran.err}`.trim().slice(-2000) };
+};
+
+// Uncommitted paths, tracked or not. Two plain listings, because porcelain status loses
+// its first column when brewery trims command output.
+const changedPaths = async (cwd: string): Promise<Set<string>> => {
+  const tracked = await git(cwd, "diff", "--name-only", "HEAD");
+  const untracked = await git(cwd, "ls-files", "--others", "--exclude-standard");
+  return new Set(`${tracked}\n${untracked}`.split("\n").filter(Boolean));
+};
+
+const revertPaths = async (cwd: string, paths: string[]): Promise<void> => {
+  for (const path of paths) {
+    const inHead = (await sh(cwd, ["git", "cat-file", "-e", `HEAD:${path}`])).code === 0;
+    if (inHead) await git(cwd, "checkout", "HEAD", "--", path);
+    else rmSync(join(cwd, path), { force: true });
+  }
+};
+
+const HYGIENE_BIN = join("node_modules", ".bin", "terreno-test-hygiene");
+
+// @terreno/test ships terreno-test-hygiene, which flags the patterns that make Bun suites
+// flaky or leaky (module-scope mock.module, sleeps, cache-busted imports). Run the nearest
+// package's copy on the TypeScript tests the test step wrote; repos without it skip this.
+const checkHygiene = async (cwd: string, files: string[]): Promise<string | undefined> => {
+  const byPackage = new Map<string, string[]>();
+  for (const file of files.filter((f) => /\.(test|spec)\.tsx?$/.test(f))) {
+    for (let dir = dirname(join(cwd, file)); dir.startsWith(cwd); dir = dirname(dir)) {
+      if (existsSync(join(dir, HYGIENE_BIN))) {
+        byPackage.set(dir, [...(byPackage.get(dir) ?? []), relative(dir, join(cwd, file))]);
+        break;
+      }
+      if (dir === cwd || !dir.includes(sep)) break;
+    }
+  }
+  const reports: string[] = [];
+  for (const [dir, paths] of byPackage) {
+    // A bin that cannot start is the repo's setup, not these tests.
+    const ran = await sh(dir, [join(dir, HYGIENE_BIN), ...paths], TEST_COMMAND_TIMEOUT_MS).catch(() => undefined);
+    // 1 is new violations; 2 is a usage error, which is also setup.
+    if (ran?.code === 1) reports.push(`${relative(cwd, dir) || "."}: ${`${ran.out}\n${ran.err}`.trim().slice(-1500)}`);
+  }
+  return reports.length
+    ? `terreno-test-hygiene rejected the new tests. Fix each finding (waitUntil instead of sleeps, mocks in the preload instead of mock.module in the file):\n${reports.join("\n")}`
+    : undefined;
+};
+
+const escalates = (ctx: Ctx, ts: TaskState, stage: "test" | "pick"): boolean => {
+  const runs = ts.runs ??= {};
+  const before = runs[stage] ?? 0;
+  runs[stage] = before + 1;
+  return before >= ctx.config.limits.escalateAfter;
+};
+
+// The test step writes the task's tests from its brief before any implementation exists.
+// brewery, not the agent, checks that it wrote only what it declared and that the tests
+// fail, then commits them as the start of the task's commit. On a retest (Roast found the
+// tests wrong or thin) the implementation is already there, so red is not required.
+const writeTests = async (ctx: Ctx, taskCtx: Ctx, cwd: string, id: string, taskTitle: string, ts: TaskState): Promise<{ gate?: TaskGate; retry?: string }> => {
+  const retest = ts.retest;
+  const escalated = escalates(ctx, ts, "test");
+  saveState(ctx.state);
+  const before = await changedPaths(cwd);
+  const [{ result }] = await runStage(ctx, "test", testBody(taskCtx, id, taskTitle, { evidence: retest ?? ts.evidence, tests: ts.tests }), { task: id, cwd, escalated });
+  if (result.status === "BLOCKED") {
+    return { gate: { asks: asksFrom(result, result.action), need: `a decision on ${id}`, detail: result.summary ?? result.action } };
+  }
+  if (result.status !== "PASS") return { retry: evidenceText(result) };
+  const declared = result.tests ?? [];
+  const after = [...(await changedPaths(cwd))];
+  const stray = after.filter((path) => !before.has(path) && !declared.includes(path));
+  if (stray.length) {
+    await revertPaths(cwd, stray);
+    return { retry: `The test step changed files not declared in \`tests\`: ${stray.join(", ")}. brewery reverted them. Write only tests and test fixtures, and list every file you write in \`tests\`.` };
+  }
+  const unhygienic = await checkHygiene(cwd, declared);
+  if (unhygienic) return { retry: unhygienic };
+  let red: string | undefined;
+  if (!declared.length) {
+    if (!result.untestable?.trim()) return { retry: "The test step wrote no tests and gave no `untestable` reason." };
+  } else {
+    if (!result.command?.trim()) return { retry: "The test step wrote tests but gave no `command` that runs them." };
+    const ran = await runTests(cwd, result.command);
+    if (!retest && ran.code === 0) {
+      return { retry: `brewery ran \`${result.command}\` and it passed before any implementation, so the tests do not exercise the new behavior. Make each one fail for the reason the task's criteria describe.\n${ran.output}` };
+    }
+    red = ran.output;
+  }
+  if (after.some((path) => declared.includes(path))) {
+    const amend = Boolean(ts.commit) && ts.commit === (await headSha(cwd));
+    ts.commit = await commitAll(cwd, taskTitle, amend);
+  }
+  ts.tests = { files: declared, command: result.command, sha: await headSha(cwd), untestable: result.untestable, red };
+  // Pick sees Roast's evidence on a retest, and a clean start otherwise.
+  ts.evidence = retest;
+  ts.retest = undefined;
+  saveState(ctx.state);
+  return {};
+};
+
+// After Pick: the test step's tests may change only with a stated reason, and they must
+// pass when brewery runs them, not only when Pick says so.
+const checkPick = async (cwd: string, ts: TaskState, declared: { file: string; why: string }[]): Promise<string | undefined> => {
+  const tests = ts.tests;
+  if (!tests?.files.length) return undefined;
+  const changed = (await git(cwd, "diff", "--name-only", tests.sha, "--", ...tests.files)).split("\n").filter(Boolean);
+  const explained = declared.filter((change) => changed.includes(change.file) && change.why?.trim());
+  const unexplained = changed.filter((file) => !explained.some((change) => change.file === file));
+  if (unexplained.length) {
+    return `Pick changed the tests without saying why: ${unexplained.join(", ")}. The tests are the task's contract. Restore them, or keep a change and list it in \`testChanges\` with the reason; Roast reviews every change.`;
+  }
+  ts.testChanges = [...(ts.testChanges ?? []).filter((old) => !explained.some((change) => change.file === old.file)), ...explained];
+  if (!tests.command) return undefined;
+  const ran = await runTests(cwd, tests.command);
+  if (ran.code !== 0) return `brewery ran \`${tests.command}\` after Pick and the tests still fail:\n${ran.output}`;
+  return undefined;
+};
+
 const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, ts: TaskState, approvedIp: string): Promise<BuildResult> => {
   const { state, config } = ctx;
   let needsCleanup = ts.evidence?.startsWith("Worktree setup FAIL") || ts.evidence?.startsWith("Interrupted build") || ts.evidence?.startsWith("Land conflict:");
@@ -154,6 +277,9 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     ts.branch = branch;
     const taskCtx = taskContext(ctx, cwd);
     if (!existsSync(cwd)) {
+      // Tests written in a discarded tree are gone with it.
+      ts.tests = undefined;
+      ts.testChanges = undefined;
       await addWorktree(state.repo, cwd, branch, await headSha(state.repo));
       // The current approved IP can have tracked edits or still be untracked.
       mkdirSync(dirname(taskCtx.state.ip), { recursive: true });
@@ -172,12 +298,28 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       if (setupFailed) continue;
     }
 
-    const [{ result: picked }] = await runStage(ctx, "pick", pickBody(taskCtx, id, taskTitle, ts.evidence), { task: id, cwd });
+    if (config.limits.testFirst && (!ts.tests || ts.retest)) {
+      const written = await writeTests(ctx, taskCtx, cwd, id, taskTitle, ts);
+      if (written.gate) return written;
+      if (written.retry) {
+        ts.evidence = written.retry;
+        continue;
+      }
+    }
+
+    const escalated = escalates(ctx, ts, "pick");
+    saveState(state);
+    const [{ result: picked }] = await runStage(ctx, "pick", pickBody(taskCtx, id, taskTitle, ts.evidence, ts.tests), { task: id, cwd, escalated });
     if (picked.status === "BLOCKED") {
       return { gate: { asks: asksFrom(picked, picked.action), need: `a decision on ${id}`, detail: picked.summary ?? picked.action } };
     }
     if (picked.status !== "PASS") {
       ts.evidence = evidenceText(picked);
+      continue;
+    }
+    const unproven = await checkPick(cwd, ts, picked.testChanges ?? []);
+    if (unproven) {
+      ts.evidence = unproven;
       continue;
     }
     if (!(await anyChanges(cwd))) {
@@ -192,7 +334,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     }
     saveState(state);
 
-    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base), { task: id, cwd }));
+    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd }));
     if (await anyChanges(cwd)) ctx.log(`  note: roast left changes in the tree; folding them into ${id}`);
     if (verdict.status === "PASS") {
       if (await anyChanges(cwd)) ts.commit = await commitAll(cwd, taskTitle, true);
@@ -202,6 +344,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       return { gate: { asks: asksFrom(verdict, verdict.action), need: `a decision on ${id}`, detail: verdict.action } };
     }
     ts.evidence = evidenceText(verdict);
+    if (verdict.retest && config.limits.testFirst) ts.retest = ts.evidence;
   }
 };
 
