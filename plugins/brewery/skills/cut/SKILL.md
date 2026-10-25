@@ -53,7 +53,10 @@ planner's context). Pass the packet and this brief:
 > 3. **Mis-triage.** A deferrable question that is actually fundamental: a wrong guess
 >    would change the destination, rewrite most tasks, or be irreversible or unsafe.
 > 4. **Proof.** Acceptance criteria that are not observable or have no real
->    verification method.
+>    verification method. A task whose test brief a tester could not write tests from
+>    without seeing the implementation: no Interface, Cases without literal expected
+>    values, missing error and permission cases, a mutating task with no Blast radius, or
+>    an `untestable` claim a test could disprove.
 > 5. **Executability.** A task a fresh engineer could not start without guessing:
 >    missing seams, wrong order, hidden dependencies, claims about the code that are false.
 > 6. **Risk.** PHI or security exposure, data migration, irreversible operations,

@@ -72,9 +72,10 @@ No input → stop and ask for one. Never default to "all open issues".
    branch named after the slug from the latest base when on `master` or `main`.
 5. **Build.** Follow `pick.md` from the next incomplete task, with these overrides for
    bug fixes:
-   - **Encode** is the reproduction: one failing test at the highest seam that shows the
-     reported symptom (the API response, the rendered screen, the thrown error). Confirm
-     it fails for the reason the issue describes, not for a setup mistake.
+   - **Specify and Encode** write the reproduction first: the test writer gets the issue's
+     reported symptom as the task's Cases, and writes one failing test at the highest seam
+     that shows it (the API response, the rendered screen, the thrown error). Confirm it
+     fails for the reason the issue describes, not for a setup mistake.
    - **Roast** must show the test fails on the base and passes on the head: check out the
      base version of the non-test files the task changed, run the test, see it fail,
      restore. A test that

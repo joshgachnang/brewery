@@ -13,7 +13,7 @@ import { calibrate } from "./commands/calibrate.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
-import { defaultIpPath, distill } from "./commands/distill.ts";
+import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
 import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
@@ -29,6 +29,11 @@ const HELP = `brewery — plan and ship a feature with separate agents per step.
 Usage:
   brewery distill "<request>" [--file req.md] [--slug s] [--ip path] [--go]
       Write the IP, attack it with cut, fix it, and send it for sign-off.
+  brewery pour "<request>" [--file req.md] [--slug s] [--ip path]
+      One shot for a small feature: write the IP and its task list, cut it, and, when it
+      has no fundamental question and at most limits.pourMaxTasks tasks, approve it and
+      build it: tests first, pick, roast, integrated roast, review, PR, finish. Otherwise
+      it asks you first, here or over ntfy, and continues after your answer.
   brewery answer <slug> "<reply>" [--go]
       Apply a sign-off reply ("ok", "ok, 2b", "no: <why>") or a gate answer
       ("1a", "retry: <hint>", "skip", "ship", "stop"), then continue a waiting run.
@@ -124,7 +129,7 @@ const makeCtx = (state: RunState, agentsFlag?: string, parallel?: string | true)
 };
 
 const afterApproval = async (ctx: Ctx, go: boolean): Promise<number> => {
-  if (!go) return 0;
+  if (!go && !ctx.state.oneShot) return 0;
   return (await barrel(ctx, githubCi)) === "done" ? 0 : WAITING;
 };
 
@@ -159,6 +164,25 @@ const cmdDistill = async (positional: string[], flags: Record<string, string | t
     log(`brewery distill ${slug} in ${repo}`);
     await distill(ctx, request);
     return replyLoop(ctx, !flags["no-wait"], Boolean(flags.go));
+  });
+};
+
+const cmdPour = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
+  const file = str(flags.file);
+  const request = file ? readFileSync(file, "utf8") : positional.join(" ");
+  if (!request.trim()) throw new Error('brewery pour needs a request: brewery pour "<request>"');
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  await ensureExcluded(repo);
+  const slug = str(flags.slug) ?? slugify(request);
+  const ipFlag = str(flags.ip);
+  const ip = ipFlag ? (isAbsolute(ipFlag) ? ipFlag : join(repo, ipFlag)) : defaultIpPath(repo, slug);
+  const state = newState({ slug, repo, ip, base: await defaultBase(repo), phase: "distill" });
+  state.oneShot = true;
+  return withRunLock(state, async () => {
+    const ctx = makeCtx(state, str(flags.agents), flags.parallel);
+    log(`brewery pour ${slug} in ${repo}`);
+    if ((await pour(ctx, request)) === "approved") return afterApproval(ctx, true);
+    return replyLoop(ctx, !flags["no-wait"], true);
   });
 };
 
@@ -373,7 +397,8 @@ const cmdAgents = async (flags: Record<string, string | true>): Promise<number> 
   }
   log("\nStages:");
   for (const stage of STAGES) {
-    log(`  ${stage.padEnd(8)} ${FAN_OUT.has(stage) ? "all of" : "first of"} ${config.stages[stage].join(", ")}`);
+    const stronger = config.escalate[stage]?.length ? `  (escalates to ${config.escalate[stage]!.join(", ")})` : "";
+    log(`  ${stage.padEnd(8)} ${FAN_OUT.has(stage) ? "all of" : "first of"} ${config.stages[stage].join(", ")}${stronger}`);
   }
   return 0;
 };
@@ -389,6 +414,8 @@ const main = async (): Promise<number> => {
   switch (command) {
     case "distill":
       return cmdDistill(positional, flags);
+    case "pour":
+      return cmdPour(positional, flags);
     case "answer":
       return cmdAnswer(positional, flags);
     case "resume":

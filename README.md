@@ -5,13 +5,24 @@ plugin, with a manifest for each tool beside it.
 
 | Plugin | Skills |
 |---|---|
-| `brewery` | `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, `harvest`, `polish`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
+| `brewery` | `pour`, `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, `harvest`, `polish`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
 
 Copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at `14e3a0c`.
 Everything else in shade's `.claude/skills` stays there, including the unmodified `terreno-*`
 lifecycle copies, which the upstream [terreno marketplace](https://github.com/FlourishHealth/terreno)
 already serves to both tools.
 `terreno-shared/VENDORED.md` explains how the brewery skills relate to upstream terreno.
+
+`pour` is the one shot for small features: `brewery pour "<request>"` writes the IP and its
+task list, cuts it, asks you only fundamental questions, approves a plan of at most six tasks
+itself, then builds and finishes it like `barrel`. A bigger plan, or one with a fundamental
+question, stops at sign-off and keeps going after your answer.
+
+`barrel` builds every task tests-first: a separate step on Sonnet writes the task's tests from
+its brief in the IP (seam, interface, worked cases, blast radius), brewery confirms they fail,
+and only then does Pick implement against them. A test step or Pick that keeps failing is
+retried on Opus. The `test-writer` and `test-runner` subagents in `plugins/brewery/agents/`
+do the same inside an interactive session.
 
 `tap` is barrel for bugs: give it issue numbers, tracker IDs, or a query ("the better-auth
 issues from the last day") and it triages them, writes a short pre-approved fix IP, builds
@@ -59,6 +70,7 @@ plugins/<plugin>/.claude-plugin/plugin.json
 plugins/<plugin>/.cursor-plugin/plugin.json
 plugins/<plugin>/.codex-plugin/plugin.json
 plugins/<plugin>/skills/<skill>/SKILL.md
+plugins/<plugin>/agents/<agent>.md     Claude Code and Cursor subagents (brewery:test-writer, brewery:test-runner)
 ```
 
 Skills link to each other with relative paths (`../terreno-shared/…`), so a skill and the

@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Josh's agent skills: the brewery pipeline.",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "pluginRoot": "plugins"
   },
   "plugins": [
     {
       "name": "brewery",
       "source": "brewery",
-      "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it through Pick and Roast to a PR, and finish it to green CI. tap takes issues straight to a fixed, green PR. harvest sweeps and labels a repo's issues daily with human sign-off; polish drives your broken PRs to mergeable."
+      "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it tests-first through Pick and Roast to a PR, and finish it to green CI. pour does all of that in one shot for small features. tap takes issues straight to a fixed, green PR. harvest sweeps and labels a repo's issues daily with human sign-off; polish drives your broken PRs to mergeable."
     }
   ]
 }

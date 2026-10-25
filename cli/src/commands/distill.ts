@@ -76,7 +76,7 @@ export const cutAndFix = async (ctx: Ctx, asks: Ask[], maxRounds: number): Promi
   return current;
 };
 
-export const sendForSignoff = async (ctx: Ctx, asks: Ask[]): Promise<void> => {
+export const sendForSignoff = async (ctx: Ctx, asks: Ask[], why?: string): Promise<void> => {
   const { state } = ctx;
   const channel = ctx.config.notify.ntfyUrl ? "ntfy + terminal" : "terminal";
   writeIp(state.ip, setStatus(readIp(state.ip), `awaiting sign-off (sent ${today()} via ${channel})`));
@@ -85,7 +85,7 @@ export const sendForSignoff = async (ctx: Ctx, asks: Ask[]): Promise<void> => {
   const parts = {
     repoName: basename(state.repo),
     title: title(text),
-    need: "plan ready for sign-off",
+    need: why ? `plan ready for sign-off (${why})` : "plan ready for sign-off",
     orientation: orientation(text),
     link: relative(state.repo, state.ip),
     asks,
@@ -103,16 +103,46 @@ export const approve = (state: RunState): void => {
   saveState(state);
 };
 
-export const distill = async (ctx: Ctx, request: string): Promise<void> => {
+const draftAndCut = async (ctx: Ctx, request: string): Promise<Ask[]> => {
   const { state } = ctx;
   if (!state.request) appendContext(state, "Original request", request);
   state.request = request;
   saveState(state);
-  let asks = await writeDraft(ctx, request);
+  const asks = await writeDraft(ctx, request);
   if (isApproved(readIp(state.ip))) {
     // An agent must never approve; undo it.
     writeIp(state.ip, setStatus(readIp(state.ip), "draft"));
   }
-  asks = await cutAndFix(ctx, asks, ctx.config.limits.cutRounds);
-  await sendForSignoff(ctx, asks);
+  return cutAndFix(ctx, asks, ctx.config.limits.cutRounds);
+};
+
+export const distill = async (ctx: Ctx, request: string): Promise<void> => {
+  await sendForSignoff(ctx, await draftAndCut(ctx, request));
+};
+
+// The one shot for small features. The human running `brewery pour` has approved in
+// advance any plan that is small and has no fundamental question; brewery, not the agent,
+// checks both. Anything else goes to ordinary sign-off, with the reason.
+export const pour = async (ctx: Ctx, request: string): Promise<"approved" | "waiting"> => {
+  const { state, config } = ctx;
+  const asks = await draftAndCut(ctx, request);
+  const tasks = parseTasks(readIp(state.ip)).length;
+  const fundamental = asks.filter((ask) => ask.fundamental);
+  const reason = fundamental.length
+    ? `${fundamental.length} fundamental question${fundamental.length > 1 ? "s" : ""} need you before building`
+    : tasks > config.limits.pourMaxTasks
+    ? `${tasks} tasks is more than pour builds unattended (limits.pourMaxTasks = ${config.limits.pourMaxTasks})`
+    : null;
+  if (reason) {
+    ctx.log(`pour: ${reason}; sending for sign-off`);
+    await sendForSignoff(ctx, asks, reason);
+    return "waiting";
+  }
+  const assumed = asks.length ? `, ${asks.length} recommendation${asks.length > 1 ? "s" : ""} assumed` : "";
+  writeIp(state.ip, setStatus(readIp(state.ip), `approved ${today()} (pour: ${tasks} tasks, no fundamental questions${assumed})`));
+  state.phase = "approved";
+  state.waiting = undefined;
+  saveState(state);
+  ctx.log(`pour: approved ${tasks} tasks${assumed}; building`);
+  return "approved";
 };

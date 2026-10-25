@@ -5,7 +5,7 @@ import { join, relative } from "node:path";
 import { answer } from "../src/commands/answer.ts";
 import { runCut } from "../src/commands/cut.ts";
 import { barrel } from "../src/commands/barrel.ts";
-import { cutAndFix, distill, sendForSignoff, writeDraft } from "../src/commands/distill.ts";
+import { cutAndFix, distill, pour, sendForSignoff, writeDraft } from "../src/commands/distill.ts";
 import { finish } from "../src/commands/finish.ts";
 import { readIp, readStatus, parseTasks } from "../src/ip.ts";
 import { runStage } from "../src/step.ts";
@@ -1128,6 +1128,259 @@ describe("barrel", () => {
     expect(await answer(ctx, "skip")).toBe("continue");
     expect(await barrel(ctx, fakeCi([green("a")]))).toBe("done");
     expect(ctx.state.tasks.T1.status).toBe("skipped");
+  });
+});
+
+describe("barrel test-first", () => {
+  const RED = 'test "$(cat greeting.txt 2>/dev/null)" = hello\n';
+  const oneTask = IP("approved 2026-09-27").replace("- [ ] **T2** — Add farewell file\n", "");
+  const wroteTests = { status: "PASS", action: "wrote the tests", tests: ["greeting.test.sh"], command: "sh greeting.test.sh" };
+  const after = [
+    { match: "roast INTEGRATE", result: { status: "PASS", action: "combined tree proven" } },
+    { match: "branch review", result: { status: "PASS", action: "reviewed", findings: [] } },
+    { match: "brew", result: { status: "PASS", action: "opened", pr: 7 } },
+  ];
+  const setup = (plan: unknown[], configure: (config: ReturnType<typeof quietCtx>["config"]) => void = () => {}): { repo: string; ctx: ReturnType<typeof quietCtx> } => {
+    const repo = tempRepo();
+    mkdirSync(join(repo, "docs/plans"), { recursive: true });
+    writeFileSync(join(repo, "docs/plans/greet.md"), oneTask);
+    const { config } = fakeSetup(repo, [...plan, ...after], { roast: ["beta"] });
+    config.limits.testFirst = true;
+    configure(config);
+    const state = newState({ slug: "greet", repo, ip: join(repo, "docs/plans/greet.md"), base: "master", phase: "approved" });
+    return { repo, ctx: quietCtx(state, config) };
+  };
+  const stagesFor = (repo: string, task: string): unknown[] =>
+    events(repo, "greet").filter((event) => event.kind === "step.start" && event.task === task).map((event) => event.stage);
+
+  test("writes the task's tests first, confirms them red, and lands tests and code in one commit", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "pick", "roast"]);
+    expect(run(repo, "git", "log", "--format=%s", "master..HEAD").split("\n")).toEqual(["Add greeting file"]);
+    expect(run(repo, "git", "show", "--name-only", "--format=", "HEAD").split("\n")).toEqual(expect.arrayContaining(["greeting.test.sh", "greeting.txt"]));
+    const [testPrompt] = stepPrompts(repo, "greet", /-test-T1-/);
+    expect(testPrompt).toContain("barrel/stages/test.md");
+    const [pickPrompt] = stepPrompts(repo, "greet", /-pick-T1-/);
+    expect(pickPrompt).toContain("greeting.test.sh");
+    expect(pickPrompt).toContain("sh greeting.test.sh");
+    const [roastPrompt] = stepPrompts(repo, "greet", /-roast-T1-/);
+    expect(roastPrompt).toContain("greeting.test.sh");
+  });
+
+  test("rejects tests that already pass before any implementation", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", times: 1, write: { "greeting.test.sh": "true\n" }, result: wroteTests },
+      { match: "test T1", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "test", "pick", "roast"]);
+    expect(stepPrompts(repo, "greet", /-test-T1-/)[1]).toContain("passed before any implementation");
+  });
+
+  test("rejects a test step that edits files it did not declare, and reverts them", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", times: 1, write: { "greeting.test.sh": RED, "greeting.txt": "hello\n" }, result: wroteTests },
+      { match: "test T1", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "test", "pick", "roast"]);
+    const retry = stepPrompts(repo, "greet", /-test-T1-/)[1];
+    expect(retry).toContain("greeting.txt");
+    expect(retry).toContain("not declared");
+  });
+
+  test("runs the tests itself after pick and retries a pick that leaves them red", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", times: 1, write: { "greeting.txt": "helo\n" }, result: { status: "PASS", action: "built" } },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "fixed" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "pick", "pick", "roast"]);
+    expect(stepPrompts(repo, "greet", /-pick-T1-/)[1]).toContain("still fail");
+    expect(run(repo, "git", "show", "HEAD:greeting.txt")).toBe("hello");
+  });
+
+  test("a pick that changes the tests must say why, and roast sees the reason", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", times: 1, write: { "greeting.txt": "hello\n", "greeting.test.sh": "true\n" }, result: { status: "PASS", action: "built" } },
+      {
+        match: "pick T1", write: { "greeting.test.sh": "grep -qx hello greeting.txt\n" },
+        result: { status: "PASS", action: "fixed", testChanges: [{ file: "greeting.test.sh", why: "match the whole line instead of comparing cat output" }] },
+      },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "pick", "pick", "roast"]);
+    expect(stepPrompts(repo, "greet", /-pick-T1-/)[1]).toContain("changed the tests without saying why");
+    expect(stepPrompts(repo, "greet", /-roast-T1-/)[0]).toContain("match the whole line instead of comparing cat output");
+  });
+
+  test("roast can send a task back to the test step, which then need not be red", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", times: 1, write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", times: 1, write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", times: 1, result: { status: "FAIL", action: "add the empty-file case", retest: true, fail: [{ need: "empty file case", want: "a test", got: "none", ev: "greeting.test.sh" }] } },
+      { match: "test T1", write: { "empty.test.sh": "test -s greeting.txt\n" }, result: { status: "PASS", action: "added", tests: ["greeting.test.sh", "empty.test.sh"], command: "sh greeting.test.sh && sh empty.test.sh" } },
+      { match: "pick T1", result: { status: "PASS", action: "already green" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "pick", "roast", "test", "pick", "roast"]);
+    expect(stepPrompts(repo, "greet", /-test-T1-/)[1]).toContain("add the empty-file case");
+    expect(run(repo, "git", "show", "--name-only", "--format=", "HEAD").split("\n")).toContain("empty.test.sh");
+  });
+
+  test("an untestable task skips the red check and roast is told why", async () => {
+    const { repo, ctx } = setup([
+      { match: "test T1", result: { status: "PASS", action: "nothing to test", tests: [], untestable: "the task only adds prose to the README" } },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ]);
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "pick", "roast"]);
+    expect(stepPrompts(repo, "greet", /-roast-T1-/)[0]).toContain("the task only adds prose to the README");
+  });
+
+  test("an escalation agent that is not installed falls back to the stage's own agents", async () => {
+    const { ctx } = setup([
+      { match: "test T1", times: 1, write: { "greeting.test.sh": "true\n" }, result: wroteTests },
+      { match: "test T1", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ], (config) => {
+      config.agents.missing = { type: "command", command: ["brewery-no-such-agent"] };
+      config.escalate = { test: ["missing"] };
+      config.limits.escalateAfter = 1;
+    });
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(ctx.state.history.filter((h) => h.stage === "test").map((h) => h.agent)).toEqual(["alpha", "alpha"]);
+    expect(ctx.lines.some((line) => line.includes("no escalation agent available for test"))).toBe(true);
+  });
+
+  test("runs the repo's terreno-test-hygiene on the new tests and rejects violations", async () => {
+    // A stand-in for @terreno/test's bin: exit 1 naming the rule when a file sleeps.
+    const hygiene = '#!/bin/sh\nif grep -l "Bun.sleep" "$@"; then echo "no-sleep: use waitUntil"; exit 1; fi\n';
+    const { repo, ctx } = setup([
+      { match: "test T1", times: 1, write: { "greeting.test.ts": "await Bun.sleep(100);\n" }, result: { ...wroteTests, tests: ["greeting.test.ts"], command: "test -f greeting.txt" } },
+      { match: "test T1", write: { "greeting.test.ts": "expect(read()).toBe(\"hello\");\n" }, result: { ...wroteTests, tests: ["greeting.test.ts"], command: "test -f greeting.txt" } },
+      { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ], (config) => {
+      config.worktreeSetup = [`mkdir -p node_modules/.bin && printf '%b' '${hygiene.replace(/\n/g, "\\n")}' > node_modules/.bin/terreno-test-hygiene && chmod +x node_modules/.bin/terreno-test-hygiene`];
+    });
+    writeFileSync(join(repo, ".gitignore"), "node_modules/\n");
+    run(repo, "git", "add", ".gitignore");
+    run(repo, "git", "commit", "-q", "-m", "Ignore node_modules");
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(stagesFor(repo, "T1")).toEqual(["test", "test", "pick", "roast"]);
+    expect(stepPrompts(repo, "greet", /-test-T1-/)[1]).toContain("no-sleep: use waitUntil");
+  });
+
+  test("escalates the test step and pick to the escalation agents after escalateAfter runs", async () => {
+    const { ctx } = setup([
+      { match: "test T1", agent: "alpha", write: { "greeting.test.sh": "true\n" }, result: wroteTests },
+      { match: "test T1", agent: "beta", write: { "greeting.test.sh": RED }, result: wroteTests },
+      { match: "pick T1", agent: "alpha", write: { "greeting.txt": "helo\n" }, result: { status: "PASS", action: "built" } },
+      { match: "pick T1", agent: "beta", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "fixed" } },
+      { match: "roast T1", result: { status: "PASS", action: "proven" } },
+    ], (config) => {
+      config.escalate = { test: ["beta"], pick: ["beta"] };
+      config.limits.escalateAfter = 1;
+    });
+
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    const agents = (stage: string) => ctx.state.history.filter((h) => h.stage === stage).map((h) => h.agent);
+    expect(agents("test")).toEqual(["alpha", "beta"]);
+    expect(agents("pick")).toEqual(["alpha", "beta"]);
+    expect(ctx.lines.some((line) => line.includes("escalating test T1 to beta"))).toBe(true);
+  });
+});
+
+describe("pour (one shot)", () => {
+  const draft = (text: string, asks: unknown[] = []) => [
+    { match: "distill (write the IP)", write: { "docs/plans/greet.md": text }, result: { status: "PASS", action: "drafted", ip: "docs/plans/greet.md", ask: asks } },
+    { match: "cut", result: { status: "PASS", action: "attacked", findings: [] } },
+  ];
+  const build = [
+    { match: "test T", result: { status: "PASS", action: "nothing to test", tests: [], untestable: "a fixture task" } },
+    { match: "pick T1", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
+    { match: "pick T2", write: { "farewell.txt": "bye\n" }, result: { status: "PASS", action: "built" } },
+    { match: "roast T", result: { status: "PASS", action: "proven" } },
+    { match: "roast INTEGRATE", result: { status: "PASS", action: "combined tree proven" } },
+    { match: "branch review", result: { status: "PASS", action: "reviewed", findings: [] } },
+    { match: "brew", result: { status: "PASS", action: "opened", pr: 7 } },
+  ];
+  const setup = (plan: unknown[], configure: (config: ReturnType<typeof quietCtx>["config"]) => void = () => {}) => {
+    const repo = tempRepo();
+    const { config } = fakeSetup(repo, plan);
+    config.limits.testFirst = true;
+    configure(config);
+    const state = newState({ slug: "greet", repo, ip: join(repo, "docs/plans/2026-09-27-greet.md"), base: "master", phase: "distill" });
+    return { repo, ctx: quietCtx(state, config) };
+  };
+
+  test("approves a small plan with no fundamental questions and builds it to a green PR", async () => {
+    const deferrable = { q: "Plain text or markdown?", rec: "Plain text", opts: ["Plain text", "Markdown"] };
+    const { repo, ctx } = setup([...draft(IP("draft"), [deferrable]), ...build]);
+
+    expect(await pour(ctx, "Add a greeting file.")).toBe("approved");
+    expect(readStatus(readIp(ctx.state.ip))).toStartWith("approved");
+    expect(readStatus(readIp(ctx.state.ip))).toContain("pour");
+    expect(ctx.state.waiting).toBeUndefined();
+    expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
+
+    expect(run(repo, "git", "log", "--format=%s", "master..HEAD").split("\n")).toEqual(["Add farewell file", "Add greeting file"]);
+    expect(stepPrompts(repo, "greet", /-distill-/)[0]).toContain('"fundamental": true');
+  });
+
+  test("stops for the human when the plan has a fundamental question", async () => {
+    const fundamental = { q: "Who sees the greeting?", rec: "Everyone", opts: ["Everyone", "Staff only"], fundamental: true };
+    const { ctx } = setup(draft(IP("draft"), [fundamental]));
+
+    expect(await pour(ctx, "Add a greeting file.")).toBe("waiting");
+    expect(ctx.state.waiting?.kind).toBe("signoff");
+    expect(ctx.state.waiting?.message).toContain("Who sees the greeting?");
+    expect(readStatus(readIp(ctx.state.ip))).toStartWith("awaiting sign-off");
+  });
+
+  test("stops for the human when the plan is too big for one shot", async () => {
+    const { ctx } = setup(draft(IP("draft")), (config) => {
+      config.limits.pourMaxTasks = 1;
+    });
+
+    expect(await pour(ctx, "Add a greeting file.")).toBe("waiting");
+    expect(ctx.state.waiting?.message).toContain("2 tasks");
   });
 });
 
