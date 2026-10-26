@@ -15,6 +15,8 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
 [`pick-roast loop`](../../terreno-shared/pick-roast-loop.md),
 [`testing guidance`](../../terreno-shared/testing.md),
 [`mocking guidance`](../../terreno-shared/mocking.md),
+[`testing plan`](../../terreno-shared/testing-plan.md),
+[`user guide`](../../terreno-shared/user-guide.md),
 [`subagent briefing`](../../terreno-shared/subagent-briefing.md), and the
 [`test stage`](test.md).
 
@@ -60,7 +62,13 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    Decisions, and the path of `test.md`. It gets no patch, because there is none yet,
    and you do not describe your planned implementation. Without that subagent, use a fresh
    general-purpose subagent with the same briefing, or write the tests yourself before
-   touching product code.
+   touching product code. The test briefing includes the IP's `## E2E tests` rows whose
+   `Written in` names this task and the e2e guide at the path the testing plan resolves:
+   each such row is a spec this task writes at the row's path. When a row's path or layer
+   no longer fits the code or the guide, edit that row in the IP, add a one-line reason
+   naming the row ID below the table (never a new column), and update any
+   `## Regression cases` `Automated by` cell that names the old path; never skip a row
+   silently. An IP that lacks the section follows the testing-plan legacy rule.
 6. **Encode.** Run the tests and confirm every one fails for the reason its case
    describes, not a typo, import, or setup error. A test that passes now does not test
    the new behavior: send it back to the writer with that evidence. After two rejected
@@ -86,9 +94,16 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
     (see [test tiers](../../terreno-shared/testing.md#test-tiers)); write or update the
     e2e spec here when the slice needs one. Missing mandatory capability is `BLOCKED`,
     not skipped.
-    Missing docs for a user-visible or architectural change is `FAIL`.
+    Missing docs for a user-visible or architectural change is `FAIL`. Write or edit
+    each user guide page whose `## User guide` row names this task, at the row's path,
+    in the user-guide page format, from the behavior this slice shipped; update the
+    guide index in the same slice. When a row's page path or change no longer fits,
+    edit that row in the IP with a one-line reason naming the row ID below the table;
+    never skip a guide row silently. Skip this when the repository opts out of the
+    user guide; an IP that lacks the section follows the user-guide legacy rule.
 11. **Record.** Record the completed task/slice in execution state with commands,
-    evidence, artifacts, docs files, and attempts. Do not commit a separate task-file
+    evidence, artifacts, docs files, attempts, each planned spec written (row ID and
+    path), and each user guide page written (row ID and path). Do not commit a separate task-file
     edit to mark progress; the task-file mark rides in this slice's commit (step 13).
 12. **Prove this task.** Follow [`roast.md`](roast.md) to prove this task only. Prefer a fresh context
     and pass the same task-scoped briefing. Roast must not spawn two unconstrained
@@ -123,6 +138,10 @@ generated-code workflows, and repository gotchas.
 
 - Files/behavior completed for each task this invocation finished
 - Red and green test evidence plus required lint/type/build/runtime results
+- Each `## E2E tests` row this task owns, with the spec path written or the edited row
+  and its reason
+- Each `## User guide` row this task owns, with the page written or the edited row and
+  its reason
 - Internal review results
 - Drift decision and artifact references
 - Attempted-approach summary (especially on retries)
@@ -134,6 +153,9 @@ generated-code workflows, and repository gotchas.
 - Every in-scope task this invocation reached has Roast `PASS` on the recorded head.
 - Required repository checks/runtime gates pass for the current head.
 - No unresolved internal review findings or plan drift remain on completed tasks.
+- Every `## E2E tests` row a completed task owns has a spec at the row's path.
+- Every `## User guide` row a completed task owns has its page written, edited, or
+  retired at the row's path.
 - When unblocked tasks remain, continue the loop rather than exiting.
 - When none remain, emit `PASS` with `next: brew`.
 

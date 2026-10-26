@@ -33,6 +33,16 @@ task at a time, never for the whole IP up front, because later tasks build on se
 ones create. Under `brewery barrel` a separate `test` step writes them and brewery checks red
 and green itself; see [`../barrel/stages/test.md`](../barrel/stages/test.md).
 
+## Planned e2e specs
+
+The IP's `## E2E tests` table is the e2e plan, defined in the
+[`testing plan`](testing-plan.md). Pick writes every row whose
+`Written in` names the current task, in that task, at the row's path. Follow the e2e
+guide the testing plan resolves for where specs live, how they find elements, and how
+they wait. A row whose path or layer no longer fits is edited in the IP with a one-line
+reason, never skipped. Running a layer the current stage cannot reach follows the
+testing-plan deferral rule.
+
 ## Blast radius
 
 A task that changes state can break behavior it never touches: every screen, query, or job
