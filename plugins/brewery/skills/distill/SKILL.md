@@ -13,6 +13,8 @@ everything else in front of the human once, at sign-off.
 Read before acting:
 
 - [`distilling`](references/distilling.md): triage, IP bottom sections, sign-off brief
+- [`testing plan`](../terreno-shared/testing-plan.md): the e2e guide's spot and the two required testing sections
+- [`user guide`](../terreno-shared/user-guide.md): the end-user guide's spot, its opt-out, and the required `## User guide` section
 - [`lifecycle contract`](../terreno-shared/lifecycle-contract.md) (stage results and execution state)
 - [`documentation contract`](../terreno-shared/documentation-contract.md)
 - [`reaching the human`](../terreno-shared/reaching-the-human.md)
@@ -36,9 +38,15 @@ interactive, single-session run.
 1. **Reconstruct.** Use the repository's IP convention. Otherwise use
    `docs/plans/YYYY-MM-DD-<slug>.md`, with the task list in the same file, and state at
    `.terreno/pipeline/<slug>.json`. If an IP already says `awaiting sign-off` and a reply
-   has arrived, jump to step 11.
+   has arrived, jump to step 11. An IP approved before the testing-plan contract reads a
+   missing testing section as `None — predates contract`; revising it adds both sections.
+   The same holds for a missing `## User guide` section.
 2. **Read architecture docs** for the affected area. The IP must resolve docs that are
-   missing or contradict the code.
+   missing or contradict the code. Resolve the e2e guide, regression suites, and smoke
+   command from the agent instructions' `## Testing conventions` table or the defaults
+   (`docs/testing/e2e.md`, `docs/regression/`), then read the guide and the area's suites.
+   Resolve the `User guide` path from the `## User guide conventions` table or the
+   default (`docs/user-guide/`) and read the area's pages, unless the value is `none`.
 3. **Discover supporting skills** relevant to the affected files and record them.
 4. **Research.** Answer every discoverable fact yourself, with explore subagents in
    parallel. Never ask the human something the repo, docs, or git history can answer.
@@ -60,11 +68,24 @@ interactive, single-session run.
    Cases, Blast radius, Test skills) per [`distilling`](references/distilling.md#the-test-brief):
    its tests are written before its implementation by a writer who sees only the brief.
    For a task that changes state, trace the blast radius and put each consumer's case at
-   its layer.
-9. **Write** the IP: the brief on top, then the tracer first and the small, parallel-ready task
-   list (criteria, blockers, verification, docs, supporting skills). Every task carries
-   `Depends on:` (`none` or task IDs), `Files:` (the files or seams it touches), and its
-   test brief. Follow
+   its layer. Pair each UI or cross-process criterion with a planned spec at the path and
+   layer the e2e guide gives, written by the task that delivers the behaviour, or state
+   why it has none. Automate first: anything a guide layer can drive and assert is an e2e
+   row. Regression cases are usually `None — no hard-to-automate change`: add one only for
+   something a developer or QA must check by hand (push notifications and other hardware
+   or OS behavior, a full cross-device flow, feel) that no existing case covers, each
+   meeting the testing plan's regression-step bar. Pair each criterion that changes what a
+   user sees or does with a `## User guide` row (new, update, or retire) per the
+   [`user guide`](../terreno-shared/user-guide.md) contract, or state why it needs none.
+9. **Write** the IP: the brief on top, then `## E2E tests` and `## Regression cases` per
+   [`testing plan`](../terreno-shared/testing-plan.md) and `## User guide` per
+   [`user guide`](../terreno-shared/user-guide.md) (each may be `None — <reason>`, none
+   may be missing; a repository whose `## User guide conventions` table says `none`
+   writes `None — user guide off`), then the tracer first and the small, parallel-ready
+   task list (criteria, blockers, verification, docs, supporting skills). When no file
+   exists at the resolved e2e guide path, add a task that writes it there, and make every
+   task that writes a planned spec depend on it. Every task carries `Depends on:` (`none`
+   or task IDs), `Files:` (the files or seams it touches), and its test brief. Follow
    the task list with the bottom sections from [`distilling`](references/distilling.md): Open questions,
    Expansions, Decisions, Sign-off. Build the plan on the recommendations. Set
    `Status: draft`.

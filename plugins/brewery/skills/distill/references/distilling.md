@@ -100,9 +100,59 @@ One line on the rejected alternative when a reviewer would ask.>
 | --- | --- | --- | --- | --- |
 
 Tracer: <seam the first task cuts through>
+E2E: <planned specs and layers, e.g. "2 specs (browser, http)"; or "None — reason">
+Regression: <provisional case IDs and destination suite; or "None — reason">
+User guide: <guide pages added, updated, or retired; or "None — reason">
 Out of scope: <tags; see Expansions>
 Open risks: <none, or one line each>
 ```
+
+## Testing sections (after the brief)
+
+The two testing sections follow the brief, before the task list, in the format of
+[`testing plan`](../../terreno-shared/testing-plan.md), then `## User guide` in the format
+of [`user guide`](../../terreno-shared/user-guide.md). Each may be `None — <reason>`.
+None may be missing, and a bare `None` with no reason is a defect cut blocks on.
+
+```markdown
+## E2E tests
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | <path the e2e guide prescribes> | <a layer from the guide> | <criterion, in observable terms> | T2 |
+
+## Regression cases
+
+Destination: <AREA> → <regression suites>/<area>.md
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| <AREA>-new-1 | <case> | <starting state, then action> | <what is observable> | <platforms> | E1, or manual | <IP slug> |
+
+## User guide
+
+| ID | Page | Change | Audience | Written in |
+| --- | --- | --- | --- | --- |
+| G1 | <user guide>/<area>/<feature>.md | new, update, or retire | user, admin, or staff | T2 |
+```
+
+Rules:
+
+- Every UI or cross-process acceptance criterion has an `## E2E tests` row, written in
+  the task that delivers its behaviour, or the section says why it has none.
+- `## Regression cases` is usually `None — no hard-to-automate change`. A case is only
+  for what a developer or QA must check by hand (push notifications and other hardware
+  or OS behavior, a full cross-device flow, feel) and no existing case covers.
+- Every acceptance criterion that changes what a user sees or does has a `## User guide`
+  row, written in the task that delivers its behaviour, or the section says why it has
+  none (`None — no user-visible change`). A repository whose `## User guide conventions`
+  table says `none` writes `None — user guide off`.
+- Regression IDs stay provisional (`<AREA>-new-<n>`), with one `Destination:` line per
+  prefix. Brew assigns the real IDs. A row that edits an existing case keeps its real ID.
+- The `E2E:`, `Regression:`, and `User guide:` brief lines summarize these sections. They stay lines
+  under the plan table, not headings.
+- An IP approved before the contract reads a missing section as
+  `None — predates contract`.
 
 The detailed task list, Assumptions, and the bottom sections follow. Write each task as one
 line in exactly this format, with its details in an indented block.
@@ -203,5 +253,6 @@ contain multiple behaviours, and chains that could fan out.
   write it on your recommendation and flag it
 - Building an expansion "because it was small"
 - Open questions without a recommendation, or without "If answered differently"
+- A UI criterion with no planned spec, or a testing section that says only `None`
 - A sign-off message that needs the IP open to make sense
 - Treating silence as sign-off

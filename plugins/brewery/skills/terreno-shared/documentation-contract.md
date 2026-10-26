@@ -24,6 +24,9 @@ Update docs in the same slice as the behavior when any of these change:
 - architecture, data flow, ownership, or runtime topology
 - verification, rollout, or compatibility rules
 
+A user-visible change also updates its end-user page in the
+[`user guide`](user-guide.md), unless the repository opts out.
+
 Skip docs only for a pure internal refactor that does not change those. Record that skip
 in the stage result `done` list. Missing docs for a user-visible or architectural change is `FAIL`,
 not a follow-up.

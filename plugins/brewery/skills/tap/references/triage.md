@@ -125,6 +125,32 @@ Selected: <the tap input, verbatim>, resolved <ISO timestamp> (window <start> to
 | #15 | <title> | duplicate-of #12 | same as #12 | T1 |
 | ENG-40 | <title> | decide | <one line> | none |
 
+## E2E tests
+
+None — <reason>, or:
+
+| ID | Spec or flow | Layer | Proves | Written in |
+| --- | --- | --- | --- | --- |
+| E1 | <path the e2e guide prescribes> | <a layer from the guide> | <the fixed behavior> | T1 |
+
+## Regression cases
+
+None — <reason>, or:
+
+Destination: <AREA> → <regression suites>/<area>.md
+
+| ID | Case | Steps | Expected | Platforms | Automated by | Added |
+| --- | --- | --- | --- | --- | --- | --- |
+| <AREA>-new-1 | <the reported flow> | <starting state, then the reporter's action> | <the fixed behavior, observable> | <platforms> | <proof test>, or manual | <IP slug> |
+
+## User guide
+
+None — <reason>, or:
+
+| ID | Page | Change | Audience | Written in |
+| --- | --- | --- | --- | --- |
+| G1 | <user guide page that described the broken behavior> | update | <audience> | T1 |
+
 ## Tasks
 
 - [ ] **T1** — Fix <symptom> (#12, #15)
@@ -156,6 +182,20 @@ Status: approved <date> (tap: <issue refs>)
 Rules:
 
 - `Depends on:` is `none` unless two fixes write the same file. Then order them.
+- `## E2E tests` and `## Regression cases` follow
+  [`testing plan`](../../terreno-shared/testing-plan.md) and are never missing. Most fixes
+  are proved by the task's Proof test, so `## E2E tests` is usually
+  `None — <reason>` (`None — proved by the unit test in T1`). Plan a spec only when the
+  defect sits in a UI or cross-process flow the Proof test cannot reach.
+  `## Regression cases` is usually `None — no hard-to-automate change`: add a row only
+  when the broken flow is one a developer or QA must check by hand (push notifications,
+  real email delivery, a cross-device flow) and no case covers it. When the suite
+  already has a case for the flow, edit that row under its real ID instead.
+- `## User guide` follows [`user guide`](../../terreno-shared/user-guide.md) and is never
+  missing. It is usually `None — fix restores documented behavior`; add an `update` row
+  when a guide page described the broken behavior or the fix changes what a user does.
+  A repository whose `## User guide conventions` table says `none` writes
+  `None — user guide off`.
 - Every `fix` and `duplicate-of` issue maps to exactly one task. Every other issue appears
   in "Not fixed in this run".
 - No Expansions section: tap builds nothing beyond the reported defects. A cleanup or

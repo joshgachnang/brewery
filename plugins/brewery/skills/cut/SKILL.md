@@ -68,6 +68,24 @@ planner's context). Pass the packet and this brief:
 >    registry, index, or barrel the task must edit. Check `Depends on:` against `Files:`
 >    and the proof for each task.
 > 8. **Readability.** The brief does not make sense to someone who knows only the request.
+> 9. **Testing plan and user guide.** Each of these is `blocking`:
+>    - the IP has no `## E2E tests` or no `## Regression cases` section;
+>    - the IP has no `## User guide` section;
+>    - a section says `None` with no reason (`None — <reason>` is fine);
+>    - a UI or cross-process acceptance criterion has no planned spec in `## E2E tests`,
+>      and the section gives no reason;
+>    - a user-visible criterion has no `## User guide` row, and the section gives no
+>      reason (a repository whose `## User guide conventions` table says `none` writes
+>      `None — user guide off`).
+>
+>    Also attack regression steps with no concrete starting state, action, or observable
+>    Expected, and a regression case an e2e guide layer could fully automate or that
+>    repeats an existing suite case (`should-fix`: regression is usually
+>    `None — no hard-to-automate change`). Attack guide rows whose page would describe
+>    unshipped behavior or use code names instead of on-screen words. An IP whose
+>    Sign-off already reads `Status: approved` was approved before these contracts if it
+>    lacks a section: read the section as `None — predates contract`
+>    and report it as `should-fix`, not `blocking`.
 >
 > Return at most 12 findings, most severe first, as a markdown table:
 > `ID | Severity (blocking / should-fix / nit) | Axis | Where in the IP | Attack | Evidence | Suggested fix`.

@@ -5,7 +5,7 @@ plugin, with a manifest for each tool beside it.
 
 | Plugin | Skills |
 |---|---|
-| `brewery` | `pour`, `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, `harvest`, `polish`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
+| `brewery` | `pour`, `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, `harvest`, `polish`, `rack`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
 
 Copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at `14e3a0c`.
 Everything else in shade's `.claude/skills` stays there, including the unmodified `terreno-*`
@@ -23,6 +23,18 @@ its brief in the IP (seam, interface, worked cases, blast radius), brewery confi
 and only then does Pick implement against them. A test step or Pick that keeps failing is
 retried on Opus. The `test-writer` and `test-runner` subagents in `plugins/brewery/agents/`
 do the same inside an interactive session.
+
+Every IP that `distill`, `pour`, or `tap` writes carries three required sections, each rows
+or `None — <reason>`: `## E2E tests` and `## Regression cases` (terreno's testing plan;
+regression is usually `None`) and `## User guide` (the end-user page each feature adds or
+changes, for chat agents to answer "how do I…"). A repo with no in-app users opts out of the
+guide with `| User guide | none |` under `## User guide conventions` in its CLAUDE.md or
+AGENTS.md; brewery itself does (see [`CLAUDE.md`](CLAUDE.md)).
+
+`rack` keeps brewery current with terreno: it diffs terreno's planning skills since the SHA
+in `terreno-shared/VENDORED.md`, copies verbatim files, reapplies upstream hunks to
+brewery's forks, reflects new contracts into brewery's own skills, and records a reason for
+everything it skips.
 
 `tap` is barrel for bugs: give it issue numbers, tracker IDs, or a query ("the better-auth
 issues from the last day") and it triages them, writes a short pre-approved fix IP, builds

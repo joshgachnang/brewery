@@ -11,7 +11,8 @@ import { newState, saveState, type RunState } from "../src/state.ts";
 import type { PrSnapshot } from "../src/vcs.ts";
 import { fakeCi, fakeSetup, quietCtx, tempRepo } from "./helpers.ts";
 
-const SCHEMA_DIR = join(import.meta.dir, "..", "..", "plugins", "brewery", "skills", "terreno-shared");
+const SKILLS_DIR = join(import.meta.dir, "..", "..", "plugins", "brewery", "skills");
+const SCHEMA_DIR = join(SKILLS_DIR, "terreno-shared");
 
 interface Schema {
   required?: string[];
@@ -77,6 +78,144 @@ describe("init-docs", () => {
     writeFileSync(join(repo, RULES_PATH), "# Rules\n\n## Active\n\n- Run lint before push.\n");
     initDocs(repo);
     expect(readFileSync(join(repo, RULES_PATH), "utf8")).toContain("Run lint before push.");
+  });
+});
+
+// bun test and typecheck never read skill text, so these checks are the testing-plan
+// contract's only guard in brewery's planning skills.
+const E2E_TABLE = "| ID | Spec or flow | Layer | Proves | Written in |";
+const REGRESSION_TABLE = "| ID | Case | Steps | Expected | Platforms | Automated by | Added |";
+const LEGACY = "None — predates contract";
+const GUIDE_TABLE = "| ID | Page | Change | Audience | Written in |";
+const GUIDE_OFF = "None — user guide off";
+const CUT_RULES = [
+  "no `## E2E tests` or no `## Regression cases` section",
+  "no `## User guide` section",
+  "a section says `None` with no reason",
+  "no planned spec in `## E2E tests`",
+  "has no `## User guide` row",
+];
+
+interface Contract {
+  // Anywhere in the text, after reflow.
+  phrases: string[];
+  // A line that starts with this: template headings and brief lines.
+  lines?: string[];
+  // Phrases that must sit between two markers, such as cut's blocking list.
+  within?: { from: string; to: string; phrases: string[] };
+}
+
+const CONTRACT: Record<string, Contract> = {
+  "terreno-shared/testing-plan.md": {
+    phrases: ["docs/testing/e2e.md", "docs/regression/", "## Testing conventions", E2E_TABLE, REGRESSION_TABLE, "None — <reason>", "row as `deferred` with the exact command", LEGACY],
+  },
+  "terreno-shared/user-guide.md": {
+    phrases: ["docs/user-guide/", "## User guide conventions", "### Opting out", GUIDE_OFF, GUIDE_TABLE, "## Guide-entry bar", "None — <reason>", "predates contract"],
+  },
+  "distill/SKILL.md": {
+    phrases: ["../terreno-shared/testing-plan.md", "../terreno-shared/user-guide.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF, LEGACY],
+  },
+  "distill/references/distilling.md": {
+    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY],
+    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: "],
+  },
+  "pour/SKILL.md": {
+    phrases: ["## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF],
+  },
+  "barrel/stages/pick.md": {
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "skip a guide row silently", "opts out of the user guide"],
+  },
+  "barrel/stages/roast.md": {
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens"],
+  },
+  "barrel/stages/brew.md": {
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out"],
+  },
+  "finish/taste.md": {
+    phrases: ["../terreno-shared/user-guide.md", "## User guide", "user guide pages", "guide-entry bar"],
+  },
+  "cut/SKILL.md": {
+    phrases: [LEGACY, GUIDE_OFF],
+    within: { from: "Each of these is `blocking`", to: "Also attack regression steps", phrases: CUT_RULES },
+  },
+  "tap/references/triage.md": {
+    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF],
+    lines: ["## E2E tests", "## Regression cases", "## User guide"],
+  },
+};
+
+const skillText = (path: string): string => readFileSync(join(SKILLS_DIR, path), "utf8");
+
+// Markdown reflows prose and blockquotes, so a phrase may be wrapped across lines.
+const flatten = (text: string): string => text.replace(/^>\s?/gm, "").replace(/\s+/g, " ");
+
+const contractGaps = (path: string, text: string): string[] => {
+  const { phrases, lines = [], within } = CONTRACT[path];
+  const flat = flatten(text);
+  const rows = text.split("\n");
+  const gaps = phrases.filter((phrase) => !flat.includes(phrase));
+  gaps.push(...lines.filter((line) => !rows.some((row) => row.startsWith(line))).map((line) => `line: ${line}`));
+  if (within) {
+    const from = flat.indexOf(within.from);
+    const to = flat.indexOf(within.to, from);
+    const span = from === -1 || to === -1 ? "" : flat.slice(from, to);
+    gaps.push(...within.phrases.filter((phrase) => !span.includes(phrase)).map((phrase) => `${within.from}: ${phrase}`));
+  }
+  return gaps;
+};
+
+// The text with the first line containing `marker` removed.
+const dropLine = (text: string, marker: string): string => {
+  const rows = text.split("\n");
+  const at = rows.findIndex((row) => row.includes(marker));
+  if (at === -1) throw new Error(`no line contains ${marker}`);
+  return rows.filter((_, i) => i !== at).join("\n");
+};
+
+describe("testing-plan and user-guide contracts in the skill text", () => {
+  for (const path of Object.keys(CONTRACT)) {
+    test(`${path} carries the contract`, () => {
+      expect(contractGaps(path, skillText(path))).toEqual([]);
+    });
+  }
+
+  test("deleting either section heading from distill or tap is reported", () => {
+    expect(contractGaps("distill/SKILL.md", dropLine(skillText("distill/SKILL.md"), "then `## E2E tests` and `## Regression cases`"))).toEqual(["## E2E tests", "## Regression cases"]);
+    expect(contractGaps("distill/references/distilling.md", dropLine(skillText("distill/references/distilling.md"), "## E2E tests"))).toEqual(["line: ## E2E tests"]);
+    expect(contractGaps("distill/references/distilling.md", dropLine(skillText("distill/references/distilling.md"), "## Regression cases"))).toEqual(["line: ## Regression cases"]);
+    expect(contractGaps("tap/references/triage.md", dropLine(skillText("tap/references/triage.md"), "## E2E tests"))).toEqual(["line: ## E2E tests"]);
+    expect(contractGaps("tap/references/triage.md", dropLine(skillText("tap/references/triage.md"), "## Regression cases"))).toEqual(["line: ## Regression cases"]);
+  });
+
+  test("deleting any cut blocking rule, or moving it out of the blocking list, is reported", () => {
+    const cut = skillText("cut/SKILL.md");
+    const rows = cut.split("\n");
+    for (const rule of CUT_RULES) {
+      const gap = [`Each of these is \`blocking\`: ${rule}`];
+      expect(contractGaps("cut/SKILL.md", dropLine(cut, rule))).toEqual(gap);
+      const line = rows.find((row) => row.includes(rule)) as string;
+      expect(contractGaps("cut/SKILL.md", `${dropLine(cut, rule)}\n${line}\n`)).toEqual(gap);
+    }
+  });
+});
+
+describe("user guide and rack in the skill text", () => {
+  test("deleting the user guide section from distilling or triage is reported", () => {
+    // The heading line itself, not prose that mentions it.
+    const dropHeading = (text: string): string => text.split("\n").filter((row) => row !== "## User guide").join("\n");
+    expect(contractGaps("distill/references/distilling.md", dropHeading(skillText("distill/references/distilling.md")))).toEqual(["line: ## User guide"]);
+    expect(contractGaps("tap/references/triage.md", dropHeading(skillText("tap/references/triage.md")))).toEqual(["line: ## User guide"]);
+  });
+
+  test("dropping the opt-out from distill is reported", () => {
+    expect(contractGaps("distill/SKILL.md", skillText("distill/SKILL.md").replaceAll(GUIDE_OFF, "None"))).toEqual([GUIDE_OFF]);
+  });
+
+  test("rack exists and VENDORED.md names the SHA it last racked", () => {
+    const rack = skillText("rack/SKILL.md");
+    expect(rack).toMatch(/^---\nname: rack\n/);
+    expect(flatten(rack)).toContain("VENDORED.md");
+    expect(flatten(skillText("terreno-shared/VENDORED.md"))).toMatch(/Last racked from terreno .* at `[0-9a-f]{8,40}`/);
   });
 });
 
