@@ -62,7 +62,7 @@ Destination: `docs/regression/brewery.md`. T3 creates it.
     - `bun test` and `bun run typecheck` pass in `cli/`.
     - New `layout.test.ts` cases fail when the distill, cut or tap text loses either heading or the blocking rule.
 
-- [ ] **T2** — Resync vendored references and forked stages from terreno master
+- [x] **T2** — Resync vendored references and forked stages from terreno master
   - Depends on: T1
   - Files: plugins/brewery/skills/terreno-shared/*.md, plugins/brewery/skills/terreno-shared/*.json, plugins/brewery/skills/terreno-shared/VENDORED.md, plugins/brewery/skills/barrel/stages/pick.md, plugins/brewery/skills/barrel/stages/roast.md, plugins/brewery/skills/barrel/stages/brew.md, plugins/brewery/skills/finish/taste.md
   - Delivers:
@@ -73,12 +73,20 @@ Destination: `docs/regression/brewery.md`. T3 creates it.
     - `bun test` and `bun run typecheck` pass in `cli/`.
     - For each VENDORED.md row with Changes "none", `diff` against the upstream file at the recorded SHA is empty. That covers `references/*` against `terreno-shared/*`, and `skills/2-pick/references/{testing,mocking}.md`.
 
-- [ ] **T3** — Walk the distill regression case and record it
+- [x] **T3** — Walk the distill regression case and record it
   - Depends on: T2
   - Files: docs/regression/brewery.md
   - Owner: the agent creates the file; a human walks the case (terreno D8: only a human walks regression cases).
   - Delivers: Creates the suite file in terreno's format with BREW-001 and `Last full run: never`. The PR lists BREW-001 under ⚠️ Not tested, and Josh walks it before merging.
   - Acceptance: The file is well formed under the suite format. BREW-001 meets its Expected when the human walks it, and a failure goes back to T1.
+
+Progress (2026-10-26): T2 and T3 were done by hand on branch `user-guide-and-regression`,
+superseding the stalled barrel run (T2 was BLOCKED waiting for the terreno merge). T2
+vendored from terreno branch `user-guide` at `a5e53d0c`, which also adds the end-user guide
+contract (`## User guide`, with a `none` opt-out), so this branch carries both. VENDORED.md
+records it as pre-merge; run the new `rack` skill against master after the terreno PRs
+merge. T3 created `docs/regression/brewery.md` with BREW-001 (`Last full run: never`); Josh
+walks it before merging. Brewery opts out of the user guide in `CLAUDE.md`.
 
 ## Assumptions
 
