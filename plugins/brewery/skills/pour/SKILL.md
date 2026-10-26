@@ -22,7 +22,9 @@ tool is available. Use this skill directly for an interactive, single-session ru
 ## Procedure
 
 1. **Distill.** Follow the [`distill`](../distill/SKILL.md) skill steps 1–10: research,
-   triage, shape, give every task its test brief, write the IP, cut it, fix it. Ask
+   triage, shape, give every task its test brief, write the IP with its `## E2E tests`,
+   `## Regression cases`, and `## User guide` sections (each rows or `None — <reason>`;
+   `None — user guide off` when the repository opts out), cut it, fix it. Ask
    fundamental questions in chat when the human is here, in one round, at most four, with
    the structured question tool. The answers go into Decisions.
 2. **Decide whether to stop.** Count the tasks and the fundamental questions still open.
@@ -43,5 +45,6 @@ tool is available. Use this skill directly for an interactive, single-session ru
 ## Never
 
 - approve a plan with a fundamental question open, or with more than 6 tasks
+- approve a plan missing `## E2E tests`, `## Regression cases`, or `## User guide`
 - build Expansions, merge the PR, or skip Roast
 - stop between approval and a terminal `finish` result, except at a barrel human gate

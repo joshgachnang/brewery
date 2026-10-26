@@ -86,7 +86,15 @@ describe("init-docs", () => {
 const E2E_TABLE = "| ID | Spec or flow | Layer | Proves | Written in |";
 const REGRESSION_TABLE = "| ID | Case | Steps | Expected | Platforms | Automated by | Added |";
 const LEGACY = "None — predates contract";
-const CUT_RULES = ["no `## E2E tests` or no `## Regression cases` section", "a section says `None` with no reason", "no planned spec in `## E2E tests`"];
+const GUIDE_TABLE = "| ID | Page | Change | Audience | Written in |";
+const GUIDE_OFF = "None — user guide off";
+const CUT_RULES = [
+  "no `## E2E tests` or no `## Regression cases` section",
+  "no `## User guide` section",
+  "a section says `None` with no reason",
+  "no planned spec in `## E2E tests`",
+  "has no `## User guide` row",
+];
 
 interface Contract {
   // Anywhere in the text, after reflow.
@@ -101,20 +109,38 @@ const CONTRACT: Record<string, Contract> = {
   "terreno-shared/testing-plan.md": {
     phrases: ["docs/testing/e2e.md", "docs/regression/", "## Testing conventions", E2E_TABLE, REGRESSION_TABLE, "None — <reason>", "row as `deferred` with the exact command", LEGACY],
   },
+  "terreno-shared/user-guide.md": {
+    phrases: ["docs/user-guide/", "## User guide conventions", "### Opting out", GUIDE_OFF, GUIDE_TABLE, "## Guide-entry bar", "None — <reason>", "predates contract"],
+  },
   "distill/SKILL.md": {
-    phrases: ["../terreno-shared/testing-plan.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", LEGACY],
+    phrases: ["../terreno-shared/testing-plan.md", "../terreno-shared/user-guide.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF, LEGACY],
   },
   "distill/references/distilling.md": {
-    phrases: [E2E_TABLE, REGRESSION_TABLE, "None — <reason>", LEGACY],
-    lines: ["## E2E tests", "## Regression cases", "E2E: ", "Regression: "],
+    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY],
+    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: "],
+  },
+  "pour/SKILL.md": {
+    phrases: ["## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF],
+  },
+  "barrel/stages/pick.md": {
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "skip a guide row silently", "opts out of the user guide"],
+  },
+  "barrel/stages/roast.md": {
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens"],
+  },
+  "barrel/stages/brew.md": {
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out"],
+  },
+  "finish/taste.md": {
+    phrases: ["../terreno-shared/user-guide.md", "## User guide", "user guide pages", "guide-entry bar"],
   },
   "cut/SKILL.md": {
-    phrases: [LEGACY],
+    phrases: [LEGACY, GUIDE_OFF],
     within: { from: "Each of these is `blocking`", to: "Also attack regression steps", phrases: CUT_RULES },
   },
   "tap/references/triage.md": {
-    phrases: [E2E_TABLE, REGRESSION_TABLE, "None — <reason>"],
-    lines: ["## E2E tests", "## Regression cases"],
+    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF],
+    lines: ["## E2E tests", "## Regression cases", "## User guide"],
   },
 };
 
@@ -146,7 +172,7 @@ const dropLine = (text: string, marker: string): string => {
   return rows.filter((_, i) => i !== at).join("\n");
 };
 
-describe("testing-plan contract in the skill text", () => {
+describe("testing-plan and user-guide contracts in the skill text", () => {
   for (const path of Object.keys(CONTRACT)) {
     test(`${path} carries the contract`, () => {
       expect(contractGaps(path, skillText(path))).toEqual([]);
@@ -170,6 +196,26 @@ describe("testing-plan contract in the skill text", () => {
       const line = rows.find((row) => row.includes(rule)) as string;
       expect(contractGaps("cut/SKILL.md", `${dropLine(cut, rule)}\n${line}\n`)).toEqual(gap);
     }
+  });
+});
+
+describe("user guide and rack in the skill text", () => {
+  test("deleting the user guide section from distilling or triage is reported", () => {
+    // The heading line itself, not prose that mentions it.
+    const dropHeading = (text: string): string => text.split("\n").filter((row) => row !== "## User guide").join("\n");
+    expect(contractGaps("distill/references/distilling.md", dropHeading(skillText("distill/references/distilling.md")))).toEqual(["line: ## User guide"]);
+    expect(contractGaps("tap/references/triage.md", dropHeading(skillText("tap/references/triage.md")))).toEqual(["line: ## User guide"]);
+  });
+
+  test("dropping the opt-out from distill is reported", () => {
+    expect(contractGaps("distill/SKILL.md", skillText("distill/SKILL.md").replaceAll(GUIDE_OFF, "None"))).toEqual([GUIDE_OFF]);
+  });
+
+  test("rack exists and VENDORED.md names the SHA it last racked", () => {
+    const rack = skillText("rack/SKILL.md");
+    expect(rack).toMatch(/^---\nname: rack\n/);
+    expect(flatten(rack)).toContain("VENDORED.md");
+    expect(flatten(skillText("terreno-shared/VENDORED.md"))).toMatch(/Last racked from terreno .* at `[0-9a-f]{8,40}`/);
   });
 });
 

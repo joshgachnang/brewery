@@ -143,6 +143,14 @@ Destination: <AREA> → <regression suites>/<area>.md
 | --- | --- | --- | --- | --- | --- | --- |
 | <AREA>-new-1 | <the reported flow> | <starting state, then the reporter's action> | <the fixed behavior, observable> | <platforms> | <proof test>, or manual | <IP slug> |
 
+## User guide
+
+None — <reason>, or:
+
+| ID | Page | Change | Audience | Written in |
+| --- | --- | --- | --- | --- |
+| G1 | <user guide page that described the broken behavior> | update | <audience> | T1 |
+
 ## Tasks
 
 - [ ] **T1** — Fix <symptom> (#12, #15)
@@ -178,9 +186,16 @@ Rules:
   [`testing plan`](../../terreno-shared/testing-plan.md) and are never missing. Most fixes
   are proved by the task's Proof test, so `## E2E tests` is usually
   `None — <reason>` (`None — proved by the unit test in T1`). Plan a spec only when the
-  defect sits in a UI or cross-process flow the Proof test cannot reach. Add one
-  regression row when a human would re-check the broken flow before a release. When the
-  suite already has a case for the flow, edit that row under its real ID instead.
+  defect sits in a UI or cross-process flow the Proof test cannot reach.
+  `## Regression cases` is usually `None — no hard-to-automate change`: add a row only
+  when the broken flow is one a developer or QA must check by hand (push notifications,
+  real email delivery, a cross-device flow) and no case covers it. When the suite
+  already has a case for the flow, edit that row under its real ID instead.
+- `## User guide` follows [`user guide`](../../terreno-shared/user-guide.md) and is never
+  missing. It is usually `None — fix restores documented behavior`; add an `update` row
+  when a guide page described the broken behavior or the fix changes what a user does.
+  A repository whose `## User guide conventions` table says `none` writes
+  `None — user guide off`.
 - Every `fix` and `duplicate-of` issue maps to exactly one task. Every other issue appears
   in "Not fixed in this run".
 - No Expansions section: tap builds nothing beyond the reported defects. A cleanup or
