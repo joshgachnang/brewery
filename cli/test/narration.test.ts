@@ -28,6 +28,24 @@ describe("streamed agent narration", () => {
     expect(parseNarrationLine("codex", JSON.stringify({ type: "item.started", item: { type: "file_change", changes: [{ path: "a.ts", kind: "update" }] } }))).toEqual(["Edit files"]);
   });
 
+  test("launches Cursor's agent CLI headless, pointing it at the prompt file", () => {
+    const argv = agentArgv({ type: "cursor", model: "gpt-5" }, "/repo", undefined, "/runs/001-pick.prompt.md");
+    expect(argv.slice(0, -1)).toEqual(["agent", "-p", "--force", "--trust", "--output-format", "stream-json", "--workspace", "/repo", "--model", "gpt-5"]);
+    expect(argv.at(-1)).toContain("/runs/001-pick.prompt.md");
+    expect(agentArgv({ type: "cursor", bin: "cursor-agent" }, "/repo", undefined, "/p.md")[0]).toBe("cursor-agent");
+    expect(() => agentArgv({ type: "cursor" }, "/repo", { schema: {} }, "/p.md")).toThrow("cursor cannot run read-only steps");
+  });
+
+  test("turns Cursor's buffered assistant text and started tool calls into narration", () => {
+    const flushed = JSON.stringify({ type: "assistant", model_call_id: "m1", message: { content: [{ type: "text", text: "Writing the tests." }] } });
+    const delta = JSON.stringify({ type: "assistant", timestamp_ms: 1, message: { content: [{ type: "text", text: "Writ" }] } });
+    expect(parseNarrationLine("cursor", flushed)).toEqual(["Writing the tests."]);
+    expect(parseNarrationLine("cursor", delta)).toEqual([]);
+    expect(parseNarrationLine("cursor", JSON.stringify({ type: "tool_call", subtype: "started", tool_call: { writeToolCall: { args: { path: "/repo/a.test.ts" } } } }))).toEqual(["Edit a.test.ts"]);
+    expect(parseNarrationLine("cursor", JSON.stringify({ type: "tool_call", subtype: "started", tool_call: { readToolCall: { args: { path: "/repo/a.ts" } } } }))).toEqual(["Read a.ts"]);
+    expect(parseNarrationLine("cursor", JSON.stringify({ type: "tool_call", subtype: "completed", tool_call: { readToolCall: { args: { path: "/repo/a.ts" } } } }))).toEqual([]);
+  });
+
   test("ignores invalid and non-narrative output and truncates at 300 characters", () => {
     expect(parseNarrationLine("claude", "not json")).toEqual([]);
     expect(parseNarrationLine("claude", JSON.stringify({ type: "result", result: "duplicate final answer" }))).toEqual([]);

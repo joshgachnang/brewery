@@ -3,6 +3,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import { availability } from "./agents.ts";
+import { buildBoard, gatherBoard, renderBoard } from "./board.ts";
 import { appendEvent } from "./events.ts";
 import { answer } from "./commands/answer.ts";
 import { approve, basePolicy, gitReaders, waitForOtherChecks, type Poster } from "./commands/approve.ts";
@@ -12,7 +13,7 @@ import { calibrate } from "./commands/calibrate.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
 import { findingsTable, runCut } from "./commands/cut.ts";
-import { defaultIpPath, distill } from "./commands/distill.ts";
+import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
 import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
@@ -28,6 +29,11 @@ const HELP = `brewery — plan and ship a feature with separate agents per step.
 Usage:
   brewery distill "<request>" [--file req.md] [--slug s] [--ip path] [--go]
       Write the IP, attack it with cut, fix it, and send it for sign-off.
+  brewery pour "<request>" [--file req.md] [--slug s] [--ip path]
+      One shot for a small feature: write the IP and its task list, cut it, and, when it
+      has no fundamental question and at most limits.pourMaxTasks tasks, approve it and
+      build it: tests first, pick, roast, integrated roast, review, PR, finish. Otherwise
+      it asks you first, here or over ntfy, and continues after your answer.
   brewery answer <slug> "<reply>" [--go]
       Apply a sign-off reply ("ok", "ok, 2b", "no: <why>") or a gate answer
       ("1a", "retry: <hint>", "skip", "ship", "stop"), then continue a waiting run.
@@ -57,6 +63,8 @@ Usage:
       pass, and open one PR with learnings, rules, or checks. Meant for a nightly timer.
   brewery init-docs            Add docs/{decisions,journal,learnings}/ and point AGENTS.md/CLAUDE.md at them
   brewery status [slug]        Runs, phases, and what is waiting on you
+  brewery board [--merges N] [--json]
+      This repo's board from its IPs and runs: in progress, blocked, next up, recent merges.
   brewery agents               Agent profiles, availability, and stage routing
   brewery help
 
@@ -98,7 +106,7 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
     const [name, inline] = arg.slice(2).split("=", 2);
     const next = argv[i + 1];
     if (inline !== undefined) flags[name] = inline;
-    else if (["go", "no-wait", "here", "dry-run"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
+    else if (["go", "no-wait", "here", "dry-run", "json"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
     else flags[name] = argv[++i];
   }
   return { positional, flags };
@@ -121,7 +129,7 @@ const makeCtx = (state: RunState, agentsFlag?: string, parallel?: string | true)
 };
 
 const afterApproval = async (ctx: Ctx, go: boolean): Promise<number> => {
-  if (!go) return 0;
+  if (!go && !ctx.state.oneShot) return 0;
   return (await barrel(ctx, githubCi)) === "done" ? 0 : WAITING;
 };
 
@@ -156,6 +164,25 @@ const cmdDistill = async (positional: string[], flags: Record<string, string | t
     log(`brewery distill ${slug} in ${repo}`);
     await distill(ctx, request);
     return replyLoop(ctx, !flags["no-wait"], Boolean(flags.go));
+  });
+};
+
+const cmdPour = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
+  const file = str(flags.file);
+  const request = file ? readFileSync(file, "utf8") : positional.join(" ");
+  if (!request.trim()) throw new Error('brewery pour needs a request: brewery pour "<request>"');
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  await ensureExcluded(repo);
+  const slug = str(flags.slug) ?? slugify(request);
+  const ipFlag = str(flags.ip);
+  const ip = ipFlag ? (isAbsolute(ipFlag) ? ipFlag : join(repo, ipFlag)) : defaultIpPath(repo, slug);
+  const state = newState({ slug, repo, ip, base: await defaultBase(repo), phase: "distill" });
+  state.oneShot = true;
+  return withRunLock(state, async () => {
+    const ctx = makeCtx(state, str(flags.agents), flags.parallel);
+    log(`brewery pour ${slug} in ${repo}`);
+    if ((await pour(ctx, request)) === "approved") return afterApproval(ctx, true);
+    return replyLoop(ctx, !flags["no-wait"], true);
   });
 };
 
@@ -349,6 +376,16 @@ const cmdStatus = (positional: string[]): number => {
   return 0;
 };
 
+const cmdBoard = async (flags: Record<string, string | true>): Promise<number> => {
+  const repo = await repoRoot(str(flags.repo) ?? process.cwd());
+  const merges = str(flags.merges) ? Number(str(flags.merges)) : 10;
+  if (!Number.isSafeInteger(merges) || merges < 0) throw new Error("brewery board: --merges needs a non-negative integer");
+  const config = loadConfig(repo);
+  const board = buildBoard(await gatherBoard(repo, { base: await defaultBase(repo), planDirs: config.approve.planDirs, merges }));
+  log(flags.json ? JSON.stringify(board, null, 2) : renderBoard(board));
+  return 0;
+};
+
 const cmdAgents = async (flags: Record<string, string | true>): Promise<number> => {
   const repo = str(flags.repo) ?? process.cwd();
   const config = loadConfig(repo, str(flags.agents));
@@ -360,7 +397,8 @@ const cmdAgents = async (flags: Record<string, string | true>): Promise<number> 
   }
   log("\nStages:");
   for (const stage of STAGES) {
-    log(`  ${stage.padEnd(8)} ${FAN_OUT.has(stage) ? "all of" : "first of"} ${config.stages[stage].join(", ")}`);
+    const stronger = config.escalate[stage]?.length ? `  (escalates to ${config.escalate[stage]!.join(", ")})` : "";
+    log(`  ${stage.padEnd(8)} ${FAN_OUT.has(stage) ? "all of" : "first of"} ${config.stages[stage].join(", ")}${stronger}`);
   }
   return 0;
 };
@@ -376,6 +414,8 @@ const main = async (): Promise<number> => {
   switch (command) {
     case "distill":
       return cmdDistill(positional, flags);
+    case "pour":
+      return cmdPour(positional, flags);
     case "answer":
       return cmdAnswer(positional, flags);
     case "resume":
@@ -396,6 +436,8 @@ const main = async (): Promise<number> => {
       return cmdInitDocs(flags);
     case "status":
       return cmdStatus(positional);
+    case "board":
+      return cmdBoard(flags);
     case "agents":
       return cmdAgents(flags);
     case undefined:

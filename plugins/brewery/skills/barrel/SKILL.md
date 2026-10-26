@@ -10,7 +10,7 @@ how each step is done:
 
 | Phase | Follow | Loop |
 | --- | --- | --- |
-| Build | [`stages/pick.md`](stages/pick.md), which proves each task with [`stages/roast.md`](stages/roast.md) | every task until all have Roast `PASS` |
+| Build | [`stages/test.md`](stages/test.md) writes each task's tests, then [`stages/pick.md`](stages/pick.md) builds it and proves it with [`stages/roast.md`](stages/roast.md) | every task until all have Roast `PASS` |
 | Submit | [`stages/brew.md`](stages/brew.md) | until Brew `PASS` |
 | Finish | the `finish` skill | until the PR is conflict-free with green CI |
 
@@ -25,8 +25,11 @@ keeps a `ledger`.
 ## Run it with brewery
 
 `brewery barrel <slug>` runs this as separate agent processes (Claude, Codex, or local models via
-litellm). Every Pick, every Roast, the branch review, and Brew run in a fresh
-process, and brewery commits between them, so Roast judges a fixed tree. Ready tasks run in
+litellm). Every test step, Pick, Roast, the branch review, and Brew run in a fresh
+process, and brewery commits between them, so Roast judges a fixed tree. The test step
+writes a task's tests from its brief before Pick starts (Sonnet by default), and brewery
+itself confirms they fail first and pass after Pick. A test step or Pick that keeps failing
+moves to a stronger agent (Opus by default) after `limits.escalateAfter` runs. Ready tasks run in
 isolated worktrees up to `limits.parallelTasks` (`--parallel N` for one run), then land serially
 after Roast PASS; dependencies must already have landed. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
 interactive, single-session run.
@@ -52,9 +55,13 @@ interactive, single-session run.
    start nothing new, drain running siblings, and persist only the first gate before exiting.
    Resume crashed `running` tasks by discarding their partial worktrees and returning them
    to `todo`. The bounded agent steps return to brewery; they never start another task.
-   For an interactive run, follow `stages/pick.md` from the next incomplete task. Pick implements one
-   task, proves it with `stages/roast.md` in a fresh subagent given the task-scoped
-   briefing, commits after Roast `PASS`, and continues to the next task on its own.
+   For an interactive run, follow `stages/pick.md` from the next incomplete task. Pick has the
+   `brewery:test-writer` subagent write the task's tests from its brief, confirms them red,
+   implements against them, proves the task with `stages/roast.md` in a fresh subagent given
+   the task-scoped briefing, commits after Roast `PASS`, and continues to the next task on its own.
+   - Roast `FAIL` with `retest` → the test writer rewrites the tests from Roast's evidence first.
+   - The same task's test writer or Pick rejected twice → dispatch it again on Opus
+     (`model: opus`) with the earlier failures.
    Append a ledger entry after every Pick and Roast result.
    - Roast `FAIL` → Pick retries the same task with the exact evidence.
    - Pick exits `FAIL` with a new hypothesis → start Pick again, fresh, from state.

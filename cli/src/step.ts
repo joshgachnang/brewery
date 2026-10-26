@@ -25,8 +25,19 @@ const checkAgent = (config: Config, name: string): Promise<string | null> => {
   return availabilityCache.get(name) as Promise<string | null>;
 };
 
-export const resolveAgents = async (ctx: Ctx, stage: Stage): Promise<string[]> => {
-  const wanted = ctx.config.stages[stage];
+export const resolveAgents = async (ctx: Ctx, stage: Stage, escalated = false): Promise<string[]> => {
+  const stronger = escalated ? ctx.config.escalate[stage] : undefined;
+  if (stronger?.length) {
+    try {
+      return await pickAgents(ctx, stage, stronger);
+    } catch {
+      ctx.log(`  no escalation agent available for ${stage} (tried ${stronger.join(", ")}); using ${ctx.config.stages[stage].join(", ")}`);
+    }
+  }
+  return pickAgents(ctx, stage, ctx.config.stages[stage]);
+};
+
+const pickAgents = async (ctx: Ctx, stage: Stage, wanted: string[]): Promise<string[]> => {
   const ok: string[] = [];
   for (const name of wanted) {
     const problem = await checkAgent(ctx.config, name);
@@ -43,10 +54,13 @@ export interface StageOptions {
   cwd?: string;
   parallel?: boolean;
   readOnly?: ReadOnly;
+  // Route to `escalate[stage]` instead of `stages[stage]` when it is configured.
+  escalated?: boolean;
 }
 
 export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: StageOptions = {}): Promise<AgentResult[]> => {
-  const agents = await resolveAgents(ctx, stage);
+  const agents = await resolveAgents(ctx, stage, opts.escalated);
+  if (opts.escalated && agents.some((agent) => ctx.config.escalate[stage]?.includes(agent))) ctx.log(`  escalating ${stage}${opts.task ? ` ${opts.task}` : ""} to ${agents.join(", ")}`);
   const { state, config } = ctx;
   const runOne = async (agent: string): Promise<AgentResult> => {
     state.seq += 1;
@@ -105,6 +119,7 @@ export const mergeVerdicts = (results: AgentResult[]): StepResult => {
     fail: worst.flatMap((r) => (r.result.fail ?? []).map((f) => ({ ...f, ev: `[${r.agent}] ${f.ev}` }))),
     block: worst.flatMap((r) => r.result.block ?? []),
     ask: worst.flatMap((r) => r.result.ask ?? []),
+    ...(failing.some((r) => r.result.retest) ? { retest: true } : {}),
   };
 };
 

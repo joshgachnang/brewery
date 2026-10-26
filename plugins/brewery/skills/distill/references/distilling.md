@@ -159,6 +159,56 @@ branch; checking a dependency's box alone does not count as landing:
   - Files: reports client
 ```
 
+## The test brief
+
+Every task carries a test brief in its details block. A separate test writer reads only the
+brief, the task's criteria, and the IP's brief and Decisions, then writes the task's tests
+before anyone implements it. It never sees the implementation, so the brief is all it knows.
+Write it so a tester who has never seen this conversation could write thorough tests:
+
+```markdown
+- [ ] **T2** — Page the reports list with a cursor
+  - Depends on: T1
+  - Files: backend/src/api/reports.ts, backend/src/api/reports.test.ts
+  - Seam: GET /reports (HTTP route)
+  - Interface: `GET /reports?limit=<n>&cursor=<id>` → `{data: Report[], next: string | null}`,
+    exactly those fields (each Report: `_id`, `title`, `created`); staff only
+  - Cases:
+    - 3 reports, limit 2 → data r1, r2; next = r2's id
+    - cursor = r2's id → data r3; next null
+    - cursor of a deleted report → 400 `{title: "Invalid cursor"}`
+    - limit 0 or 101 → 400
+    - patient user → 405 (list permission); no token → 401
+  - Blast radius: report deletion reads the same index → backend case in reports.test.ts
+  - Test skills: terreno-backend-tests
+```
+
+- **Seam**: the highest public seam that proves the behavior (HTTP route, exported
+  function, rendered component, adapter contract), per the testing guidance.
+- **Interface**: what a caller writes and gets back, precise enough to code a test against
+  before it exists: signature or route, inputs, output shape, errors, who may call it.
+- **Cases**: worked examples with literal inputs and expected values. Include the edge
+  cases that matter: empty, missing, and invalid input; boundaries; permissions with exact
+  statuses; loading and error states for UI. A writer with only "handles errors" has
+  nothing to assert.
+- **Blast radius**: for a task that changes state, the consumers that read it and the layer
+  each case belongs to, traced per the testing guidance's
+  [blast radius](../../terreno-shared/testing.md#blast-radius) method. `none` when the task
+  changes no state another behavior reads.
+- **Test skills**: the repository skills that say how to write tests at this seam. In
+  Terreno apps, `terreno-backend-tests`, `terreno-frontend-tests`, or
+  `terreno-mobile-tests`. Their tables decide the layer and the exact permission statuses
+  (401 no token, 405 method permission, 403 object permission, 404 missing id), so Cases
+  name statuses from them. A route that returns user or PHI data lists its exact response
+  fields in Interface, so the test can pin the shape.
+
+A layer with no test setup yet (no preload, `bun test` finds nothing) gets its own first
+task, built with `terreno-test-setup`, which the other tasks depend on. The test step
+writes only tests, so it cannot add setup itself.
+
+A task whose criteria no test can observe (prose, config with no behavior) says
+`Cases: none (untestable: <why>)`. Roast checks the claim.
+
 ## Splitting for a parallel build
 
 Put the tracer first: the smallest end-to-end behaviour that proves the main seam.

@@ -9,9 +9,12 @@ brewery distill "<request>"      claude writes the IP ─┐
                                   cut: claude + codex attack it (clean worktree, only your words)
                                   claude fixes the findings (≤2 rounds)
                                   → sign-off message, ntfy ping, exit 3
+brewery pour "<request>"         distill + cut as above → no fundamental question and ≤ pourMaxTasks tasks? brewery approves it
+                                  and goes straight into barrel and finish; otherwise sign-off, then the same
 brewery answer <slug> "ok, 2b"   apply the reply → validate/repair task graph → Status: approved or ask again
-brewery barrel <slug>            ready tasks (up to parallelTasks), each: create worktree → setup → claude picks → commit → claude roasts
-                                    (FAIL → pick again with evidence, amend the worktree commit)
+brewery barrel <slug>            ready tasks (up to parallelTasks), each: create worktree → setup → sonnet writes the task's tests
+                                    → brewery confirms them red → commit → claude picks → brewery confirms green → amend → claude roasts
+                                    (FAIL → pick again with evidence, amend the worktree commit; FAIL with retest → tests first)
                                     PASS → cherry-pick onto feature branch → tick checkbox and amend → remove worktree
                                   if tasks overlapped: integrated roast → repair and commit → roast again
                                   branch review: claude + codex in parallel → fix blocking findings
@@ -35,8 +38,12 @@ to `~/.claude/skills`.
 
 ## Agents and routing
 
-Profiles are `claude` (`claude -p`), `codex` (`codex exec`), or `command` (any argv, with
-the prompt on stdin). Local models run through codex with a custom provider pointed at
+Profiles are `claude` (`claude -p`), `codex` (`codex exec`), `cursor` (Cursor's `agent -p
+--force --trust`; set `bin` to `cursor-agent` on older installs and `CURSOR_API_KEY` to log
+in), or `command` (any argv, with the prompt on stdin). Cursor's CLI takes its prompt as an
+argument, so brewery passes it a one-line pointer to the prompt file. It has no read-only
+mode, so `approve` and `calibrate` must stay on claude. An escalation agent that is not
+installed falls back to the stage's own route with a note. Local models run through codex with a custom provider pointed at
 the litellm gateway, so they get a real tool-using harness:
 
 ```json
@@ -81,6 +88,10 @@ strict, so a failure stops the run with the landed commit recorded.
 | --- | --- | --- |
 | `worktreeSetup` | `[]` | Shell commands run in order in each fresh task worktree, before Pick. Shade uses `["bun bootstrap"]`. A nonzero exit records stdout/stderr as failure evidence, removes the tree, and consumes a Pick attempt. |
 | `limits.parallelTasks` | `3` | Maximum concurrent task builds. `--parallel N` overrides it for one run; `--parallel 1` runs sequentially. |
+| `limits.testFirst` | `true` | Run the `test` step (default agent `claude-sonnet`) before each task's Pick. `false` returns to Pick writing its own tests. |
+| `limits.pourMaxTasks` | `6` | The most tasks `brewery pour` approves without asking you. |
+| `limits.escalateAfter` | `2` | Runs of a task's `test` or `pick` step before the next one uses `escalate[stage]`. |
+| `escalate` | `{"test": ["claude-opus"], "pick": ["claude-opus"]}` | Stronger agents per stage for steps that keep failing. A repo's map replaces this one wholesale; `{}` turns escalation off. |
 
 ## Parallel builds
 
@@ -136,10 +147,12 @@ them fails the step. Other stages use the first available agent. An unavailable 
 
 | Rule | Mechanism |
 | --- | --- |
-| Separate agents per step | Every step is a new `claude -p` / `codex exec` process with a written prompt. |
+| Separate agents per step | Every step is a new `claude -p` / `codex exec` / `agent -p` process with a written prompt. |
 | Cut sees only the human's words | Its prompt holds only `.terreno/brewery/<slug>/context.md` (your request and replies, verbatim), and it runs in a `git worktree` of HEAD where `.terreno/` does not exist. |
 | Roast judges a fixed tree | brewery commits after Pick, before Roast. Retries amend the task's commit. |
-| No self-approval | brewery owns the IP's `Status:` line and resets one an agent approved. Only `brewery answer` approves. |
+| Tests come before code | With `limits.testFirst` (default), a `test` step writes each task's tests from its brief before Pick. brewery reverts any file it did not declare, runs its `command` and rejects tests that already pass, then commits them. After Pick, brewery reruns the command and rejects a red result or a change to those tests with no stated reason. |
+| Stuck steps escalate | A task's test step or Pick that has run `limits.escalateAfter` times (default 2) runs next on `escalate[stage]` (default `claude-opus`). |
+| No self-approval | brewery owns the IP's `Status:` line and resets one an agent approved. Only `brewery answer` approves, or `brewery pour` when brewery itself counts at most `pourMaxTasks` tasks and no `fundamental` question; it records that in the Status line. |
 | Valid task graph before sign-off | Distill rejects drafts with duplicate task IDs, unknown dependencies, self-dependencies, or cycles. Cut/fix rechecks the graph after every edit and passes remaining problems as blocking decomposition findings, even when Cut found nothing. An invalid graph after `limits.cutRounds` throws before sign-off. |
 | Valid task graph before approval | Answer validates the edited IP regardless of the agent's `structural` flag. Invalid graphs go through cut/fix as blocking decomposition findings. Unrepaired problems return to sign-off, with the problems listed; only a valid graph can be approved. |
 | Progress can't be faked | brewery checks each task box only after a Roast PASS and cherry-pick onto the feature branch. |

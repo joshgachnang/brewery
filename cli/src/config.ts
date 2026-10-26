@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
-export type AgentType = "claude" | "codex" | "command";
+export type AgentType = "claude" | "codex" | "cursor" | "command";
 
 export interface ProviderConfig {
   name: string;
@@ -24,10 +24,12 @@ export interface AgentProfile {
   provider?: ProviderConfig;
   // command only: argv; the prompt arrives on stdin
   command?: string[];
+  // cursor only: the CLI binary (default `agent`; older installs call it `cursor-agent`)
+  bin?: string;
   timeoutMin?: number;
 }
 
-export const STAGES = ["distill", "cut", "pick", "roast", "review", "brew", "taste", "compound", "cellar", "approve", "calibrate"] as const;
+export const STAGES = ["distill", "cut", "test", "pick", "roast", "review", "brew", "taste", "compound", "cellar", "approve", "calibrate"] as const;
 export type Stage = (typeof STAGES)[number];
 
 // Stages whose agents all run and whose verdicts are merged. Every other stage uses
@@ -80,6 +82,12 @@ export const DEFAULT_PATH_RULES: PathRule[] = [
 
 export interface Limits {
   pickAttempts: number;
+  // Write each task's tests in their own step, confirmed red, before Pick implements it.
+  testFirst: boolean;
+  // A test or pick step that has already run this many times for a task moves to `escalate`.
+  escalateAfter: number;
+  // `brewery pour` approves its own plan only when it has at most this many tasks.
+  pourMaxTasks: number;
   parallelTasks: number;
   cutRounds: number;
   reviewRounds: number;
@@ -96,6 +104,8 @@ export type LearnMode = "off" | "local" | "shared";
 export interface Config {
   agents: Record<string, AgentProfile>;
   stages: Record<Stage, string[]>;
+  // Stronger agents for a step that keeps failing. A repo's map replaces this one wholesale.
+  escalate: Partial<Record<Stage, string[]>>;
   skillsDir: string;
   worktreeSetup: string[];
   notify: { ntfyUrl?: string };
@@ -111,6 +121,7 @@ export const DEFAULT_CONFIG: Config = {
     claude: { type: "claude" },
     // Roast checks criteria with named commands; Sonnet is fast enough and cheaper.
     "claude-sonnet": { type: "claude", model: "sonnet" },
+    "claude-opus": { type: "claude", model: "opus" },
     codex: { type: "codex" },
     local: {
       type: "codex",
@@ -126,6 +137,8 @@ export const DEFAULT_CONFIG: Config = {
   stages: {
     distill: ["claude"],
     cut: ["claude", "codex"],
+    // Tests come from the task's brief, not the implementation, so a cheaper model writes them.
+    test: ["claude-sonnet"],
     pick: ["claude"],
     roast: ["claude-sonnet"],
     review: ["claude", "codex"],
@@ -136,6 +149,7 @@ export const DEFAULT_CONFIG: Config = {
     approve: ["claude"],
     calibrate: ["claude"],
   },
+  escalate: { test: ["claude-opus"], pick: ["claude-opus"] },
   skillsDir: join(homedir(), ".claude", "skills"),
   worktreeSetup: [],
   // Shade's ntfy-compatible webhook relays to Slack. Pings carry no content.
@@ -144,6 +158,9 @@ export const DEFAULT_CONFIG: Config = {
   phi: false,
   limits: {
     pickAttempts: 3,
+    testFirst: true,
+    escalateAfter: 2,
+    pourMaxTasks: 6,
     parallelTasks: 3,
     cutRounds: 2,
     reviewRounds: 1,
@@ -184,6 +201,7 @@ const readJson = (path: string): PartialConfig => {
 const merge = (base: Config, over: PartialConfig): Config => ({
   agents: { ...base.agents, ...over.agents },
   stages: { ...base.stages, ...over.stages },
+  escalate: over.escalate ?? base.escalate,
   skillsDir: over.skillsDir ?? base.skillsDir,
   worktreeSetup: over.worktreeSetup ?? base.worktreeSetup,
   notify: { ...base.notify, ...over.notify },
@@ -236,6 +254,9 @@ export const loadConfig = (repo: string, agentsFlag?: string): Config => {
   for (const stage of STAGES) {
     for (const name of config.stages[stage]) {
       if (!config.agents[name]) throw new Error(`brewery: stage ${stage} names unknown agent "${name}"`);
+    }
+    for (const name of config.escalate[stage] ?? []) {
+      if (!config.agents[name]) throw new Error(`brewery: escalation for ${stage} names unknown agent "${name}"`);
     }
   }
   return config;

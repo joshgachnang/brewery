@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { Ask, Finding } from "./agents.ts";
 import { activeRules, RULES_PATH } from "./docs.ts";
 import type { Ctx } from "./step.ts";
-import { refreshNotes } from "./state.ts";
+import { refreshNotes, type TaskState } from "./state.ts";
 import type { ApproveContext, PlanRef } from "./approve/context.ts";
 import type { Classification } from "./approve/policy.ts";
 import type { JudgeReport } from "./approve/schemas.ts";
@@ -31,7 +31,10 @@ const taskSplitting = `Task splitting rules:
   Never chain tasks just to order them; a chain longer than 3 needs a reason per link.
 - List every file each task writes in Files:, including shared registries, barrels, and
   route or tool indexes. brewery never builds two tasks with a shared file at once.
-- Split any task that needs more than one roast-able behaviour.`;
+- Split any task that needs more than one roast-able behaviour.
+- Every task's details carry its test brief (Seam, Interface, Cases with literal expected
+  values, Blast radius, Test skills), per distilling.md's "The test brief". A separate
+  writer writes the task's tests from that brief alone, before the task is built.`;
 
 const fileResult = (resultFile: string): string => `- Before exiting, write your result as JSON to:
     ${resultFile}
@@ -92,7 +95,9 @@ ${existsSync(join(ctx.state.repo, "docs", "learnings")) ? "- Before shaping the 
   indented or in a following block:
     - [ ] **T1** — <task title, written as a commit subject>
 - In \`ask\`, put the sign-off questions: fundamental first, then the open questions whose
-  answers would change the most. At most 5. Status PASS when the IP is written.
+  answers would change the most. At most 5. Set "fundamental": true on each fundamental
+  question (distilling.md's test), and only on those: \`brewery pour\` builds without
+  asking when none is fundamental. Status PASS when the IP is written.
 
 ${taskSplitting}
 
@@ -114,7 +119,7 @@ ${taskSplitting}
 
 Result keys: \`structural\` (true when a blocking finding changed tasks, the tracer, or the
 data model), \`tally\` ({edited, moved, rebutted}), and \`ask\` (the refreshed sign-off
-questions, at most 5, fundamental first).
+questions, at most 5, fundamental first, each fundamental one with "fundamental": true).
 
 Findings:
 \`\`\`json
@@ -166,27 +171,108 @@ What the human said, verbatim:
 ${context || "(no transcript: use the ticket or PR the IP cites and its Decisions table)"}
 </human>`;
 
-export const pickBody = (ctx: Ctx, taskId: string, taskTitle: string, evidence?: string): string => `## Step: pick ${taskId} — ${taskTitle}
+type TaskTests = NonNullable<TaskState["tests"]>;
+
+export const testBody = (ctx: Ctx, taskId: string, taskTitle: string, opts: { evidence?: string; tests?: TaskTests } = {}): string => `## Step: test ${taskId} — ${taskTitle}
+
+Read and follow ${skill(ctx, "barrel/stages/test.md")} for task ${taskId} of the IP at
+${ctx.state.ip}, and no other task. You write this task's tests before it is implemented.
+- Your context is the IP's brief, Assumptions, and Decisions, and task ${taskId}'s block: its
+  acceptance criteria and its test brief (Seam, Interface, Cases, Blast radius, Test
+  skills). Do not read other tasks' blocks.
+- Read existing code only for what a caller sees at the seam: exports, signatures, route
+  registrations, schemas, and the test helpers, fixtures, and factories near it. Do not read
+  function bodies and do not write implementation. Tests derived from code check what it
+  does, not what the task asked for.
+- Write only tests and test fixtures, and list every file you write in \`tests\`. brewery
+  reverts any other change.
+- \`command\` runs only the fast-tier tests you wrote. Write an e2e or browser spec when the
+  brief calls for one and list it in \`tests\`, but leave it out of \`command\` and check
+  that it typechecks. brewery runs it in the integrated roast.
+- Run \`command\` and confirm each test fails for the reason its case describes, not a typo
+  or setup error. brewery runs it too and rejects tests that pass before implementation.
+- Do not commit. brewery commits your tests as the start of the task's commit.
+
+Result keys: \`tests\` (repo-relative paths you wrote or changed), \`command\` (one shell
+command, run from the repository root, that runs exactly those fast-tier tests and exits
+nonzero while any fails), and \`untestable\` (only with an empty \`tests\`: why no test
+can observe this task's behavior; Roast checks the claim).
+${opts.tests ? `
+Roast sent this task back to you: the tests are wrong or missing a case. The current tests
+are ${opts.tests.files.join(", ") || "(none)"}${opts.tests.command ? ` (\`${opts.tests.command}\`)` : ""}. The implementation now
+exists; still do not read its bodies. Fix or add tests for the evidence below. They need
+not fail now, but list every test file in \`tests\`, old and new.
+` : ""}${opts.evidence ? `
+${opts.tests ? "Roast's evidence:" : "This is a retry. brewery or the previous attempt reported the following:"}
+
+\`\`\`json
+${opts.evidence}
+\`\`\`
+` : ""}`;
+
+const pickTests = (tests?: TaskTests): string => {
+  if (!tests) return "";
+  if (!tests.files.length) {
+    return `- The test step found nothing a test can observe in this task: ${tests.untestable}. Build it;
+  Roast checks that claim.
+`;
+  }
+  return `- A separate test step already wrote this task's tests from its brief, and brewery confirmed
+  they failed: ${tests.files.join(", ")} (run: \`${tests.command}\`). They are the task's
+  contract. Skip pick.md's Specify and Encode steps (5–6): make these tests pass, then
+  continue from Clean the Kitchen (step 8).
+- Do not weaken, skip, or delete them. If a test is genuinely wrong, change it and list each
+  changed file in \`testChanges\` ([{"file": "", "why": ""}]); Roast reviews every change.
+  brewery runs the command after you and rejects a red result or an unexplained change.
+- Add a test only for behavior inside this task's criteria that the brief missed.
+- Run suites through the \`brewery:test-runner\` subagent when you have it, so test output
+  stays out of your context.
+${tests.red ? `
+The tests' output when brewery confirmed them red:
+
+${fence(tests.red, "text")}
+` : ""}`;
+};
+
+export const pickBody = (ctx: Ctx, taskId: string, taskTitle: string, evidence?: string, tests?: TaskTests): string => `## Step: pick ${taskId} — ${taskTitle}
 
 Read and follow ${skill(ctx, "barrel/stages/pick.md")} steps 1–11 for task ${taskId} of the
 IP at ${ctx.state.ip}, and no other task. Overrides:
 - Skip step 12 (Roast), 13 (commit), and 14 (continue). brewery commits your working tree
   when you finish, runs Roast in separate agents, and picks the next task.
 - Do not commit, push, or edit the task's checkbox. brewery marks it.
-${fastTestsOnly}
+${pickTests(tests)}${fastTestsOnly}
 - Status PASS when the task is built and your own checks are green. FAIL with evidence
   when you cannot get it green. BLOCKED only for a genuine human or access gate.
 ${evidence ? `\nThis is a retry. Roast or the previous attempt reported the following. Form a new
 hypothesis from it; do not repeat an approach that already failed.\n\n\`\`\`json\n${evidence}\n\`\`\`\n` : ""}`;
 
-export const roastBody = (ctx: Ctx, taskId: string, taskTitle: string, base: string): string => `## Step: roast ${taskId} — ${taskTitle}
+const roastTests = (tests?: TaskTests, changes: { file: string; why: string }[] = []): string => {
+  if (!tests) return "";
+  if (!tests.files.length) {
+    return `- The test step wrote no tests: "${tests.untestable}". If a test could observe this task's
+  behavior, FAIL with \`retest: true\`.
+`;
+  }
+  return `- The task's tests were written first, from its brief, before the implementation:
+  ${tests.files.join(", ")} (\`${tests.command}\`). A criterion or a test-brief case with no
+  test is FAIL. When the defect is in the tests (a missing case, a wrong expected value, a
+  test that cannot fail) rather than in the code, FAIL with \`retest: true\` so they are
+  written again.
+${changes.length ? `- Pick changed those tests. Judge each reason; a change that weakens what a criterion
+  requires is FAIL.
+${changes.map((change) => `  - ${change.file}: ${change.why}`).join("\n")}
+` : ""}`;
+};
+
+export const roastBody = (ctx: Ctx, taskId: string, taskTitle: string, base: string, tests?: TaskTests, testChanges?: { file: string; why: string }[]): string => `## Step: roast ${taskId} — ${taskTitle}
 
 Read and follow ${skill(ctx, "barrel/stages/roast.md")} for task ${taskId} of the IP at
 ${ctx.state.ip}. The task's work is the HEAD commit on this branch (\`git show HEAD\`; the
 branch diff is \`git diff ${base}...HEAD\`). You are an independent verifier. Do not trust
 any claim of completion. Prove or disprove every acceptance criterion of ${taskId} by
 running things. Do not fix implementation code. Do not commit.
-${fastTestsOnly}
+${roastTests(tests, testChanges)}${fastTestsOnly}
 - A criterion that only a browser or running app can prove is not FAIL here. Prove what
   the fast tiers can, and list the rest in \`summary\` as deferred to the integrated roast.
 
