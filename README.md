@@ -5,7 +5,7 @@ plugin, with a manifest for each tool beside it.
 
 | Plugin | Skills |
 |---|---|
-| `brewery` | `pour`, `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, `harvest`, `polish`, `rack`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
+| `brewery` | `pour`, `distill`, `cut`, `barrel`, `finish`, `tap`, `compound`, `cellar`, `calibrate`, `board`, `harvest`, `polish`, `rack`, `recipe`, plus `terreno-shared/` (the vendored terreno references they link to; not a skill) |
 
 Copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at `14e3a0c`.
 Everything else in shade's `.claude/skills` stays there, including the unmodified `terreno-*`
@@ -40,6 +40,16 @@ everything it skips.
 issues from the last day") and it triages them, writes a short pre-approved fix IP, builds
 each fix test-first through Pick and Roast, and runs `finish` on the PR. Issues that need a
 product decision are reported instead of built.
+
+`recipe` is the step above `distill`: it shapes a Linear project from the current repository's
+context (instructions, plans, specs, decisions, learnings, board, history) and the workspace
+(teams, initiatives, labels, sibling projects), creating a new project or improving an existing
+one. It asks only the questions fundamental to the project, writes the rest into the project
+with recommendations, splits the work into milestones sized for `pour`, `distill`, or `tap`
+with one issue each, and writes nothing to Linear until you confirm the preview. A Claude
+Design, when there is one, maps its screens onto the milestones; a user-facing project without
+one gets a design brief, started in Claude Design through the Artifact tool when it is
+available.
 
 `harvest` and `polish` are the daily sweeps. harvest triages every issue it has not seen,
 labels it (`brewery:proposed`, then `fix-now`, `fix-later`, `wontfix`, `needs-info`,
