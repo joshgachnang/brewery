@@ -27,7 +27,8 @@ Score each 0–3 (0 absent, 1 weak, 2 adequate, 3 strong) and give reasons a rev
   or weakened; snapshot updates explained; a coverage gate check green when present.
 - **Evidence**: the `Verification` table names commands and outcomes, not just commands;
   UI changes carry screenshots or video; CI is green on this head; `⚠️ Not tested` rows
-  are absent or covered by an explicit reviewer instruction; each plan acceptance criterion
+  are absent or each carries an explicit reviewer instruction (the blocked behavior and the
+  exact steps to check it); each plan acceptance criterion
   has its named verification present.
 
 ## Security
@@ -83,7 +84,8 @@ A finding here is blocking when it is certain and should-fix when it is likely.
   source; a `TODO`, `FIXME`, or commented-out code added; explicit `any` added; PR body
   missing `Why`, `What changed`, or `Verification`; `WIP` in the title; the plan edited
   in the same PR to match the code.
-- Never low: new logic without a test; a `⚠️ Not tested` row without a reviewer action; an unresolved bot thread;
+- Never low: new logic without a test; a `⚠️ Not tested` row without an explicit reviewer instruction
+  (a row that does not name the blocked behavior and the exact steps to check it); an unresolved bot thread;
   a revert.
 - Size never moves the level. Changed lines and file counts say nothing about risk on
   their own: judge what the lines do. Pure renames and moves, regenerated SDK or
