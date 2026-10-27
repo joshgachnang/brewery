@@ -1,7 +1,7 @@
 {
   "name": "brewery",
-  "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it tests-first through Pick and Roast to a PR, and finish it to green CI. pour does all of that in one shot for small features. tap takes issues straight to a fixed, green PR. harvest sweeps and labels a repo's issues daily with human sign-off; polish drives your broken PRs to mergeable. rack pulls terreno's skill changes into brewery.",
-  "version": "0.7.0",
+  "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it tests-first through Pick and Roast to a PR, and finish it to green CI. pour does all of that in one shot for small features. tap takes issues straight to a fixed, green PR. harvest sweeps and labels a repo's issues daily with human sign-off; polish drives your broken PRs to mergeable. rack pulls terreno's skill changes into brewery. recipe shapes a Linear project from the repo's context, taking a Claude Design in or sending a design brief out, and hands its milestones to distill, pour, or tap.",
+  "version": "0.8.0",
   "author": {"name": "Josh Gachnang", "email": "josh@nang.io"},
   "repository": "https://github.com/joshgachnang/brewery",
   "keywords": ["brewery", "planning", "terreno", "sdlc"],
