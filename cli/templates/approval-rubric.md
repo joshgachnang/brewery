@@ -83,7 +83,7 @@ A finding here is blocking when it is certain and should-fix when it is likely.
   source; a `TODO`, `FIXME`, or commented-out code added; explicit `any` added; PR body
   missing `Why`, `What changed`, or `Verification`; `WIP` in the title; the plan edited
   in the same PR to match the code.
-- Never low: new logic without a test; a `⚠️ Not tested` row; an unresolved bot thread;
+- Never low: new logic without a test; a `⚠️ Not tested` row without a reviewer action; an unresolved bot thread;
   a revert.
 - Size never moves the level. Changed lines and file counts say nothing about risk on
   their own: judge what the lines do. Pure renames and moves, regenerated SDK or

@@ -46,7 +46,8 @@ otherwise; `skipped` on a skip. A repository may make it a required check.
    diff, and returns a level, the four scores, findings, and a rationale. The body's
    `## Verification` table is read row by row: `| Status | Scope | Evidence |` with ✅,
    ⚠️ (not tested), or 🧭 (instructions) in the first cell, or a `| Check | Result |`
-   table with the mark in the result cell. A row without a mark is not a claim.
+   table with the mark in the result cell. A row without a mark is not a claim; when no
+   row has one, the section goes to the agent as raw text, still marked as a claim.
 4. **Merge and gates (code).** The level is clamped into the band. With fan-out, the
    strictest level wins and findings are unioned. Approval also needs: no failing or
    pending check on the head (other than the approver's own), no unresolved review thread
@@ -96,7 +97,7 @@ by. The `approve` block of `.brewery.json`:
 | --- | --- | --- |
 | `approveLevels` | `["low"]` | Levels the App may approve. `[]` is comment-only mode: every PR gets the review and the check, nothing approves. |
 | `rubric` | `docs/approval-rubric.md` | Repo-relative markdown the rubric agent judges by. Absent → brewery's default (`cli/templates/approval-rubric.md`), and the review says so. |
-| `planDirs` | `["docs/implementationPlans", "docs/plans", "docs/tasks"]` | Where plans live. Found from body paths, the stage-result `ip:` slug, changed plan files, and a `docs/tasks/<slug>.md` sibling. |
+| `planDirs` | `["docs/implementationPlans", "docs/plans", "docs/tasks"]` | Where plans live. Found from body paths, the stage-result `ip:` slug (as `<dir>/<slug>.md`, or any `<dir>/*-<slug>.md` at the head for dated plan names), changed plan files, and a `docs/tasks/<slug>.md` sibling. |
 | `skipAuthors` | `["dependabot[bot]"]` | PR authors that get a skip. |
 | `skipLabels` | `["do-not-merge", "hold"]` | PR labels that get a skip. |
 | `maxLines` | `800` | Changed lines above which the size gate blocks approval. `0` turns the line limit off. |

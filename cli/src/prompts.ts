@@ -475,7 +475,9 @@ export const rubricBody = (input: { rubric: string; context: ApproveContext; cla
     : "- none";
   const verification = context.body.verification.length
     ? context.body.verification.map((r) => `- ${r.status}: ${r.scope} — ${r.evidence}`).join("\n")
-    : "- no verification table";
+    : context.body.verificationText
+      ? `- no row carries a status mark (✅, 🧭, ⚠️); the section as written:\n\n${context.body.verificationText}`
+      : "- no verification section";
   const judgeText = judge
     ? judge.status === "no_plan"
       ? "No implementation plan is referenced. Score ipMatch against the body's Why and What changed."
