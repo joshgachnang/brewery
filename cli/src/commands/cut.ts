@@ -12,7 +12,20 @@ import { addWorktree, removeWorktree } from "../vcs.ts";
 
 const SEVERITY_ORDER = { blocking: 0, "should-fix": 1, nit: 2 } as const;
 
-export const runCut = async (ctx: Ctx): Promise<Finding[]> => {
+// An empty findings list only means a clean plan when couldNotAssess is empty too.
+export interface CutReport {
+  findings: Finding[];
+  wellReasoned: string[];
+  couldNotAssess: string[];
+}
+
+const lines = (results: { agent: string; result: { wellReasoned?: string[]; couldNotAssess?: string[] } }[], key: "wellReasoned" | "couldNotAssess"): string[] =>
+  results.flatMap((r) => (Array.isArray(r.result[key]) ? r.result[key] : []).filter((l) => typeof l === "string" && l.trim()).map((l) => `[${r.agent}] ${l.trim()}`));
+
+export const cutSummary = (report: CutReport): string =>
+  `${report.findings.length} findings (${report.findings.filter((f) => f.severity === "blocking").length} blocking), ${report.wellReasoned.length} well-reasoned, ${report.couldNotAssess.length} couldn't assess`;
+
+export const runCut = async (ctx: Ctx): Promise<CutReport> => {
   const { state } = ctx;
   const dir = mkdtempSync(join(tmpdir(), `brewery-cut-${state.slug}-`));
   const tree = join(dir, "tree");
@@ -27,13 +40,18 @@ export const runCut = async (ctx: Ctx): Promise<Finding[]> => {
       (r.result.findings ?? []).filter((f) => f.evidence?.trim()).map((f) => ({ ...f, agent: r.agent })),
     );
     findings.sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 3) - (SEVERITY_ORDER[b.severity] ?? 3));
-    const blocking = findings.filter((f) => f.severity === "blocking").length;
-    ctx.log(`  cut: ${findings.length} findings (${blocking} blocking) from ${results.map((r) => r.agent).join(", ")}`);
-    return findings;
+    const report = { findings, wellReasoned: lines(results, "wellReasoned"), couldNotAssess: lines(results, "couldNotAssess") };
+    ctx.log(`  cut: ${cutSummary(report)} from ${results.map((r) => r.agent).join(", ")}`);
+    return report;
   } finally {
     await removeWorktree(state.repo, tree, ctx.log);
   }
 };
+
+const section = (title: string, items: string[]): string => `${title}:\n${items.length ? items.map((i) => `- ${i}`).join("\n") : "None."}`;
+
+export const cutReport = (report: CutReport): string =>
+  [findingsTable(report.findings), section("Well-reasoned", report.wellReasoned), section("Couldn't assess", report.couldNotAssess)].join("\n\n");
 
 export const findingsTable = (findings: Finding[]): string => {
   if (!findings.length) return "No findings.";

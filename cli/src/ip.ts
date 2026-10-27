@@ -108,5 +108,8 @@ export const orientation = (text: string): string => {
   return para?.replace(/\s+/g, " ") ?? "";
 };
 
+// The brief's `Elephant:` line: the likeliest unraised risk, or "none". Absent in older IPs.
+export const elephant = (text: string): string | undefined => text.match(/^Elephant:[ \t]*(\S.*)$/m)?.[1].trim();
+
 export const readIp = (path: string): string => readFileSync(path, "utf8");
 export const writeIp = (path: string, text: string): void => writeFileSync(path, text);

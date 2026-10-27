@@ -12,7 +12,7 @@ import { installationToken } from "./approve/token.ts";
 import { calibrate } from "./commands/calibrate.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
-import { findingsTable, runCut } from "./commands/cut.ts";
+import { cutReport, cutSummary, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
 import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
@@ -315,9 +315,9 @@ const cmdCut = async (positional: string[], flags: Record<string, string | true>
   return withRunLock(state, async () => {
     if (context) appendContext(state, "What the human said", context);
     saveState(state);
-    const findings = await runCut(makeCtx(state, str(flags.agents), flags.parallel));
-    log(`\nCut: ${findings.length} findings (${findings.filter((f) => f.severity === "blocking").length} blocking) on ${relative(repo, ip)}, context: ${context ? "provided" : "ticket+Decisions"}\n`);
-    log(findingsTable(findings));
+    const report = await runCut(makeCtx(state, str(flags.agents), flags.parallel));
+    log(`\nCut: ${cutSummary(report)} on ${relative(repo, ip)}, context: ${context ? "provided" : "ticket+Decisions"}\n`);
+    log(cutReport(report));
     return 0;
   });
 };

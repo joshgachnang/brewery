@@ -123,7 +123,7 @@ const CONTRACT: Record<string, Contract> = {
   },
   "distill/references/distilling.md": {
     phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY],
-    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: "],
+    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: ", "Elephant: "],
   },
   "pour/SKILL.md": {
     phrases: ["## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF],
@@ -135,13 +135,13 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens"],
   },
   "barrel/stages/brew.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out", "`Provenance` section", "write `unknown` for the rest"],
   },
   "finish/taste.md": {
     phrases: ["../terreno-shared/user-guide.md", "## User guide", "user guide pages", "guide-entry bar"],
   },
   "cut/SKILL.md": {
-    phrases: [LEGACY, GUIDE_OFF],
+    phrases: [LEGACY, GUIDE_OFF, "**Well-reasoned:**", "**Couldn't assess:**", "<w> well-reasoned, <u> couldn't assess"],
     within: { from: "Each of these is `blocking`", to: "Also attack regression steps", phrases: CUT_RULES },
   },
   "tap/references/triage.md": {

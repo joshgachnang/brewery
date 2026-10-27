@@ -34,6 +34,8 @@ export interface HistoryEntry {
   seconds: number;
   log: string;
   task?: string;
+  // Ran on the stage's escalation route, not its normal one.
+  escalated?: boolean;
 }
 
 export interface Answer {
@@ -68,6 +70,8 @@ export interface RunState {
   reviewFindings?: Finding[];
   finish?: { startedAt: string; pushes: number; reactions: number; stuck: number; lastKey?: string; recorded?: boolean };
   history: HistoryEntry[];
+  // Agents skipped or fallen back from when a stage resolved its route, once each.
+  reroutes?: string[];
 }
 
 export const runDir = (repo: string, slug: string): string => join(repo, ".terreno", "brewery", slug);

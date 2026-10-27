@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import type { Ask, Finding } from "../agents.ts";
 import { buildMessage, smsVersion, waitForHuman } from "../human.ts";
-import { isApproved, orientation, parseTasks, readIp, readStatus, setStatus, taskGraphProblems, title, writeIp } from "../ip.ts";
+import { elephant, isApproved, orientation, parseTasks, readIp, readStatus, setStatus, taskGraphProblems, title, writeIp } from "../ip.ts";
 import { distillBody, fixBody } from "../prompts.ts";
 import { appendContext, saveState, type RunState } from "../state.ts";
 import { runStage, type Ctx } from "../step.ts";
@@ -62,9 +62,10 @@ export const cutAndFix = async (ctx: Ctx, asks: Ask[], maxRounds: number): Promi
   let current = asks;
   for (let round = 1; round <= maxRounds; round++) {
     ctx.state.cutRounds += 1;
-    const findings = [...await runCut(ctx), ...graphFindings(ctx.state.ip)];
-    if (!findings.length) break;
-    const [{ result }] = await runStage(ctx, "distill", fixBody(ctx, findings));
+    const cut = await runCut(ctx);
+    const findings = [...cut.findings, ...graphFindings(ctx.state.ip)];
+    if (!findings.length && !cut.couldNotAssess.length) break;
+    const [{ result }] = await runStage(ctx, "distill", fixBody(ctx, findings, cut.couldNotAssess));
     if (result.ask) current = result.ask;
     const blocking = findings.some((f) => f.severity === "blocking");
     const graphInvalid = graphFindings(ctx.state.ip).length > 0;
@@ -87,6 +88,7 @@ export const sendForSignoff = async (ctx: Ctx, asks: Ask[], why?: string): Promi
     title: title(text),
     need: why ? `plan ready for sign-off (${why})` : "plan ready for sign-off",
     orientation: orientation(text),
+    elephant: elephant(text),
     link: relative(state.repo, state.ip),
     asks,
     replyHint: `Reply "ok" to accept every recommendation, or e.g. "ok, 2b" / "no: <why>".`,

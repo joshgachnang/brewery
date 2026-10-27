@@ -97,13 +97,17 @@ interactive, single-session run.
     - rebut it in one line with evidence (a file, a quote from the human), when the
       attack is wrong.
 
+    A `Couldn't assess` line is unchecked, not passed: check it yourself, or record it in
+    Assumptions or Open questions. `Well-reasoned` lines need nothing.
+
     Blocking findings must all be edited, moved, or rebutted. When any blocking finding
     changed the plan, run `cut` once more on the new draft. Stop after two cut rounds and
     carry anything left into Open questions. Record the tally in the Sign-off section.
 11. **Sign off.** Set `Status: awaiting sign-off` and send the sign-off message per
     [`reaching the human`](../terreno-shared/reaching-the-human.md): fundamental questions
     first, then the open questions whose answers would change the most, with a link to
-    the IP for the rest. Emit `BLOCKED` (`stage: grow`, `next: null`,
+    the IP for the rest. Add one `Elephant:` line after the summary, copied from the
+    brief: the likeliest risk nobody has raised, or `none`. Never invent one. Emit `BLOCKED` (`stage: grow`, `next: null`,
     `block: [{kind: human}]`, one `ask` per question in the message) and stop.
 12. **Apply the reply.** When answers arrive, move each answered question from Open
     questions to Decisions. Where an answer differs from the recommendation, rewrite the
