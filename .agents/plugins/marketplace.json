@@ -15,7 +15,7 @@
         "authentication": "ON_INSTALL"
       },
       "category": "Development & Workflow",
-      "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it tests-first through Pick and Roast to a PR, and finish it to green CI. pour does all of that in one shot for small features. tap takes issues straight to a fixed, green PR. harvest sweeps and labels a repo's issues daily with human sign-off; polish drives your broken PRs to mergeable. rack pulls terreno's skill changes into brewery."
+      "description": "Brewery's pipeline: distill a request into a signed-off IP, cut it from the requester's side, barrel it tests-first through Pick and Roast to a PR, and finish it to green CI. pour does all of that in one shot for small features. tap takes issues straight to a fixed, green PR. harvest sweeps and labels a repo's issues daily with human sign-off; polish drives your broken PRs to mergeable. rack pulls terreno's skill changes into brewery. install sets up the plugin, CLI, and a repo; overview says which skill to use."
     }
   ]
 }

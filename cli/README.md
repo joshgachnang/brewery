@@ -1,7 +1,7 @@
 # brewery
 
 Plan and ship a feature with a separate agent process for every step. It uses the
-`distill`, `cut`, `barrel`, and `finish` skills in this repo's `.claude/skills/` for method. brewery
+`distill`, `cut`, `barrel`, and `finish` skills in `plugins/brewery/skills/` for method. brewery
 owns sequencing, commits, CI waits, limits, and every contact with the human.
 
 ```text

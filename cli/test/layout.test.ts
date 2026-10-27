@@ -1,6 +1,6 @@
 // The docs layout, the terreno pipeline projection, and CI failure evidence.
 import { describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { failureExcerpt, readFailures } from "../src/ci.ts";
 import { finish } from "../src/commands/finish.ts";
@@ -216,6 +216,86 @@ describe("user guide and rack in the skill text", () => {
     expect(rack).toMatch(/^---\nname: rack\n/);
     expect(flatten(rack)).toContain("VENDORED.md");
     expect(flatten(skillText("terreno-shared/VENDORED.md"))).toMatch(/Last racked from terreno .* at `[0-9a-f]{8,40}`/);
+  });
+});
+
+// The README and the overview skill are how people and agents learn brewery, so a skill or
+// command that ships without them fails here. See "Keep the docs and installer current" in CLAUDE.md.
+const ROOT = join(import.meta.dir, "..", "..");
+const rootText = (path: string): string => readFileSync(join(ROOT, path), "utf8");
+
+const skillNames = (): string[] =>
+  readdirSync(SKILLS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(SKILLS_DIR, entry.name, "SKILL.md")))
+    .map((entry) => entry.name);
+
+const cliCommands = (): string[] => {
+  const source = rootText("cli/src/cli.ts");
+  const main = source.slice(source.indexOf("const main = async"));
+  // `note` and `answer` are dispatched before the switch.
+  const names = [...main.matchAll(/case "([a-z][a-z-]*)":|command === "([a-z][a-z-]*)"/g)].map((m) => m[1] ?? m[2]);
+  return [...new Set(names)].filter((name) => name !== "help");
+};
+
+const MANIFESTS = [
+  ".claude-plugin/marketplace.json",
+  ".cursor-plugin/marketplace.json",
+  "plugins/brewery/.claude-plugin/plugin.json",
+  "plugins/brewery/.cursor-plugin/plugin.json",
+  "plugins/brewery/.codex-plugin/plugin.json",
+];
+
+const manifestVersion = (path: string): string => {
+  const json = JSON.parse(rootText(path)) as { version?: string; metadata?: { version?: string } };
+  return json.version ?? json.metadata?.version ?? "missing";
+};
+
+const missingSkills = (text: string, names: string[]): string[] => names.filter((name) => !text.includes(`\`${name}\``));
+
+describe("README, overview, and install stay current", () => {
+  test("every skill has a frontmatter name matching its directory", () => {
+    for (const name of skillNames()) expect(skillText(`${name}/SKILL.md`)).toMatch(new RegExp(`^---\\nname: ${name}\\n`));
+  });
+
+  test("every skill appears in the README, its Skills table, and the overview skill", () => {
+    const names = skillNames();
+    expect(names).toContain("install");
+    expect(names).toContain("overview");
+    const readme = rootText("README.md");
+    expect(missingSkills(readme, names)).toEqual([]);
+    const table = readme.slice(readme.indexOf("### Skills"), readme.indexOf("### CLI"));
+    expect(names.filter((name) => !table.includes(`| \`${name}\` |`))).toEqual([]);
+    expect(missingSkills(skillText("overview/SKILL.md"), names)).toEqual([]);
+  });
+
+  test("a skill missing from the README or overview is reported", () => {
+    expect(missingSkills(rootText("README.md").replaceAll("`polish`", "polish"), skillNames())).toEqual(["polish"]);
+    expect(missingSkills(skillText("overview/SKILL.md").replaceAll("`rack`", "rack"), skillNames())).toEqual(["rack"]);
+  });
+
+  test("every CLI command appears in HELP and the README", () => {
+    const commands = cliCommands();
+    expect(commands).toContain("board");
+    expect(commands).toContain("note");
+    expect(commands.length).toBeGreaterThan(10);
+    const help = rootText("cli/src/cli.ts");
+    const readme = rootText("README.md");
+    expect(commands.filter((c) => !help.includes(`  brewery ${c}`))).toEqual([]);
+    expect(commands.filter((c) => !readme.includes(`brewery ${c}`))).toEqual([]);
+    expect(commands.filter((c) => !readme.replaceAll("brewery cellar", "cellar").includes(`brewery ${c}`))).toEqual(["cellar"]);
+  });
+
+  test("the install skill covers every install route the README gives", () => {
+    const install = flatten(skillText("install/SKILL.md"));
+    for (const step of ["bin/install", "brewery agents", "claude plugin install brewery@brewery", "codex plugin add brewery@brewery", "~/.cursor/plugins/local/", "notify.ntfyUrl", "brewery init-docs", "## Testing conventions", "## User guide conventions"]) {
+      expect(install).toContain(step);
+    }
+  });
+
+  test("the plugin manifests and marketplaces carry one version", () => {
+    const versions = MANIFESTS.map(manifestVersion);
+    expect(versions.every((v) => /^\d+\.\d+\.\d+$/.test(v))).toBe(true);
+    expect(new Set(versions).size).toBe(1);
   });
 });
 
