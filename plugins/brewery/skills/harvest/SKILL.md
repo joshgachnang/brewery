@@ -1,6 +1,6 @@
 ---
 name: harvest
-description: Daily sweep of a repo's open GitHub issues with a human in the loop. Triages every issue it has not seen, labels it so the next sweep knows, and proposes a bucket for each (fix now, fix later, won't fix, needs info, decide, duplicate) in one digest the human answers with "ok" or per-issue overrides. Only after that answer does it apply final labels, close won't-fix issues, and dispatch fix-now issues to `tap` subagents in their own worktrees. Use when asked to harvest, sweep, groom, or triage a repo's issues, or on a daily timer; not for fixing a hand-picked set of issues (use `tap`) or for features that need a plan (use `distill`).
+description: Daily sweep of a repo's open GitHub issues with a human in the loop. Triages every issue it has not seen, labels it so the next sweep knows, and proposes a bucket for each (fix now, fix later, collect signal, won't fix, needs info, decide, duplicate) in one digest the human answers with "ok" or per-issue overrides. Only after that answer does it apply final labels, close won't-fix issues, and dispatch fix-now issues to `tap` subagents in their own worktrees. Use when asked to harvest, sweep, groom, or triage a repo's issues, or on a daily timer; not for fixing a hand-picked set of issues (use `tap`) or for features that need a plan (use `distill`).
 ---
 
 # Harvest — sweep the issues, keep what's good
@@ -44,6 +44,7 @@ already has.
 | `brewery:fix-now` | Accepted; dispatch on the next run | harvest after the human's answer, or the human by hand |
 | `brewery:fix-later` | Accepted; backlog, never dispatched automatically | the same |
 | `brewery:in-progress` | A `tap` worker or open PR owns it | harvest when it dispatches |
+| `brewery:collect-signal` | Actionable, but the evidence is too thin to act on yet; waits for more reports | the same |
 | `brewery:needs-info` | Waiting on the reporter for one fact | harvest after the human's answer |
 | `brewery:decide` | Needs a product decision before anyone builds it | the same |
 | `brewery:wontfix` | Rejected; closed as not planned | the same |
@@ -51,6 +52,11 @@ already has.
 An issue carries at most one `brewery:` label. Any `brewery:` label means seen. A human
 changing the label by hand is an answer: harvest acts on the label it finds, not on the
 one it last set. Promoting a `fix-later` issue is just relabelling it `fix-now`.
+
+`collect-signal` and `needs-info` differ in who can unblock them. `needs-info` cannot be
+acted on until the reporter answers one question. `collect-signal` could be acted on, but
+one report of unclear frequency is not enough reason to: it waits for other people to hit
+the same problem.
 
 ## Drive
 
@@ -66,29 +72,39 @@ one it last set. Promoting a `fix-later` issue is just relabelling it `fix-now`.
    - `needs-info`: comment the one question the digest showed, addressed to the reporter.
    - `duplicate`: close with `Duplicate of #<n>` (`--reason "not planned"`).
    - `decide`: label only. The report points to `/brewery:distill #<n>`.
-   - `fix-now`, `fix-later`: label only.
+   - `fix-now`, `fix-later`, `collect-signal`: label only.
 3. **Revisit.** Re-triage, as if new, every open issue that:
    - is `brewery:needs-info` and the reporter replied after the label was set
    - is `brewery:in-progress` with no live worker, no open PR referencing it, and no
      activity for 3 days (the worker died or tap dropped it; read its last report)
    - is `brewery:fix-later` or `brewery:decide` and had new comments or a linked PR merge
      since the label was set
+   - is `brewery:collect-signal` and got new signal since the label was set: another
+     person reporting or reacting, a duplicate or linked issue, or a reproduction. This
+     usually promotes it to `fix-now`, `fix-later`, or `decide`.
+   - is `brewery:collect-signal` with no new signal for 60 days. Propose `wontfix`
+     ("no further reports in 60 days"); the human decides, as for any proposal.
    Remove the stale label before re-proposing. Leave every other labelled issue alone.
 4. **Sweep.** List open issues with no `brewery:` label, oldest first, skipping pull
    requests, issues assigned to someone else, and issues an open PR already references
    (tap's [skip rules](../tap/references/triage.md#skip)). Take the first `limit`. Count
    the rest as the backlog for the report.
 5. **Triage.** Fresh read-only subagents, one per issue or obvious cluster, at most five at
-   a time, briefed exactly as [`triage`](../tap/references/triage.md#triage) says. Map
-   the disposition to a proposed bucket:
+   a time, briefed exactly as [`triage`](../tap/references/triage.md#triage) says.
+   Never let the reporter's proposed solution define the fix. Restate each feature
+   request as the problem behind it: "add dark mode" may really mean "reduce eye strain
+   at night". The digest reason names the problem, not the requested feature. Count the
+   signal too: how many people reported or reacted, and how often it happens. Map the
+   disposition to a proposed bucket:
 
    | Triage disposition | Proposed bucket |
    | --- | --- |
    | `fix`, small and contained, or a crash, data, or security symptom | `fix-now` |
    | `fix`, cosmetic, low traffic, or larger than one tap area | `fix-later` |
+   | `fix` or `decide` with no crash, data, or security symptom, resting on one report of unclear frequency | `collect-signal`, with the signal that would promote it |
    | `upstream` with a test-backed workaround | `fix-now` or `fix-later`, by the same test |
    | `upstream` without one, `already-fixed` | `wontfix`, with the commit or upstream link as the reason |
-   | `duplicate-of` | `duplicate` |
+   | `duplicate-of` | `duplicate`; a duplicate of a `collect-signal` issue is new signal for it (step 3) |
    | `cannot-reproduce`, `needs-info` | `needs-info`, with the one fact needed |
    | `decide` | `decide`, with its question |
 
@@ -136,6 +152,7 @@ one it last set. Promoting a `fix-later` issue is just relabelling it `fix-now`.
    3. #45 Add crypto payments: wontfix. Out of scope for a Medicaid-billed product.
    4. #47 Sync fails sometimes: needs-info. Ask: which app version and screen?
    5. #48 Who can see draft notes?: decide. a) authors only (recommended) b) whole care pod
+   6. #49 Export to CSV: collect-signal. Problem: moving visit data into billing. One report; promote on a second.
    ...
 
    Dispatched: #38 #39 -> PR #120 (green), #42 -> working
@@ -166,7 +183,8 @@ names, credentials, or tokens. When a reason cannot be written without them, the
 
 - set a final label, close, comment, or dispatch without the human's answer, except acting
   on a label a human set by hand
-- dispatch a `fix-later`, `decide`, or `needs-info` issue, or more than 3 areas per run
+- dispatch a `fix-later`, `collect-signal`, `decide`, or `needs-info` issue, or more than 3
+  areas per run
 - triage an issue that already carries a `brewery:` label, outside step 3
 - reopen issues, edit issue bodies, assign people, or touch labels outside `brewery:`
 - merge a PR, or end a worker with a red PR unwatched (tap and `finish` own that)

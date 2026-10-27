@@ -42,8 +42,8 @@ each fix test-first through Pick and Roast, and runs `finish` on the PR. Issues 
 product decision are reported instead of built.
 
 `harvest` and `polish` are the daily sweeps. harvest triages every issue it has not seen,
-labels it (`brewery:proposed`, then `fix-now`, `fix-later`, `wontfix`, `needs-info`,
-`decide`), and sends one digest; only after the human answers does it close, comment, or
+labels it (`brewery:proposed`, then `fix-now`, `fix-later`, `collect-signal`, `wontfix`,
+`needs-info`, `decide`), and sends one digest; only after the human answers does it close, comment, or
 dispatch `fix-now` issues to `tap` workers in their own worktrees. polish finds your open PRs
 in the current repo that have a conflict, red CI, or an unanswered bot thread, and runs
 `finish` on each in its own worktree.
