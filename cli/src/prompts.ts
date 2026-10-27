@@ -516,7 +516,7 @@ ${context.body.why || "(empty)"}
 
 ${context.body.whatChanged || "(empty)"}
 
-#### Claims: Verification rows
+#### Claims: Verification rows (parsed from the body's table and listed one per line here)
 
 ${verification}
 
