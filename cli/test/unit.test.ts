@@ -8,12 +8,14 @@ import { buildMessage, formatAsks, parseReply, smsVersion } from "../src/human.t
 import { appendEvent } from "../src/events.ts";
 import { elephant, isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
 import { newState, runDir, slugify } from "../src/state.ts";
-import { cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
+import { brewBody, cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
 import type { Ctx } from "../src/step.ts";
 import { mergeVerdicts } from "../src/step.ts";
 import { isGreen } from "../src/commands/finish.ts";
 import { unansweredBotThreads } from "../src/vcs.ts";
 import { IP } from "./helpers.ts";
+import { provenance } from "../src/provenance.ts";
+import type { HistoryEntry } from "../src/state.ts";
 
 describe("planning prompts", () => {
   const ctx: Ctx = {
@@ -59,6 +61,49 @@ describe("planning prompts", () => {
   test("fix lists unchecked parts only when there are some", () => {
     expect(fixBody(ctx, [])).not.toContain("could not assess");
     expect(fixBody(ctx, [], ["[alpha] the billing API's rate limit: no access"])).toContain("- [alpha] the billing API's rate limit: no access");
+  });
+});
+
+describe("provenance", () => {
+  const step = (stage: string, agent: string, task?: string): HistoryEntry => ({ seq: 1, stage, agent, status: "PASS", action: "x", seconds: 1, log: "/l", task });
+  const config = { ...DEFAULT_CONFIG, stages: { ...DEFAULT_CONFIG.stages, cut: ["claude", "codex"], review: ["claude", "codex"], test: ["claude-sonnet"], pick: ["claude"] }, escalate: { pick: ["claude-opus"] } };
+  const state = (history: HistoryEntry[]) => ({ ...newState({ slug: "s", repo: "/repo", ip: "/repo/plan.md", base: "master", phase: "brew" }), history });
+
+  test("lists who ran each stage, with models only where the profile names one", () => {
+    const text = provenance(state([step("cut", "claude"), step("cut", "codex"), step("review", "claude"), step("review", "codex"), step("test", "claude-sonnet", "T1"), step("test", "claude-sonnet", "T2")]), config, "# T\n\nStatus: approved 2026-10-20\n");
+    expect(text).toBe([
+      "### Provenance",
+      "",
+      "- Cut: claude (model unknown), codex (model unknown)",
+      "- Reviews: claude (model unknown), codex (model unknown)",
+      "- Tests-first writer: claude-sonnet (sonnet)",
+      "- Approval: plan approved by the human 2026-10-20",
+      "- Rerouted or fell back: none",
+    ].join("\n"));
+  });
+
+  test("names recorded skips and escalations, and says unknown or none recorded rather than guessing", () => {
+    const run = state([step("cut", "claude"), step("pick", "claude", "T1"), { ...step("pick", "claude-opus", "T2"), escalated: true }, { ...step("pick", "claude-opus", "T3"), escalated: true }]);
+    run.reroutes = ["cut: codex skipped (codex not found on PATH)"];
+    const text = provenance(run, config, null);
+    expect(text).toContain("- Reviews: none recorded");
+    expect(text).toContain("- Approval: unknown");
+    expect(text).toContain("- Rerouted or fell back: cut: codex skipped (codex not found on PATH); pick: escalated to claude-opus");
+  });
+
+  test("an agent missing from today's route is not reported as a reroute", () => {
+    // The steps ran under an earlier --agents override; only routing records count.
+    expect(provenance(state([step("cut", "claude")]), config, null)).toContain("- Rerouted or fell back: none");
+  });
+
+  test("tells pour's self-approval apart from the human's", () => {
+    expect(provenance(state([]), config, "Status: approved 2026-10-21 (pour: 2 tasks, no fundamental questions)\n")).toContain("- Approval: plan self-approved by pour 2026-10-21");
+    expect(provenance(state([]), config, "Status: awaiting sign-off\n")).toContain("- Approval: unknown");
+  });
+
+  test("brew gets the block verbatim", () => {
+    const ctx: Ctx = { state: state([step("cut", "claude")]), config, log: () => {} };
+    expect(brewBody(ctx, "master")).toContain("### Provenance\n\n- Cut: claude (model unknown)");
   });
 });
 

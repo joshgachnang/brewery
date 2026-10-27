@@ -25,6 +25,12 @@ const checkAgent = (config: Config, name: string): Promise<string | null> => {
   return availabilityCache.get(name) as Promise<string | null>;
 };
 
+// Provenance reads these, so record only what routing actually did.
+const recordReroute = (ctx: Ctx, text: string): void => {
+  const seen = (ctx.state.reroutes ??= []);
+  if (!seen.includes(text)) seen.push(text);
+};
+
 export const resolveAgents = async (ctx: Ctx, stage: Stage, escalated = false): Promise<string[]> => {
   const stronger = escalated ? ctx.config.escalate[stage] : undefined;
   if (stronger?.length) {
@@ -32,6 +38,7 @@ export const resolveAgents = async (ctx: Ctx, stage: Stage, escalated = false): 
       return await pickAgents(ctx, stage, stronger);
     } catch {
       ctx.log(`  no escalation agent available for ${stage} (tried ${stronger.join(", ")}); using ${ctx.config.stages[stage].join(", ")}`);
+      recordReroute(ctx, `${stage}: escalation to ${stronger.join(", ")} unavailable, fell back to its normal route`);
     }
   }
   return pickAgents(ctx, stage, ctx.config.stages[stage]);
@@ -41,7 +48,10 @@ const pickAgents = async (ctx: Ctx, stage: Stage, wanted: string[]): Promise<str
   const ok: string[] = [];
   for (const name of wanted) {
     const problem = await checkAgent(ctx.config, name);
-    if (problem) ctx.log(`  skip ${name} for ${stage}: ${problem}`);
+    if (problem) {
+      ctx.log(`  skip ${name} for ${stage}: ${problem}`);
+      recordReroute(ctx, `${stage}: ${name} skipped (${problem})`);
+    }
     else ok.push(name);
     if (ok.length && !FAN_OUT.has(stage)) break;
   }
@@ -95,6 +105,7 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       seconds: outcome.seconds,
       log: `${base}.log`,
       task: opts.task,
+      ...(opts.escalated && ctx.config.escalate[stage]?.includes(agent) ? { escalated: true } : {}),
     });
     saveState(state);
     return { agent, result: outcome.result };

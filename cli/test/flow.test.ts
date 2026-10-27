@@ -1313,6 +1313,13 @@ describe("barrel test-first", () => {
 
     expect(ctx.state.history.filter((h) => h.stage === "test").map((h) => h.agent)).toEqual(["alpha", "alpha"]);
     expect(ctx.lines.some((line) => line.includes("no escalation agent available for test"))).toBe(true);
+    expect(ctx.state.reroutes).toEqual([
+      expect.stringMatching(/^test: missing skipped \(/),
+      "test: escalation to missing unavailable, fell back to its normal route",
+    ]);
+    const [brew] = stepPrompts(ctx.state.repo, ctx.state.slug, /-brew-/);
+    expect(brew).toContain("- Tests-first writer: alpha (model unknown)");
+    expect(brew).toContain("- Rerouted or fell back: test: missing skipped (");
   });
 
   test("runs the repo's terreno-test-hygiene on the new tests and rejects violations", async () => {

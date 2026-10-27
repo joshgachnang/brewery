@@ -1,9 +1,10 @@
 // Prompts for each step. Skills hold the method; these say which slice of it this
 // process runs and where brewery takes over.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Ask, Finding } from "./agents.ts";
 import { activeRules, RULES_PATH } from "./docs.ts";
+import { provenance } from "./provenance.ts";
 import type { Ctx } from "./step.ts";
 import { refreshNotes, type TaskState } from "./state.ts";
 import type { ApproveContext, PlanRef } from "./approve/context.ts";
@@ -353,6 +354,11 @@ ${ctx.state.branch} against ${base}. Overrides:
 - Skip step 4 (independent review). brewery already ran a multi-agent branch review.
 - Every task is already committed and Roast-verified. Do not rewrite those commits.
 - Skip step 12. brewery runs finish.
+- Use this as the Provenance section in step 8, verbatim. brewery built it from the run's
+  history. Do not add or guess agents or models.
+
+${provenance(ctx.state, ctx.config, ctx.state.ip && existsSync(ctx.state.ip) ? readFileSync(ctx.state.ip, "utf8") : null)}
+
 Result keys: \`pr\` (the PR number) and \`sha\` (the pushed head).`;
 
 export const tasteBody = (ctx: Ctx, pr: number, snap: PrSnapshot): string => `## Step: taste (one reaction on PR #${pr})

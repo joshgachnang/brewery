@@ -108,6 +108,12 @@ must follow the [`GitHub attention contract`](../../terreno-shared/github-attent
    visible body uses
    only `Why`, `What changed`, and `Verification`, stays under 250 words, and puts
    optional detail plus the stage-result YAML in one expandable Details block.
+   The Details block opens with a short `Provenance` section, one line each: the
+   agents and models that ran cut, the reviews, the tests-first writer, and approval
+   (the plan's sign-off: the human, or `pour` approving itself), then any agent that was
+   rerouted, escalated, or fell back. Record only what the run's state or logs show and
+   write `unknown` for the rest. Never guess a model. The PR approval agent records its
+   own agents in its verdict.
    Preserve human-edited title/body; make only accurate minimal edits. Attach only
    decisive UI/runtime artifacts without sensitive data.
 9. **Do not announce.** Do not post a PR comment for creation, readiness, check results,
