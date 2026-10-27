@@ -49,6 +49,17 @@ describe("planning prompts", () => {
     expect(prompt).toContain("a task that is really two independently roast-able behaviours");
     expect(prompt).toContain("a chain that could be a fan-out");
   });
+
+  test("cut asks for what held up and what it could not check", () => {
+    const prompt = cutBody(ctx, "Add greeting", "plan.md");
+    expect(prompt).toContain("`wellReasoned`");
+    expect(prompt).toContain("`couldNotAssess`");
+  });
+
+  test("fix lists unchecked parts only when there are some", () => {
+    expect(fixBody(ctx, [])).not.toContain("could not assess");
+    expect(fixBody(ctx, [], ["[alpha] the billing API's rate limit: no access"])).toContain("- [alpha] the billing API's rate limit: no access");
+  });
 });
 
 describe("build prompts", () => {

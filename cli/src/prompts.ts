@@ -107,7 +107,7 @@ The request, verbatim:
 ${request}
 </request>`;
 
-export const fixBody = (ctx: Ctx, findings: Finding[]): string => `## Step: distill step 10 (fix the cut findings)
+export const fixBody = (ctx: Ctx, findings: Finding[], couldNotAssess: string[] = []): string => `## Step: distill step 10 (fix the cut findings)
 
 Read ${skill(ctx, "distill/SKILL.md")} step 10 and ${skill(ctx, "distill/references/distilling.md")}.
 The IP is ${ctx.state.ip}. A fresh attacker that saw only the human's words produced these
@@ -124,7 +124,12 @@ questions, at most 5, fundamental first, each fundamental one with "fundamental"
 Findings:
 \`\`\`json
 ${JSON.stringify(findings, null, 2)}
-\`\`\``;
+\`\`\`${couldNotAssess.length ? `
+
+The attacker could not assess these. Each is unchecked, not passed: check it yourself, or
+record it in Assumptions or Open questions.
+
+${couldNotAssess.map((c) => `- ${c}`).join("\n")}` : ""}`;
 
 export const applyReplyBody = (ctx: Ctx, asks: Ask[], reply: string, verdict: string): string => `## Step: distill step 12 (apply the human's reply)
 
@@ -163,7 +168,9 @@ registry, index, or barrel the task must edit.
 Result: status PASS, and \`findings\`: at most 12, most severe first, each
 {"id": "C1", "severity": "blocking" | "should-fix" | "nit", "axis": "", "where": "",
 "attack": "", "evidence": "", "fix": ""}. A finding without evidence is dropped. An empty
-list is a valid answer.
+list is a valid answer. Also \`wellReasoned\`: one line each for a part you attacked that held
+up, with its evidence. And \`couldNotAssess\`: one line each for a part you could not check,
+and why (no access, no transcript, an external system). Either may be empty; do not pad them.
 
 What the human said, verbatim:
 

@@ -91,11 +91,21 @@ planner's context). Pass the packet and this brief:
 > `ID | Severity (blocking / should-fix / nit) | Axis | Where in the IP | Attack | Evidence | Suggested fix`.
 > Evidence is a quote of their words, a quote of the IP, or a file and line. A finding
 > without evidence is dropped. "No findings" is a valid answer; do not invent any.
+>
+> After the table, add two short sections, one line each, or `None.`:
+>
+> - **Well-reasoned:** a part of the plan you attacked that held up, with the evidence
+>   that it holds.
+> - **Couldn't assess:** a part you could not check, and why: no access, no transcript,
+>   a claim about an external system or data you cannot see.
+>
+> An empty table must not read as a clean plan when you could not check it. Do not pad
+> either list.
 
 ## Return
 
-Hand the table back to the caller unchanged, prefixed with one line:
-`Cut: <n> findings (<b> blocking) on <IP path>, context: <transcript | ticket+Decisions>`.
+Hand the table and both sections back to the caller unchanged, prefixed with one line:
+`Cut: <n> findings (<b> blocking), <w> well-reasoned, <u> couldn't assess on <IP path>, context: <transcript | ticket+Decisions>`.
 
 When invoked standalone by the human, print the table and offer to apply fixes through
 `distill` step 10. Do not apply them yourself.

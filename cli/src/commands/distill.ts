@@ -62,9 +62,10 @@ export const cutAndFix = async (ctx: Ctx, asks: Ask[], maxRounds: number): Promi
   let current = asks;
   for (let round = 1; round <= maxRounds; round++) {
     ctx.state.cutRounds += 1;
-    const findings = [...await runCut(ctx), ...graphFindings(ctx.state.ip)];
-    if (!findings.length) break;
-    const [{ result }] = await runStage(ctx, "distill", fixBody(ctx, findings));
+    const cut = await runCut(ctx);
+    const findings = [...cut.findings, ...graphFindings(ctx.state.ip)];
+    if (!findings.length && !cut.couldNotAssess.length) break;
+    const [{ result }] = await runStage(ctx, "distill", fixBody(ctx, findings, cut.couldNotAssess));
     if (result.ask) current = result.ask;
     const blocking = findings.some((f) => f.severity === "blocking");
     const graphInvalid = graphFindings(ctx.state.ip).length > 0;
