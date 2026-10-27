@@ -101,7 +101,7 @@ the same problem.
    | --- | --- |
    | `fix`, small and contained, or a crash, data, or security symptom | `fix-now` |
    | `fix`, cosmetic, low traffic, or larger than one tap area | `fix-later` |
-   | `fix` or `decide` with no crash, data, or security symptom, resting on one report of unclear frequency | `collect-signal`, with the signal that would promote it |
+   | A feature request (`fix` or `decide`) resting on one report of unclear frequency or impact | `collect-signal`, with the signal that would promote it |
    | `upstream` with a test-backed workaround | `fix-now` or `fix-later`, by the same test |
    | `upstream` without one, `already-fixed` | `wontfix`, with the commit or upstream link as the reason |
    | `duplicate-of` | `duplicate`; a duplicate of a `collect-signal` issue is new signal for it (step 3) |
