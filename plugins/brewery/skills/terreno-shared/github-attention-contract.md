@@ -44,6 +44,8 @@ Use exactly these top-level headings, in this order:
 
 <The IP's initial justification: problem, user/repository impact, and canonical issue/spec.>
 
+Implements `<plan path>` (T1–T3). Closes #<n>.
+
 ## What changed
 
 - <Brief overview of the approved IP and its intended outcomes; maximum five bullets.>
@@ -61,6 +63,14 @@ Use exactly these top-level headings, in this order:
 Rules:
 
 - Keep the visible body under 250 words.
+- Spell the headings exactly `## Why`, `## What changed`, and `## Verification`. The
+  approval bot reads sections by heading; a `What`, `Summary`, or `Testing` heading reads
+  as a missing section and raises the PR's risk level.
+- When the PR implements a plan, end `Why` with one line naming the plan file's
+  repository path in backticks and the task ids it delivers (`T1–T3`, `Tasks 2.1–2.2`).
+  When it closes an issue, add `Closes #<n>`. The approval bot finds the plan only from a
+  literal path, the stage result's `ip`, or a plan file changed in the diff; without one it
+  scores plan match at most 1 out of 3.
 - Initialize `Why` from the IP's original justification. Preserve the problem and
   motivation that caused the IP to exist; do not replace them with recent-turn context.
 - Initialize `What changed` with a short overview of the approved IP and intended
@@ -80,7 +90,11 @@ Rules:
   every listed case on this branch; then use `✅ Tested`, naming who walked them and
   the evidence. Omit the row when the PR adds or changes no case.
 - Put the most decision-relevant verification first.
-- Name what a check proves; a command alone is not evidence.
+- Name what a check proves; a command alone is not evidence. Write the outcome next
+  to the command (`` `bun test api` → 412 pass ``).
+- Use only the three-column table, with the status mark (`✅`, `🧭`, or `⚠️`) in the
+  first cell of every row. The approval bot reads verification from those marks; a
+  bullet list or a `| Check | Result |` table without them reads as no verification.
 - Link one canonical issue/spec in `Why`; do not add a separate metadata section.
 - Embed only the minimum screenshot/video needed to prove user-visible behavior.
 - Put migration notes, full check logs, compatibility matrices, unusual implementation
@@ -97,6 +111,10 @@ Rules:
   </details>
   ```
 
+- In the stage-result YAML, set `ip` to the plan's filename without `.md` (for
+  `<plans dir>/2026-10-01-post-cache.md`, `ip: 2026-10-01-post-cache`), and
+  start each `done` entry with its task id (`T2 Roast PASS`). A later stage that rewrites
+  the block keeps `ip` and the delivered task ids.
 - Never put stage-result YAML in the visible body or a comment. Omit the inner Stage
   result toggle when this PR is not a lifecycle handoff.
 

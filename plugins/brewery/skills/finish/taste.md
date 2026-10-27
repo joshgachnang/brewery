@@ -189,7 +189,8 @@ make it clean, stop and escalate per push ownership.
 11. **Preserve PR description.** Never regenerate or replace human-authored text. Fetch the
     latest body before a required minimal evidence edit; skip body mutation if it cannot
     be preserved exactly. Update `Verification` instead of posting test/CI comments. Keep
-    stage-result YAML in the Details toggle, never in the visible body. Keep
+    stage-result YAML in the Details toggle, never in the visible body; when you rewrite
+    it, keep `ip` and the delivered task ids so the approval bot still finds the plan. Keep
     sensitive data out of text and artifacts.
 12. **Default to silence.** Never post progress, thanks, readiness, CI, or PR-summary
     comments. Use an existing review thread when possible. A top-level comment is allowed

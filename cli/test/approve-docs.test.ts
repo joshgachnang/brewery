@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { claimedScope, findPlans, splitBody } from "../src/approve/context.ts";
 import { DEFAULT_CONFIG } from "../src/config.ts";
 
 const root = join(import.meta.dir, "..", "..");
@@ -45,5 +46,18 @@ describe("approve docs and CI templates", () => {
   test("the READMEs point at the approve docs", () => {
     expect(read("README.md")).toContain("docs/approve.md");
     expect(read("cli/README.md")).toContain("docs/approve.md");
+  });
+
+  test("the attention contract's example PR body parses into every section the approver reads", async () => {
+    const contract = read("plugins/brewery/skills/terreno-shared/github-attention-contract.md");
+    const example = /Use exactly these top-level headings[\s\S]*?```markdown\n([\s\S]*?)\n```/.exec(contract)?.[1] ?? "";
+    const planPath = "docs/plans/2026-10-01-post-cache.md";
+    const body = splitBody(example.replace("<plan path>", planPath));
+    expect(body.why).toContain(planPath);
+    expect(body.whatChanged).not.toBe("");
+    expect(new Set(body.verification.map((r) => r.status))).toEqual(new Set(["tested", "instructions", "notTested"]));
+    expect(claimedScope(body)).toEqual(["T1", "T2", "T3"]);
+    const plans = await findPlans({ body, changed: [], planDirs: DEFAULT_CONFIG.approve.planDirs, readHead: async (path) => (path === planPath ? "# Plan\n" : null) });
+    expect(plans.map((p) => p.path)).toEqual([planPath]);
   });
 });

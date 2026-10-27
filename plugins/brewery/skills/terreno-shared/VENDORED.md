@@ -20,6 +20,7 @@ use terreno's), and `loop-engineering.md` (terreno-internal explanation no brewe
 | Here | Upstream | Changes |
 | --- | --- | --- |
 | `*.md`, `*.json` in this directory | `references/` | none, except below |
+| `github-attention-contract.md` | `references/` | approval-ready body rules (exact headings, plan path and task ids in `Why`, status-marked rows, `ip` kept) from TerrenoLabs/terreno#1635 (open) |
 | `lifecycle-contract.md`, `pick-roast-loop.md` | `references/` | `push-ownership.md` references are links |
 | `subagent-briefing.md` | `references/` | per-task Roast spawns no UI/runtime verifier; the integrated Roast spawns at most one |
 | `mocking.md` | `skills/2-pick/references/` | none |

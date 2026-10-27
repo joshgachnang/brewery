@@ -23,6 +23,7 @@ export interface ApproveDeps {
   ci: Pick<Ci, "prView" | "prFiles" | "prDiff">;
   readBase: (path: string) => Promise<string | null>;
   readHead: (path: string) => Promise<string | null>;
+  listHead?: (dir: string) => Promise<string[]>;
   baseSha: () => Promise<string>;
   poster?: Poster;
 }
@@ -119,7 +120,7 @@ export const approve = async (
   opts: { dryRun: boolean; view?: PrView; appLogin?: string; requireChecks?: boolean },
 ): Promise<ApproveOutcome> => {
   const { log } = ctx;
-  const context = await gatherContext({ ci: deps.ci, repo: ctx.state.repo, pr, view: opts.view, readBase: deps.readBase, readHead: deps.readHead, baseSha: deps.baseSha });
+  const context = await gatherContext({ ci: deps.ci, repo: ctx.state.repo, pr, view: opts.view, readBase: deps.readBase, readHead: deps.readHead, listHead: deps.listHead, baseSha: deps.baseSha });
   const head = context.pr.headSha;
   log(`approve #${pr} at ${head.slice(0, 7)} (${context.files.length} files, policy ${context.policy.source})`);
   const skipped = skipReason(context, opts.appLogin ?? deps.poster?.appLogin, { requireChecks: opts.requireChecks });
@@ -155,7 +156,7 @@ export const approve = async (
 };
 
 // Readers for a real checkout: policy from the base branch, plans from the head.
-export const gitReaders = (repo: string, base: string, headSha: string): Pick<ApproveDeps, "readBase" | "readHead" | "baseSha"> => {
+export const gitReaders = (repo: string, base: string, headSha: string): Pick<ApproveDeps, "readBase" | "readHead" | "listHead" | "baseSha"> => {
   // File contents untrimmed: sh() trims, and a plan's trailing newline is part of the text.
   const show = async (ref: string, path: string): Promise<string | null> => {
     const proc = Bun.spawn(["git", "show", `${ref}:${path}`], { cwd: repo, stdout: "pipe", stderr: "pipe" });
@@ -173,6 +174,11 @@ export const gitReaders = (repo: string, base: string, headSha: string): Pick<Ap
   return {
     readBase: async (path) => show(await baseRef(), path),
     readHead: async (path) => show(headSha, path),
+    listHead: async (dir) => {
+      const proc = Bun.spawn(["git", "ls-tree", "--name-only", headSha, `${dir}/`], { cwd: repo, stdout: "pipe", stderr: "pipe" });
+      const out = await new Response(proc.stdout).text();
+      return (await proc.exited) === 0 ? out.split("\n").filter(Boolean) : [];
+    },
     baseSha: async () => (await git(repo, "rev-parse", "--short", await baseRef())).trim(),
   };
 };
