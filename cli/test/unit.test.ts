@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildMessage, formatAsks, parseReply, smsVersion } from "../src/human.ts";
 import { appendEvent } from "../src/events.ts";
-import { isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
+import { elephant, isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
 import { newState, runDir, slugify } from "../src/state.ts";
 import { cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
 import type { Ctx } from "../src/step.ts";
@@ -222,6 +222,17 @@ describe("human", () => {
     const parts = { repoName: "r", title: "t".repeat(600), need: "n", link: "l", asks: [], replyHint: "" };
     expect(smsVersion(parts, "slug").length).toBeLessThanOrEqual(480);
     expect(buildMessage(parts)).toContain("Plan: l");
+  });
+
+  test("the sign-off message names the elephant only when the IP does", () => {
+    const parts = { repoName: "r", title: "t", need: "n", orientation: "Adds a greeting.", link: "l", asks: [], replyHint: "" };
+    expect(buildMessage({ ...parts, elephant: "the nightly export reads this table" })).toContain("Adds a greeting.\n\nElephant: the nightly export reads this table\n\nPlan: l");
+    expect(buildMessage({ ...parts, elephant: "none" })).toContain("Elephant: none");
+    expect(buildMessage(parts)).not.toContain("Elephant");
+    expect(elephant("# T\n\nOpen risks: none\nElephant: a backfill nobody planned\n")).toBe("a backfill nobody planned");
+    expect(elephant("# T\n\nElephant: none\n")).toBe("none");
+    expect(elephant("# T\n\nOpen risks: none\n")).toBeUndefined();
+    expect(elephant("# T\n\nElephant:\n")).toBeUndefined();
   });
 });
 

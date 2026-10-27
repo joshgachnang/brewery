@@ -106,7 +106,8 @@ interactive, single-session run.
 11. **Sign off.** Set `Status: awaiting sign-off` and send the sign-off message per
     [`reaching the human`](../terreno-shared/reaching-the-human.md): fundamental questions
     first, then the open questions whose answers would change the most, with a link to
-    the IP for the rest. Emit `BLOCKED` (`stage: grow`, `next: null`,
+    the IP for the rest. Add one `Elephant:` line after the summary, copied from the
+    brief: the likeliest risk nobody has raised, or `none`. Never invent one. Emit `BLOCKED` (`stage: grow`, `next: null`,
     `block: [{kind: human}]`, one `ask` per question in the message) and stop.
 12. **Apply the reply.** When answers arrive, move each answered question from Open
     questions to Decisions. Where an answer differs from the recommendation, rewrite the

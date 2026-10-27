@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { basename, isAbsolute, join, relative } from "node:path";
 import type { Ask, Finding } from "../agents.ts";
 import { buildMessage, smsVersion, waitForHuman } from "../human.ts";
-import { isApproved, orientation, parseTasks, readIp, readStatus, setStatus, taskGraphProblems, title, writeIp } from "../ip.ts";
+import { elephant, isApproved, orientation, parseTasks, readIp, readStatus, setStatus, taskGraphProblems, title, writeIp } from "../ip.ts";
 import { distillBody, fixBody } from "../prompts.ts";
 import { appendContext, saveState, type RunState } from "../state.ts";
 import { runStage, type Ctx } from "../step.ts";
@@ -88,6 +88,7 @@ export const sendForSignoff = async (ctx: Ctx, asks: Ask[], why?: string): Promi
     title: title(text),
     need: why ? `plan ready for sign-off (${why})` : "plan ready for sign-off",
     orientation: orientation(text),
+    elephant: elephant(text),
     link: relative(state.repo, state.ip),
     asks,
     replyHint: `Reply "ok" to accept every recommendation, or e.g. "ok, 2b" / "no: <why>".`,
