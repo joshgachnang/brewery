@@ -7,7 +7,13 @@ export const MARKER_PREFIX = "<!-- terreno-approve:";
 export const marker = (headSha: string): string => `${MARKER_PREFIX}${headSha} -->`;
 export const markerSha = (body: string): string | null => new RegExp(`${MARKER_PREFIX}([0-9a-f]+) -->`).exec(body)?.[1] ?? null;
 
-const LABELS: Record<string, string> = { ipMatch: "Plan match", architecture: "Architecture", tests: "Tests", evidence: "Evidence" };
+const LABELS: Record<string, string> = { ipMatch: "🎯 Plan match", architecture: "🏗️ Architecture", tests: "🧪 Tests", evidence: "📸 Evidence" };
+
+const LEVEL_EMOJI: Record<string, string> = { low: "🟢", medium: "🟡", high: "🔴" };
+const SEVERITY_EMOJI: Record<string, string> = { blocking: "🛑", "should-fix": "⚠️", nit: "💬" };
+
+// A 0-3 score as a traffic light: 3 green, 2 yellow, 0-1 red.
+const scoreLight = (score: number): string => (score >= 3 ? "🟢" : score === 2 ? "🟡" : "🔴");
 
 const cell = (text: string): string => text.replace(/\|/g, "\\|").replace(/\s+/g, " ").trim();
 
@@ -30,50 +36,71 @@ export const firstLine = (verdict: Verdict): string => {
   const why = verdict.approve
     ? verdict.dimensions.ipMatch.reasons[0] ?? verdict.rationale.split(/(?<=\.)\s/)[0] ?? ""
     : verdict.reasons[0] ?? "";
-  return `**Risk: ${verdict.level} — ${decision}.** ${why.replace(/\s+/g, " ")}`.trim();
+  const icon = `${verdict.approve ? "✅" : "✋"} ${LEVEL_EMOJI[verdict.level] ?? ""}`.trim();
+  return `${icon} **Risk: ${verdict.level} — ${decision}.** ${why.replace(/\s+/g, " ")}`.trim();
 };
 
+// Short at a glance: decision, one row of scores, finding counts. Everything else folds away.
 export const renderBody = (verdict: Verdict, context: ApproveContext): string => {
   const lines: string[] = [marker(context.pr.headSha), firstLine(verdict), ""];
   if (!verdict.approve && verdict.reasons.length > 1) {
-    lines.push("Also: " + verdict.reasons.slice(1).join("; ") + ".", "");
+    lines.push(`➕ Also: ${verdict.reasons.slice(1).join("; ")}.`, "");
   }
-  for (const [key, label] of Object.entries(LABELS)) {
-    const d = verdict.dimensions[key as keyof Verdict["dimensions"]];
-    lines.push(`#### ${label} ${d.score}/3`, "", paragraph(d.reasons), "");
-  }
-  lines.push(`<details><summary>Findings (${verdict.findings.length}), plan, and gates</summary>`, "");
+  const dims = Object.entries(LABELS).map(([key, label]) => ({ label, d: verdict.dimensions[key as keyof Verdict["dimensions"]] }));
+  lines.push(
+    `| ${dims.map(({ label }) => label).join(" | ")} |`,
+    `|${dims.map(() => ":-:").join("|")}|`,
+    `| ${dims.map(({ d }) => `${scoreLight(d.score)} ${d.score}/3`).join(" | ")} |`,
+    "",
+  );
   if (verdict.findings.length) {
+    const counts = (["blocking", "should-fix", "nit"] as const)
+      .map((s) => [s, verdict.findings.filter((f) => f.severity === s).length] as const)
+      .filter(([, n]) => n > 0)
+      .map(([s, n]) => `${SEVERITY_EMOJI[s]} ${n} ${s}`);
+    lines.push(`🔎 ${counts.join(" · ")}`, "");
+  }
+
+  lines.push("<details><summary>📝 Why these scores</summary>", "");
+  for (const { label, d } of dims) lines.push(`**${label} ${d.score}/3** — ${paragraph(d.reasons)}`, "");
+  if (verdict.rationale) lines.push(verdict.rationale.trim(), "");
+  lines.push("</details>", "");
+
+  if (verdict.findings.length) {
+    lines.push(`<details><summary>🐞 Findings (${verdict.findings.length})</summary>`, "");
     for (const f of verdict.findings) {
       const who = verdict.agents.length > 1 ? ` _(${f.agents.join(", ")})_` : "";
-      lines.push(`- **${f.severity}** \`${cell(f.where)}\` — ${cell(f.attack)}${f.evidence ? ` · ${cell(f.evidence)}` : ""}${who}`);
+      lines.push(`- ${SEVERITY_EMOJI[f.severity] ?? ""} **${f.severity}** \`${cell(f.where)}\` — ${cell(f.attack)}${f.evidence ? ` · ${cell(f.evidence)}` : ""}${who}`);
     }
-    lines.push("");
+    lines.push("", "</details>", "");
   }
+
+  lines.push("<details><summary>⚙️ Plan, gates, policy</summary>", "");
   if (verdict.judge && verdict.judge.status !== "no_plan") {
     const j = verdict.judge;
-    lines.push(`Plan: ${j.status}${j.planEdited ? ", edited in this PR" : ""} — ${cell(j.summary)}`);
+    lines.push(`🗺️ Plan: ${j.status}${j.planEdited ? ", edited in this PR" : ""} — ${cell(j.summary)}`);
     if (j.missing.length) lines.push(`- Missing: ${j.missing.map(cell).join("; ")}`);
     if (j.unrequested.length) lines.push(`- Unrequested: ${j.unrequested.map(cell).join("; ")}`);
     if (j.evidenceGaps.length) lines.push(`- Evidence gaps: ${j.evidenceGaps.map(cell).join("; ")}`);
     lines.push("");
   } else {
-    lines.push("Plan: none referenced.", "");
+    lines.push("🗺️ Plan: none referenced.", "");
   }
-  if (verdict.rationale) lines.push(verdict.rationale.trim(), "");
   const g = verdict.gates;
   const checks = otherChecks(context);
   lines.push(
-    `Checks: ${g.checks} (${checks.length}) · Bot threads: ${g.botThreads} unresolved · Human changes requested: ${g.humanChangesRequested ? "yes" : "no"} · Size: ${g.size}`,
-    bandText(verdict),
-    `Policy: \`.brewery.json\` at \`${context.policy.source}\`, rubric ${context.policy.rubric === null ? "brewery default" : `\`${context.policy.approve.rubric}\``}, agents ${verdict.agents.join(", ") || "none"}${verdict.errors.length ? `, failed: ${verdict.errors.map((e) => `${e.agent} (${cell(e.error)})`).join("; ")}` : ""}`,
+    `🚦 Checks: ${g.checks} (${checks.length}) · 🤖 Bot threads: ${g.botThreads} unresolved · 🙋 Human changes requested: ${g.humanChangesRequested ? "yes" : "no"} · 📏 Size: ${g.size}`,
+    "",
+    `📐 ${bandText(verdict)}`,
+    "",
+    `📜 Policy: \`.brewery.json\` at \`${context.policy.source}\`, rubric ${context.policy.rubric === null ? "brewery default" : `\`${context.policy.approve.rubric}\``}, agents ${verdict.agents.join(", ") || "none"}${verdict.errors.length ? `, failed: ${verdict.errors.map((e) => `${e.agent} (${cell(e.error)})`).join("; ")}` : ""}`,
     "",
     "</details>",
   );
   return `${lines.join("\n")}\n`;
 };
 
-export const renderSkip = (headSha: string, reason: string): string => `${marker(headSha)}\n**Skipped.** ${reason}\n`;
+export const renderSkip = (headSha: string, reason: string): string => `${marker(headSha)}\n⏭️ **Skipped.** ${reason}\n`;
 
 export type CheckConclusion = "success" | "neutral" | "failure";
 

@@ -144,7 +144,7 @@ describe("GitHub poster", () => {
     expect(review?.body).toMatchObject({ event: "COMMENT", commit_id: "new222" });
     const dismissal = gh.calls.find((c) => c.method === "PUT");
     expect(dismissal?.url).toBe("https://api.github.com/repos/acme/widgets/pulls/7/reviews/1/dismissals");
-    expect(dismissal?.body).toEqual({ message: "Risk: medium — not approved. risk medium is above the configured approval levels (low)" });
+    expect(dismissal?.body).toEqual({ message: "✋ 🟡 Risk: medium — not approved. risk medium is above the configured approval levels (low)" });
     expect(gh.calls.filter((c) => c.method === "PUT")).toHaveLength(1);
     expect(poster.last.dismissed).toEqual([1]);
     expect(poster.last.check?.conclusion).toBe("neutral");
