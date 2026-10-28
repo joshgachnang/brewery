@@ -141,7 +141,10 @@ Milestone M1's issue is the one the report hands off.
 
 A Claude Design is a Design artifact on claude.ai (`claude.ai/artifact/...`), made in
 Claude; it may also arrive as an export (HTML, PNG, PDF) in the repository or a local
-path. It is the source of truth for screens, states, and copy. Recipe never redraws it.
+path. It is the source of truth for screens, states, and copy. Recipe never redraws it:
+it only adds question stickies, option artboards, `Draft —` screens, and pages, at the
+checkpoints [`designing`](../../distill/references/designing.md) names, and an export in
+the repository is read only.
 
 **Taking one in.** When the input, the conversation, the repository (`docs/specs`, a
 `Design:` line in an IP, a link in the agent instructions), or an existing project's

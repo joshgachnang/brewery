@@ -103,6 +103,7 @@ Tracer: <seam the first task cuts through>
 E2E: <planned specs and layers, e.g. "2 specs (browser, http)"; or "None — reason">
 Regression: <provisional case IDs and destination suite; or "None — reason">
 User guide: <guide pages added, updated, or retired; or "None — reason">
+Design: <canvas link and the artboards the plan builds; or "None — reason">
 Out of scope: <tags; see Expansions>
 Open risks: <none, or one line each>
 Elephant: <the likeliest risk nobody has raised, in one line; or "none">
@@ -117,7 +118,8 @@ sign-off message carries it, so it must make sense without the IP.
 
 The two testing sections follow the brief, before the task list, in the format of
 [`testing plan`](../../terreno-shared/testing-plan.md), then `## User guide` in the format
-of [`user guide`](../../terreno-shared/user-guide.md). Each may be `None — <reason>`.
+of [`user guide`](../../terreno-shared/user-guide.md), then `## Design` in the format of
+[`designing`](designing.md#the--design-section). Each may be `None — <reason>`.
 None may be missing, and a bare `None` with no reason is a defect cut blocks on.
 
 ```markdown
@@ -155,7 +157,7 @@ Rules:
   table says `none` writes `None — user guide off`.
 - Regression IDs stay provisional (`<AREA>-new-<n>`), with one `Destination:` line per
   prefix. Brew assigns the real IDs. A row that edits an existing case keeps its real ID.
-- The `E2E:`, `Regression:`, and `User guide:` brief lines summarize these sections. They stay lines
+- The `E2E:`, `Regression:`, `User guide:`, and `Design:` brief lines summarize these sections. They stay lines
   under the plan table, not headings.
 - An IP approved before the contract reads a missing section as
   `None — predates contract`.
@@ -260,5 +262,7 @@ contain multiple behaviours, and chains that could fan out.
 - Building an expansion "because it was small"
 - Open questions without a recommendation, or without "If answered differently"
 - A UI criterion with no planned spec, or a testing section that says only `None`
+- A UI task with no `Design:` line when the IP has a design, or a canvas change applied
+  without saying what it became
 - A sign-off message that needs the IP open to make sense
 - Treating silence as sign-off

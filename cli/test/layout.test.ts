@@ -88,6 +88,8 @@ const REGRESSION_TABLE = "| ID | Case | Steps | Expected | Platforms | Automated
 const LEGACY = "None — predates contract";
 const GUIDE_TABLE = "| ID | Page | Change | Audience | Written in |";
 const GUIDE_OFF = "None — user guide off";
+const DESIGN_TABLE = "| Artboard | States and flows | Tasks | Notes |";
+const SNAPSHOT = "docs/specs/<slug>/design/";
 const CUT_RULES = [
   "no `## E2E tests` or no `## Regression cases` section",
   "no `## User guide` section",
@@ -97,6 +99,7 @@ const CUT_RULES = [
 ];
 const RECIPE_NEVER = [
   "write to Linear, or start a design, before the human's answer to the preview",
+  "alter an existing artboard or a note it did not add",
   "create an initiative, label, or team",
   "delete or archive projects, milestones, or issues",
   "drop a fact, link, or decision from an existing description",
@@ -119,20 +122,24 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["docs/user-guide/", "## User guide conventions", "### Opting out", GUIDE_OFF, GUIDE_TABLE, "## Guide-entry bar", "None — <reason>", "predates contract"],
   },
   "distill/SKILL.md": {
-    phrases: ["../terreno-shared/testing-plan.md", "../terreno-shared/user-guide.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF, LEGACY],
+    phrases: ["../terreno-shared/testing-plan.md", "../terreno-shared/user-guide.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF, LEGACY, "references/designing.md", "then `## Design` per", SNAPSHOT, "A canvas that changed since the snapshot is a reply too"],
   },
   "distill/references/distilling.md": {
-    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY],
-    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: ", "Elephant: "],
+    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY, "then `## Design` in the format of"],
+    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: ", "Design: ", "Elephant: "],
+  },
+  "distill/references/designing.md": {
+    phrases: [DESIGN_TABLE, SNAPSHOT, "None — <reason>", LEGACY, "A planning run only adds to a canvas", "Never edit, move, resize, or delete an existing artboard", "never read the live canvas", "never silently overrules", "Never render, screenshot, or open a canvas"],
+    lines: ["## Reaching the canvas", "## What a planning run may add", "## Checkpoints", "## Applying canvas changes", "## The `## Design` section", "## The snapshot", "## Design"],
   },
   "pour/SKILL.md": {
-    phrases: ["## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF],
+    phrases: ["## E2E tests", "## Regression cases", "## User guide", "## Design", GUIDE_OFF],
   },
   "barrel/stages/pick.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "skip a guide row silently", "opts out of the user guide"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "skip a guide row silently", "opts out of the user guide", SNAPSHOT, "Build to the snapshot, never to the live canvas"],
   },
   "barrel/stages/roast.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens", "match the snapshot, not the live canvas"],
   },
   "barrel/stages/brew.md": {
     phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out", "`Provenance` section", "write `unknown` for the rest"],
@@ -141,7 +148,7 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["../terreno-shared/user-guide.md", "## User guide", "user guide pages", "guide-entry bar"],
   },
   "cut/SKILL.md": {
-    phrases: [LEGACY, GUIDE_OFF, "**Well-reasoned:**", "**Couldn't assess:**", "<w> well-reasoned, <u> couldn't assess"],
+    phrases: [LEGACY, GUIDE_OFF, "Attack the `## Design` section", "**Well-reasoned:**", "**Couldn't assess:**", "<w> well-reasoned, <u> couldn't assess"],
     within: { from: "Each of these is `blocking`", to: "Also attack regression steps", phrases: CUT_RULES },
   },
   "tap/references/triage.md": {
@@ -149,7 +156,7 @@ const CONTRACT: Record<string, Contract> = {
     lines: ["## E2E tests", "## Regression cases", "## User guide"],
   },
   "recipe/SKILL.md": {
-    phrases: ["references/shaping.md", "../distill/references/distilling.md", "../terreno-shared/reaching-the-human.md", "Nothing is written to Linear before this answer", "## Open questions (recommendation assumed)", "## Expansions (follow up later)", "## Decisions", "design brief", "Claude Design"],
+    phrases: ["references/shaping.md", "../distill/references/distilling.md", "../distill/references/designing.md", "../terreno-shared/reaching-the-human.md", "Nothing is written to Linear before this answer", "## Open questions (recommendation assumed)", "## Expansions (follow up later)", "## Decisions", "design brief", "Claude Design"],
     within: { from: "## Never", to: "commit `.terreno/recipe/`", phrases: RECIPE_NEVER },
   },
   "recipe/references/shaping.md": {
@@ -228,6 +235,16 @@ describe("recipe in the skill text", () => {
   test("dropping the design brief or the milestone size line from shaping is reported", () => {
     expect(contractGaps("recipe/references/shaping.md", skillText("recipe/references/shaping.md").replaceAll("## Design brief", "## Brief"))).toEqual(["## Design brief"]);
     expect(contractGaps("recipe/references/shaping.md", dropLine(skillText("recipe/references/shaping.md"), "Size: pour | distill | tap"))).toEqual(["Size: pour | distill | tap"]);
+  });
+});
+
+describe("design loop in the skill text", () => {
+  test("dropping the snapshot, the additive rule, or the Design section is reported", () => {
+    const designing = skillText("distill/references/designing.md");
+    expect(contractGaps("distill/references/designing.md", dropLine(designing, "never read the live"))).toEqual(["never read the live canvas"]);
+    expect(contractGaps("distill/references/designing.md", dropLine(designing, "Never edit, move, resize, or delete"))).toEqual(["Never edit, move, resize, or delete an existing artboard"]);
+    expect(contractGaps("distill/references/distilling.md", dropLine(skillText("distill/references/distilling.md"), "Design: <canvas link"))).toEqual(["line: Design: "]);
+    expect(contractGaps("barrel/stages/pick.md", dropLine(skillText("barrel/stages/pick.md"), "Build to the snapshot"))).toEqual(["Build to the snapshot, never to the live canvas"]);
   });
 });
 

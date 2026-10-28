@@ -87,6 +87,12 @@ planner's context). Pass the packet and this brief:
 >    lacks a section: read the section as `None — predates contract`
 >    and report it as `should-fix`, not `blocking`.
 >
+>    Attack the `## Design` section the same way, as `should-fix`: a missing section or a
+>    bare `None`, a UI task with no `Design:` line when the IP links a canvas, an artboard
+>    no task delivers that is not an Expansion, and a canvas that contradicts a criterion
+>    or Decision (per `distill/references/designing.md`). An approved IP without the
+>    section reads it as `None — predates contract`.
+>
 > Return at most 12 findings, most severe first, as a markdown table:
 > `ID | Severity (blocking / should-fix / nit) | Axis | Where in the IP | Attack | Evidence | Suggested fix`.
 > Evidence is a quote of their words, a quote of the IP, or a file and line. A finding

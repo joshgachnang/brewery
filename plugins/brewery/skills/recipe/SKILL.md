@@ -1,6 +1,6 @@
 ---
 name: recipe
-description: Shape a Linear project from the current repository's context. Creates a new project (finding its initiative, team, labels, lead, status, and milestones from the workspace, or asking when no match is clear) or improves an existing one given its URL, key, or name. Takes a Claude Design in when one exists and maps its screens onto milestones; when none exists for a user-facing change, writes a design brief and starts the design in Claude Design through the Artifact tool, or prints the brief to paste. Uses distill's triage instead of a questionnaire: only questions fundamental to the project are asked, every other question is written into the project with a recommendation. Nothing is written to Linear until the human confirms the preview. Use when asked to recipe, plan, scope, shape, or clean up a Linear project, epic, or roadmap item; not for an implementation plan (use `distill`) or for fixing issues (use `tap`).
+description: Shape a Linear project from the current repository's context. Creates a new project (finding its initiative, team, labels, lead, status, and milestones from the workspace, or asking when no match is clear) or improves an existing one given its URL, key, or name. Takes a Claude Design in when one exists, maps its screens onto milestones, and trades questions and draft screens with it at checkpoints; when none exists for a user-facing change, writes a design brief and starts the design in Claude Design through the Artifact tool, or prints the brief to paste. Uses distill's triage instead of a questionnaire: only questions fundamental to the project are asked, every other question is written into the project with a recommendation. Nothing is written to Linear until the human confirms the preview. Use when asked to recipe, plan, scope, shape, or clean up a Linear project, epic, or roadmap item; not for an implementation plan (use `distill`) or for fixing issues (use `tap`).
 ---
 
 # Recipe — shape a Linear project from the repo
@@ -18,6 +18,8 @@ Read before acting:
   the design in and the design brief out, the recipe bar, the improve diff, the preview
 - [`distilling`](../distill/references/distilling.md): the triage table and the rules for
   asking fundamental questions, which recipe applies to a project instead of an IP
+- [`designing`](../distill/references/designing.md): what a run may add to a canvas, the
+  checkpoints, and how canvas changes become plan changes
 - [`reaching the human`](../terreno-shared/reaching-the-human.md)
 - [`GitHub attention contract`](../terreno-shared/github-attention-contract.md): the
   `[TEAM-n]` ticket form that IPs and PRs carry back to the issues recipe creates
@@ -79,7 +81,10 @@ duplicating a project is worse than extending one.
    input, the conversation, the repository, or the project's links name, read with the
    Artifact tool; or, for a user-facing request that names none, the user's Design
    artifacts whose title clearly matches, offered as a question. Take from it the screens,
-   states, flows, and copy; each screen lands in exactly one milestone.
+   states, flows, and copy; each screen lands in exactly one milestone. In improve mode, a
+   canvas that changed since the project last mapped it is applied per
+   [`designing`](../distill/references/designing.md#applying-canvas-changes), with
+   milestones in place of tasks.
 5. **Match fields** per [`shaping`](references/shaping.md#matching-fields). One clear
    candidate is a fact: use it and cite why in the preview. Several plausible
    candidates, or none where one is expected, is a question with the candidates as
@@ -97,7 +102,9 @@ duplicating a project is worse than extending one.
    is allowed only when an answer unlocks a new fundamental question; get to the bottom of
    a vague answer before treating it as settled. With the human away, do not block: build
    on the recommendation, mark the question fundamental, and it goes first in the preview
-   message. No fundamental questions → shape straight away.
+   message. No fundamental questions → shape straight away. With a design, a question
+   about a screen goes on the canvas too, as a sticky or two option artboards the
+   question names, per the [checkpoints](../distill/references/designing.md#checkpoints).
 8. **Shape.**
    - **New:** write the project per the [template](references/shaping.md#the-project):
      orientation, the idea, in and out of scope, milestones in order with the tracer
@@ -118,6 +125,10 @@ duplicating a project is worse than extending one.
      shows shipped (a merged PR or a done IP; propose the state, never set it silently),
      duplicates, and issues no milestone owns. Open questions in the old text move into
      the table with recommendations.
+
+   With a design, add a page per milestone and a sticky per artboard naming the milestone
+   that delivers it, and `Draft —` artboards for screens a milestone needs that the
+   canvas lacks.
 
    Check the result against the bar and fix what fails before showing it.
 9. **Preview and confirm.** Write the whole draft to `.terreno/recipe/<slug>.json`, mark
@@ -184,7 +195,9 @@ credentials, or tokens into a project, issue, state file, or message.
 - write to Linear, or start a design, before the human's answer to the preview, or past
   what the preview showed
 - create an initiative, label, or team, or change another project, without asking first
-- redraw or edit an existing design; recipe reads designs and writes briefs
+- alter an existing artboard or a note it did not add (edit, move, or delete it);
+  recipe only adds question stickies, option artboards, drafts, and pages, per
+  [`designing`](../distill/references/designing.md#what-a-planning-run-may-add)
 - delete or archive projects, milestones, or issues; propose it and let the human do it
 - post project updates or issue comments unless asked
 - drop a fact, link, or decision from an existing description when rewriting it
