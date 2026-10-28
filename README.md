@@ -161,7 +161,9 @@ skill when you want to steer.
   preview.
 - A Claude Design, when there is one, maps its screens onto the milestones; a user-facing
   project without one gets a design brief, started in Claude Design through the Artifact
-  tool when it is available.
+  tool when it is available. Recipe only adds to a canvas (question stickies, option
+  artboards, `Draft —` screens, a page per milestone) and never edits an artboard you
+  made; rerun it on the project after you change the design and it re-maps the milestones.
 - Skill only: `/brewery:recipe`, `/brewery:recipe "<request>"`, or
   `/brewery:recipe <project url>`.
 
@@ -185,6 +187,12 @@ change what gets built.**
   and `## Regression cases` (the testing plan; regression is usually `None`) and
   `## User guide` (the end-user page each feature adds or changes). A repo with no in-app
   users opts out with `| User guide | none |` under `## User guide conventions`.
+- With a Claude Design, distill and the canvas trade at checkpoints: it puts open
+  questions on the canvas as stickies or A/B artboards, your pick or edit is the answer,
+  and each canvas change you make becomes a plan edit, a task, an Expansion, or a
+  question. At sign-off it snapshots the artboards into `docs/specs/<slug>/design/`, and
+  the `## Design` section maps them to tasks; barrel builds against that snapshot, never
+  the live canvas. Rules: [`designing`](plugins/brewery/skills/distill/references/designing.md).
 - The CLI rejects a draft whose task graph has duplicate IDs, unknown dependencies, or
   cycles before it ever reaches you.
 - `brewery distill "<request>"` (`--file req.md` for a long one).

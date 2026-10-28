@@ -34,6 +34,8 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
 - Prior Pick attempts
 - Exact Roast failures or Taste/CI/review evidence when retrying
 - Known blockers and existing artifacts
+- For a UI task, the snapshot artboards its `Design:` line names, under
+  `docs/specs/<slug>/design/`
 
 ## Procedure
 
@@ -69,6 +71,10 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    naming the row ID below the table (never a new column), and update any
    `## Regression cases` `Automated by` cell that names the old path; never skip a row
    silently. An IP that lacks the section follows the testing-plan legacy rule.
+   For a UI task, the test briefing also names the snapshot artboards its `Design:` line
+   lists. Build to the snapshot, never to the live canvas: a design that changed after
+   approval reaches the build only through distill. An artboard the snapshot lacks is a
+   `BLOCKED` result naming it, not a guess.
 6. **Encode.** Run the tests and confirm every one fails for the reason its case
    describes, not a typo, import, or setup error. A test that passes now does not test
    the new behavior: send it back to the writer with that evidence. After two rejected

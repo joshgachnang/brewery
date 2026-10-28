@@ -45,10 +45,12 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    compatibility, and non-scope that this task could break. Check the tests written first
    for this task against its test brief: every `Cases` entry and criterion has a test,
    expected values are the brief's literals, and each `Blast radius` consumer has its case
-   at the assigned layer. Review every change Pick made to those tests, with its reason. A
-   missing case, a wrong expected value, a test that cannot fail, or a change that weakens a
-   criterion is `FAIL`; mark it `retest: true` when the defect is in the tests rather than
-   the code, so the test stage writes them again. An `untestable` claim that a test could
+   at the assigned layer. Review every change Pick made to those tests, with its reason. For a
+   UI task, every state its snapshot artboards show (`docs/specs/<slug>/design/`) is a
+   criterion: copy, fields, and empty, loading, and error states match the snapshot, not
+   the live canvas. A missing case, a wrong expected value, a test that cannot fail, or a
+   change that weakens a criterion is `FAIL`; mark it `retest: true` when the defect is in
+   the tests rather than the code, so the test stage writes them again. An `untestable` claim that a test could
    disprove is the same. Add every IP `## E2E tests` row whose `Written in` names this
    task, with the command that runs its spec at the row's path, following the e2e guide
    the testing plan resolves. A missing spec is `FAIL` that names the row ID. Run `http`
