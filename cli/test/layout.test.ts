@@ -95,6 +95,12 @@ const CUT_RULES = [
   "no planned spec in `## E2E tests`",
   "has no `## User guide` row",
 ];
+const RECIPE_NEVER = [
+  "write to Linear, or start a design, before the human's answer to the preview",
+  "create an initiative, label, or team",
+  "delete or archive projects, milestones, or issues",
+  "drop a fact, link, or decision from an existing description",
+];
 
 interface Contract {
   // Anywhere in the text, after reflow.
@@ -117,7 +123,7 @@ const CONTRACT: Record<string, Contract> = {
   },
   "distill/references/distilling.md": {
     phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY],
-    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: "],
+    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: ", "Elephant: "],
   },
   "pour/SKILL.md": {
     phrases: ["## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF],
@@ -129,18 +135,26 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens"],
   },
   "barrel/stages/brew.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out", "`Provenance` section", "write `unknown` for the rest"],
   },
   "finish/taste.md": {
     phrases: ["../terreno-shared/user-guide.md", "## User guide", "user guide pages", "guide-entry bar"],
   },
   "cut/SKILL.md": {
-    phrases: [LEGACY, GUIDE_OFF],
+    phrases: [LEGACY, GUIDE_OFF, "**Well-reasoned:**", "**Couldn't assess:**", "<w> well-reasoned, <u> couldn't assess"],
     within: { from: "Each of these is `blocking`", to: "Also attack regression steps", phrases: CUT_RULES },
   },
   "tap/references/triage.md": {
     phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF],
     lines: ["## E2E tests", "## Regression cases", "## User guide"],
+  },
+  "recipe/SKILL.md": {
+    phrases: ["references/shaping.md", "../distill/references/distilling.md", "../terreno-shared/reaching-the-human.md", "Nothing is written to Linear before this answer", "## Open questions (recommendation assumed)", "## Expansions (follow up later)", "## Decisions", "design brief", "Claude Design"],
+    within: { from: "## Never", to: "commit `.terreno/recipe/`", phrases: RECIPE_NEVER },
+  },
+  "recipe/references/shaping.md": {
+    phrases: ["## Linear access", "## Matching fields", "## The recipe bar", "## The improve diff", "## The preview", "## Design brief", "keeps every fact, link, decision", "Size: pour | distill | tap"],
+    lines: ["## Milestones", "## Design", "## Open questions (recommendation assumed)", "## Expansions (follow up later)", "## Decisions", "## Links"],
   },
 };
 
@@ -196,6 +210,24 @@ describe("testing-plan and user-guide contracts in the skill text", () => {
       const line = rows.find((row) => row.includes(rule)) as string;
       expect(contractGaps("cut/SKILL.md", `${dropLine(cut, rule)}\n${line}\n`)).toEqual(gap);
     }
+  });
+});
+
+describe("recipe in the skill text", () => {
+  test("deleting a recipe Never rule, or moving it out of the Never list, is reported", () => {
+    const recipe = skillText("recipe/SKILL.md");
+    const rows = recipe.split("\n");
+    for (const rule of RECIPE_NEVER) {
+      const gap = [`## Never: ${rule}`];
+      expect(contractGaps("recipe/SKILL.md", dropLine(recipe, rule.split(",")[0]))).toEqual(gap);
+      const line = rows.find((row) => row.includes(rule.split(",")[0])) as string;
+      expect(contractGaps("recipe/SKILL.md", `${dropLine(recipe, rule.split(",")[0])}\n${line}\n`)).toEqual(gap);
+    }
+  });
+
+  test("dropping the design brief or the milestone size line from shaping is reported", () => {
+    expect(contractGaps("recipe/references/shaping.md", skillText("recipe/references/shaping.md").replaceAll("## Design brief", "## Brief"))).toEqual(["## Design brief"]);
+    expect(contractGaps("recipe/references/shaping.md", dropLine(skillText("recipe/references/shaping.md"), "Size: pour | distill | tap"))).toEqual(["Size: pour | distill | tap"]);
   });
 });
 

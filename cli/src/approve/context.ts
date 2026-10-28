@@ -16,6 +16,8 @@ export interface BodySections {
   why: string;
   whatChanged: string;
   verification: VerificationRow[];
+  // The raw Verification section, for the rubric when no row carries a status mark.
+  verificationText: string;
   // The collapsed stage-result YAML, scalar keys and inline lists only.
   stageResult: Record<string, string | string[]> | null;
 }
@@ -55,26 +57,43 @@ const parseVerification = (text: string): VerificationRow[] => {
   return rows;
 };
 
+const unquote = (value: string): string => value.replace(/^["']|["']$/g, "");
+
+// Top-level keys only: nested mappings (`checks:` entries) would otherwise overwrite
+// `status` and `ev`. A key with no value takes the `- item` lines under it as a list.
 const parseStageResult = (text: string): BodySections["stageResult"] => {
   const block = /<summary>\s*Stage result\s*<\/summary>[\s\S]*?```ya?ml\s*([\s\S]*?)```/i.exec(text);
   if (!block) return null;
   const out: Record<string, string | string[]> = {};
+  let listKey: string | null = null;
   for (const line of block[1].split(/\r?\n/)) {
-    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line.trim());
+    const item = /^\s+-\s+(.*)$/.exec(line);
+    if (listKey && item) {
+      // A `- name: x` item is a mapping, not a scalar; only scalar items belong in the list.
+      if (!/^[A-Za-z_][\w-]*:\s/.test(item[1])) (out[listKey] as string[]).push(unquote(item[1].trim()));
+      continue;
+    }
+    const kv = /^([A-Za-z_][\w-]*):\s*(.*)$/.exec(line);
     if (!kv) continue;
+    listKey = null;
     const [, key, raw] = kv;
     const value = raw.trim();
+    if (!value) {
+      out[key] = [];
+      listKey = key;
+      continue;
+    }
     if (value.startsWith("[") && value.endsWith("]")) {
       try {
         const list = JSON.parse(value) as unknown;
         out[key] = Array.isArray(list) ? list.map(String) : [value];
         continue;
       } catch {
-        out[key] = value.slice(1, -1).split(",").map((v) => v.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+        out[key] = value.slice(1, -1).split(",").map((v) => unquote(v.trim())).filter(Boolean);
         continue;
       }
     }
-    out[key] = value.replace(/^["']|["']$/g, "");
+    out[key] = unquote(value);
   }
   return out;
 };
@@ -87,6 +106,7 @@ export const splitBody = (body: string): BodySections => {
     why: section(text, "Why"),
     whatChanged: section(text, "What changed"),
     verification: parseVerification(verification),
+    verificationText: verification,
     stageResult: parseStageResult(text),
   };
 };
@@ -141,6 +161,8 @@ export const findPlans = async (input: {
   changed: ChangedFile[];
   planDirs: string[];
   readHead: (path: string) => Promise<string | null>;
+  // Files under a directory at the head; resolves an `ip:` slug to a dated plan filename.
+  listHead?: (dir: string) => Promise<string[]>;
 }): Promise<PlanRef[]> => {
   const candidates: string[] = [];
   const add = (path: string): void => {
@@ -153,7 +175,19 @@ export const findPlans = async (input: {
     for (const m of input.body.text.matchAll(re)) add(m[0]);
   }
   const slug = input.body.stageResult?.ip;
-  if (typeof slug === "string" && slug) for (const dir of dirs) add(`${dir}/${slug}.md`);
+  if (typeof slug === "string" && slug) {
+    if (slug.endsWith(".md") && dirs.some((dir) => slug.replace(/^\.?\//, "").startsWith(`${dir}/`))) add(slug);
+    else {
+      const name = slug.replace(/\.md$/, "");
+      for (const dir of dirs) {
+        add(`${dir}/${name}.md`);
+        // Plans named `YYYY-MM-DD-<slug>.md` carry the bare slug in the stage result.
+        for (const path of (await input.listHead?.(dir)) ?? []) {
+          if (path.endsWith(`/${name}.md`) || path.endsWith(`-${name}.md`)) add(path);
+        }
+      }
+    }
+  }
   for (const file of input.changed) {
     if (file.path.endsWith(".md") && dirs.some((dir) => file.path.startsWith(`${dir}/`))) add(file.path);
   }
@@ -230,6 +264,7 @@ export const gatherContext = async (input: {
   planDirs?: string[];
   readBase: (path: string) => Promise<string | null>;
   readHead: (path: string) => Promise<string | null>;
+  listHead?: (dir: string) => Promise<string[]>;
   baseSha: () => Promise<string>;
 }): Promise<ApproveContext> => {
   const pr = input.view ?? (await input.ci.prView(input.repo, input.pr));
@@ -238,7 +273,7 @@ export const gatherContext = async (input: {
   const [files, diff, sha] = await Promise.all([input.ci.prFiles(input.repo, input.pr), input.ci.prDiff(input.repo, input.pr), input.baseSha()]);
   const body = splitBody(pr.body);
   const planDirs = input.planDirs ?? approve.planDirs;
-  const plans = await findPlans({ body, changed: files, planDirs, readHead: input.readHead });
+  const plans = await findPlans({ body, changed: files, planDirs, readHead: input.readHead, listHead: input.listHead });
   return {
     pr,
     files,

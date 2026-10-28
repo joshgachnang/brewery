@@ -46,6 +46,20 @@ describe("splitBody", () => {
     expect(splitBody("## What changed\r\n- Zod schema\r\n\r\n## Why\r\nBecause.\r\n").whatChanged).toBe("- Zod schema");
   });
 
+  test("a block-list stage result keeps top-level keys and scalar lists, not nested check fields", () => {
+    const body = splitBody(
+      "<details>\n<summary>Stage result</summary>\n\n```yaml\nv: 2\nstage: taste\nstatus: PASS\nip: 2026-10-01-post-cache\ndone:\n  - \"T1 Roast PASS\"\n  - T2 Roast PASS\nchecks:\n  - name: circleci\n    status: FAIL\n    ev: \"43 success\"\nnext: null\naction: Done\n```\n</details>\n",
+    );
+    expect(body.stageResult).toEqual({ v: "2", stage: "taste", status: "PASS", ip: "2026-10-01-post-cache", done: ["T1 Roast PASS", "T2 Roast PASS"], checks: [], next: "null", action: "Done" });
+    expect(claimedScope(body)).toEqual(["T1", "T2"]);
+  });
+
+  test("a Verification section without status marks keeps its raw text", () => {
+    const body = splitBody("## Verification\n\n- `bun test` → 4 pass\n\n## Notes\nx\n");
+    expect(body.verification).toEqual([]);
+    expect(body.verificationText).toBe("- `bun test` → 4 pass");
+  });
+
   test("a body without the sections or a stage result still parses", () => {
     const body = splitBody("Just a sentence.");
     expect(body.why).toBe("");
@@ -95,6 +109,13 @@ describe("findPlans", () => {
       { path: "docs/plans/not-at-head.md", additions: 1, deletions: 0 },
     ];
     const plans = await findPlans({ body: splitBody("no refs"), changed, planDirs, readHead });
+    expect(plans.map((p) => p.path)).toEqual(["docs/plans/2026-10-01-post-cache.md"]);
+  });
+
+  test("a bare stage-result slug resolves to a dated plan file through the head listing", async () => {
+    const body = splitBody("<details>\n<summary>Stage result</summary>\n\n```yaml\nv: 2\nip: post-cache\n```\n</details>\n");
+    const listHead = async (dir: string): Promise<string[]> => Object.keys(headFiles).filter((p) => p.startsWith(`${dir}/`));
+    const plans = await findPlans({ body, changed: [], planDirs, readHead, listHead });
     expect(plans.map((p) => p.path)).toEqual(["docs/plans/2026-10-01-post-cache.md"]);
   });
 

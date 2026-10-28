@@ -6,14 +6,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildMessage, formatAsks, parseReply, smsVersion } from "../src/human.ts";
 import { appendEvent } from "../src/events.ts";
-import { isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
+import { elephant, isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
 import { newState, runDir, slugify } from "../src/state.ts";
-import { cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
+import { brewBody, cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
 import type { Ctx } from "../src/step.ts";
 import { mergeVerdicts } from "../src/step.ts";
 import { isGreen } from "../src/commands/finish.ts";
 import { unansweredBotThreads } from "../src/vcs.ts";
 import { IP } from "./helpers.ts";
+import { provenance } from "../src/provenance.ts";
+import type { HistoryEntry } from "../src/state.ts";
 
 describe("planning prompts", () => {
   const ctx: Ctx = {
@@ -48,6 +50,60 @@ describe("planning prompts", () => {
     expect(prompt).toContain("two tasks that write the same file with no dependency between them");
     expect(prompt).toContain("a task that is really two independently roast-able behaviours");
     expect(prompt).toContain("a chain that could be a fan-out");
+  });
+
+  test("cut asks for what held up and what it could not check", () => {
+    const prompt = cutBody(ctx, "Add greeting", "plan.md");
+    expect(prompt).toContain("`wellReasoned`");
+    expect(prompt).toContain("`couldNotAssess`");
+  });
+
+  test("fix lists unchecked parts only when there are some", () => {
+    expect(fixBody(ctx, [])).not.toContain("could not assess");
+    expect(fixBody(ctx, [], ["[alpha] the billing API's rate limit: no access"])).toContain("- [alpha] the billing API's rate limit: no access");
+  });
+});
+
+describe("provenance", () => {
+  const step = (stage: string, agent: string, task?: string): HistoryEntry => ({ seq: 1, stage, agent, status: "PASS", action: "x", seconds: 1, log: "/l", task });
+  const config = { ...DEFAULT_CONFIG, stages: { ...DEFAULT_CONFIG.stages, cut: ["claude", "codex"], review: ["claude", "codex"], test: ["claude-sonnet"], pick: ["claude"] }, escalate: { pick: ["claude-opus"] } };
+  const state = (history: HistoryEntry[]) => ({ ...newState({ slug: "s", repo: "/repo", ip: "/repo/plan.md", base: "master", phase: "brew" }), history });
+
+  test("lists who ran each stage, with models only where the profile names one", () => {
+    const text = provenance(state([step("cut", "claude"), step("cut", "codex"), step("review", "claude"), step("review", "codex"), step("test", "claude-sonnet", "T1"), step("test", "claude-sonnet", "T2")]), config, "# T\n\nStatus: approved 2026-10-20\n");
+    expect(text).toBe([
+      "### Provenance",
+      "",
+      "- Cut: claude (model unknown), codex (model unknown)",
+      "- Reviews: claude (model unknown), codex (model unknown)",
+      "- Tests-first writer: claude-sonnet (sonnet)",
+      "- Approval: plan approved by the human 2026-10-20",
+      "- Rerouted or fell back: none",
+    ].join("\n"));
+  });
+
+  test("names recorded skips and escalations, and says unknown or none recorded rather than guessing", () => {
+    const run = state([step("cut", "claude"), step("pick", "claude", "T1"), { ...step("pick", "claude-opus", "T2"), escalated: true }, { ...step("pick", "claude-opus", "T3"), escalated: true }]);
+    run.reroutes = ["cut: codex skipped (codex not found on PATH)"];
+    const text = provenance(run, config, null);
+    expect(text).toContain("- Reviews: none recorded");
+    expect(text).toContain("- Approval: unknown");
+    expect(text).toContain("- Rerouted or fell back: cut: codex skipped (codex not found on PATH); pick: escalated to claude-opus");
+  });
+
+  test("an agent missing from today's route is not reported as a reroute", () => {
+    // The steps ran under an earlier --agents override; only routing records count.
+    expect(provenance(state([step("cut", "claude")]), config, null)).toContain("- Rerouted or fell back: none");
+  });
+
+  test("tells pour's self-approval apart from the human's", () => {
+    expect(provenance(state([]), config, "Status: approved 2026-10-21 (pour: 2 tasks, no fundamental questions)\n")).toContain("- Approval: plan self-approved by pour 2026-10-21");
+    expect(provenance(state([]), config, "Status: awaiting sign-off\n")).toContain("- Approval: unknown");
+  });
+
+  test("brew gets the block verbatim", () => {
+    const ctx: Ctx = { state: state([step("cut", "claude")]), config, log: () => {} };
+    expect(brewBody(ctx, "master")).toContain("### Provenance\n\n- Cut: claude (model unknown)");
   });
 });
 
@@ -211,6 +267,17 @@ describe("human", () => {
     const parts = { repoName: "r", title: "t".repeat(600), need: "n", link: "l", asks: [], replyHint: "" };
     expect(smsVersion(parts, "slug").length).toBeLessThanOrEqual(480);
     expect(buildMessage(parts)).toContain("Plan: l");
+  });
+
+  test("the sign-off message names the elephant only when the IP does", () => {
+    const parts = { repoName: "r", title: "t", need: "n", orientation: "Adds a greeting.", link: "l", asks: [], replyHint: "" };
+    expect(buildMessage({ ...parts, elephant: "the nightly export reads this table" })).toContain("Adds a greeting.\n\nElephant: the nightly export reads this table\n\nPlan: l");
+    expect(buildMessage({ ...parts, elephant: "none" })).toContain("Elephant: none");
+    expect(buildMessage(parts)).not.toContain("Elephant");
+    expect(elephant("# T\n\nOpen risks: none\nElephant: a backfill nobody planned\n")).toBe("a backfill nobody planned");
+    expect(elephant("# T\n\nElephant: none\n")).toBe("none");
+    expect(elephant("# T\n\nOpen risks: none\n")).toBeUndefined();
+    expect(elephant("# T\n\nElephant:\n")).toBeUndefined();
   });
 });
 

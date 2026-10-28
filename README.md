@@ -145,6 +145,28 @@ Every stage is both an **interactive skill** (`/brewery:<name>`, runs in your se
 commits, CI waits, limits, and every contact with you). Use the CLI for unattended work, the
 skill when you want to steer.
 
+### 0. recipe: idea → Linear project (optional)
+
+**Shapes a Linear project from the repo's context and splits it into milestones sized for
+`pour`, `distill`, or `tap`, one issue each.**
+
+<details>
+<summary>More</summary>
+
+- Reads the repository the way distill does (instructions, plans, specs, decisions,
+  learnings, board, history) and the Linear workspace (teams, initiatives, labels, sibling
+  projects). Creates a new project or improves an existing one given its URL, key, or name.
+- Same triage as distill: only fundamental questions are asked, the rest are written into
+  the project with recommendations. Nothing is written to Linear until you confirm the
+  preview.
+- A Claude Design, when there is one, maps its screens onto the milestones; a user-facing
+  project without one gets a design brief, started in Claude Design through the Artifact
+  tool when it is available.
+- Skill only: `/brewery:recipe`, `/brewery:recipe "<request>"`, or
+  `/brewery:recipe <project url>`.
+
+</details>
+
 ### 1. distill: request → plan
 
 **Writes an implementation plan (IP) and its task list, and asks only the questions that
@@ -199,6 +221,7 @@ anything that can't be built or proven.**
 - At the terminal, the CLI asks right there. Otherwise it prints the message, pings ntfy
   (no content in the ping), saves state, and exits 3. Reply from anywhere with
   `brewery answer <slug> "ok"`.
+- An `Elephant:` line names the likeliest risk nobody has raised, or `none`.
 - Only you approve. brewery owns the IP's `Status:` line and resets one an agent set.
 
 </details>
@@ -227,7 +250,8 @@ Then, once every task has landed:
 - **integrate**: one roast over the combined branch, the only step that runs e2e and browser
   suites, with repairs committed as `Fix integration of parallel tasks`.
 - **review**: Claude and Codex review the branch in parallel; blocking findings get fixed.
-- **brew**: opens the PR.
+- **brew**: opens the PR. Its body records provenance: which agents and models ran cut,
+  review, the tests-first writer, and approval.
 
 Steps that keep failing escalate to Opus (`limits.escalateAfter`). A task stuck after
 `limits.pickAttempts` becomes a gate: `retry: <hint>`, `skip`, or `stop`. Ready tasks run up to
@@ -279,7 +303,8 @@ conflict, or an unanswered review-bot comment.**
 <summary>More</summary>
 
 harvest labels `brewery:proposed` on its own, then after your answer one of `fix-now`,
-`fix-later`, `wontfix`, `needs-info`, `decide`. A label you change by hand is an answer.
+`fix-later`, `collect-signal` (actionable, but waiting for more reports), `wontfix`,
+`needs-info`, `decide`. Feature requests are triaged as problems, not as specs. A label you change by hand is an answer.
 polish skips drafts, green PRs, and PRs a live brewery run already owns. Both are meant for a
 daily timer (a scheduled agent, cron with `claude -p`, a zerg drone).
 
@@ -376,6 +401,7 @@ copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at
 
 | Skill | One line |
 | --- | --- |
+| `recipe` | Idea → Linear project with pipeline-sized milestones |
 | `distill` | Request → signed-off IP and task list |
 | `cut` | Attack an IP from the requester's side |
 | `barrel` | Approved IP → tests-first build → PR → finish |

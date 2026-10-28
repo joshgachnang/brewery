@@ -3,7 +3,7 @@ name: overview
 description: >-
   Map of brewery: what each skill and `brewery` command does, the order the pipeline runs
   them in (distill → cut → sign-off → barrel → finish), the side loops (tap, harvest,
-  polish, compound, cellar, approve, calibrate, board, rack), and which one fits the
+  polish, compound, cellar, approve, calibrate, board, rack, recipe), and which one fits the
   request in front of you. Use when asked what brewery is, how it works end to end, or
   which brewery skill or command to use; read-only, never starts a run.
 ---
@@ -27,6 +27,8 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 - **Pick** builds one task against tests a separate step wrote first; **Roast** is a fresh
   agent proving that task's acceptance criteria; **Brew** opens the PR; **Taste** fixes one
   red CI snapshot or bot thread. These stages are terreno's, vendored in `terreno-shared/`.
+- `recipe` (optional) sits above the pipeline: it shapes a Linear project whose milestones
+  each become one distill, pour, or tap request.
 - The human is asked only at sign-off and at gates (a task stuck after its attempts, review
   that will not converge, CI still red after three fix rounds).
 
@@ -34,6 +36,7 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 
 | The human wants to… | Skill | CLI |
 | --- | --- | --- |
+| Shape a bigger idea into a Linear project | `recipe` | — (skill only) |
 | Plan a feature for later | `distill` | `brewery distill "<request>"` |
 | Check a plan against what was asked | `cut` | `brewery cut <ip>` |
 | Build an approved plan to a green PR | `barrel` | `brewery barrel <slug>` |

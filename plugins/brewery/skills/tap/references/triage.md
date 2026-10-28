@@ -48,7 +48,7 @@ probes. It does not edit tracked files. It returns:
 ```text
 Issue: <ref>
 Disposition: fix | already-fixed | duplicate-of <ref> | cannot-reproduce | decide | upstream | needs-info
-Symptom: <what the reporter sees, by shape, no PHI>
+Symptom: <what the reporter sees, by shape, no PHI; for a feature request, the problem behind it>
 Reproduction: <the test or probe that shows it, and its output>
 Root cause: <file:line and one sentence>
 Fix: <the smallest change, one or two sentences>
@@ -83,9 +83,12 @@ A crash, a wrong status code, a broken flow that used to work, or a mismatch wit
 is a fix. When unsure, ask "would a reviewer who reads only the issue know what the fixed
 behavior should be?" Yes is `fix`. No is `decide`.
 
-Labels do not set the disposition. A `feature` or `enhancement` issue with a settled
-proposal is `fix`: it names the API and the behavior, and none of the choices above stay
-open. Only the open choices make it `decide`.
+Labels do not set the disposition. Never let the reporter's proposed solution define the
+fix: restate a feature request as the problem behind it ("add dark mode" may really mean
+"reduce eye strain at night"). A `feature` or `enhancement` issue is `fix` when that
+problem is clear and the fix is settled: one obvious change solves it, the API and the
+behavior are named, and none of the choices above stay open. Only the open choices make it
+`decide`.
 
 A Sentry error with a clear stack trace usually reproduces at the throwing seam: call
 that function with an input of the failing shape. Fixing only the symptom (a `try`/`catch`

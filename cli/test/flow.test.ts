@@ -389,6 +389,36 @@ describe("distill → sign-off → answer", () => {
   });
 });
 
+describe("cut's held and unchecked lines", () => {
+  test("an empty findings table with unchecked parts still goes to the fixer, and held parts do not", async () => {
+    const repo = tempRepo();
+    const { config } = fakeSetup(repo, [
+      { match: "distill (write the IP)", write: { "docs/plans/g.md": IP("draft") }, result: { status: "PASS", action: "x", ip: "docs/plans/g.md" } },
+      { match: "cut", agent: "alpha", result: { status: "PASS", action: "attacked", findings: [], wellReasoned: ["T1 matches the request: 'add a greeting'"], couldNotAssess: ["Whether the deploy host has write access: no access"] } },
+      { match: "cut", agent: "beta", result: { status: "PASS", action: "attacked", findings: [] } },
+      { match: "distill step 10", result: { status: "PASS", action: "recorded", structural: false } },
+    ]);
+    const state = newState({ slug: "g", repo, ip: join(repo, "docs/plans/g.md"), base: "master", phase: "distill" });
+    const ctx = quietCtx(state, config);
+    await distill(ctx, "Add a greeting");
+    expect(ctx.lines.join("\n")).toContain("cut: 0 findings (0 blocking), 1 well-reasoned, 1 couldn't assess from alpha, beta");
+    const [fixPrompt] = stepPrompts(repo, "g", /distill-alpha/).filter((p) => p.includes("## Step: distill step 10"));
+    expect(fixPrompt).toContain("[alpha] Whether the deploy host has write access: no access");
+    expect(fixPrompt).not.toContain("add a greeting'");
+  });
+
+  test("a clean cut with nothing unchecked skips the fixer", async () => {
+    const repo = tempRepo();
+    const { config } = fakeSetup(repo, [
+      { match: "distill (write the IP)", write: { "docs/plans/g.md": IP("draft") }, result: { status: "PASS", action: "x", ip: "docs/plans/g.md" } },
+      { match: "cut", result: { status: "PASS", action: "attacked", findings: [], wellReasoned: ["T1 holds"] } },
+    ]);
+    const state = newState({ slug: "g", repo, ip: join(repo, "docs/plans/g.md"), base: "master", phase: "distill" });
+    await distill(quietCtx(state, config), "Add a greeting");
+    expect(stepPrompts(repo, "g", /distill-alpha/).some((p) => p.includes("## Step: distill step 10"))).toBe(false);
+  });
+});
+
 describe("cut cleanup failures", () => {
   for (const failure of ["exit", "spawn"] as const) {
     for (const successful of [false, true]) {
@@ -412,7 +442,7 @@ describe("cut cleanup failures", () => {
           return spawn(argv, options as Parameters<typeof spawn>[1]);
         }) as typeof Bun.spawn);
         try {
-          if (successful) expect(await runCut(ctx)).toEqual([{ ...finding, agent: "alpha" }]);
+          if (successful) expect(await runCut(ctx)).toEqual({ findings: [{ ...finding, agent: "alpha" }], wellReasoned: [], couldNotAssess: [] });
           else await expect(runCut(ctx)).rejects.toThrow("brewery: no available agent for cut");
           expect(ctx.lines.some((line) => line.includes("cleanup") && line.includes(tree!))).toBe(true);
           expect(ctx.lines.join("\n")).toContain(failure === "spawn" ? "cleanup spawn unavailable" : "not a working tree");
@@ -1283,6 +1313,13 @@ describe("barrel test-first", () => {
 
     expect(ctx.state.history.filter((h) => h.stage === "test").map((h) => h.agent)).toEqual(["alpha", "alpha"]);
     expect(ctx.lines.some((line) => line.includes("no escalation agent available for test"))).toBe(true);
+    expect(ctx.state.reroutes).toEqual([
+      expect.stringMatching(/^test: missing skipped \(/),
+      "test: escalation to missing unavailable, fell back to its normal route",
+    ]);
+    const [brew] = stepPrompts(ctx.state.repo, ctx.state.slug, /-brew-/);
+    expect(brew).toContain("- Tests-first writer: alpha (model unknown)");
+    expect(brew).toContain("- Rerouted or fell back: test: missing skipped (");
   });
 
   test("runs the repo's terreno-test-hygiene on the new tests and rejects violations", async () => {

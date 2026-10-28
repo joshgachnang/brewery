@@ -37,6 +37,9 @@ export interface StepResult {
   fail?: { need: string; want: string; got: string; ev: string }[];
   block?: { kind: "human" | "environment" | "access" | "external"; why: string; ev?: string }[];
   findings?: Finding[];
+  // cut: what held up under attack, and what the attacker could not check
+  wellReasoned?: string[];
+  couldNotAssess?: string[];
   structural?: boolean;
   // compound: the repo-relative learning written or updated, or null when skipped
   learning?: string | null;

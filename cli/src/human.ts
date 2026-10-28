@@ -29,6 +29,8 @@ export interface MessageParts {
   title: string;
   need: string;
   orientation?: string;
+  // Omitted when the IP has no Elephant line; "none" only when the planner wrote it.
+  elephant?: string;
   link: string;
   asks: Ask[];
   replyHint: string;
@@ -37,6 +39,7 @@ export interface MessageParts {
 export const buildMessage = (m: MessageParts): string => {
   const lines = [`[${m.repoName}] ${m.title}: ${m.need}`, ""];
   if (m.orientation) lines.push(m.orientation, "");
+  if (m.elephant) lines.push(`Elephant: ${m.elephant}`, "");
   lines.push(`Plan: ${m.link}`, "");
   if (m.asks.length) lines.push("Needs an answer:", formatAsks(m.asks.slice(0, 5)), "");
   lines.push(m.replyHint);

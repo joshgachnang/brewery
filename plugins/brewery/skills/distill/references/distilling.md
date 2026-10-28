@@ -105,7 +105,13 @@ Regression: <provisional case IDs and destination suite; or "None — reason">
 User guide: <guide pages added, updated, or retired; or "None — reason">
 Out of scope: <tags; see Expansions>
 Open risks: <none, or one line each>
+Elephant: <the likeliest risk nobody has raised, in one line; or "none">
 ```
+
+`Open risks` are the ones the plan already names. `Elephant` is the one nobody has said
+out loud: a migration, a cost, a dependency on a person, an assumption everyone is making.
+Write `none` only when there honestly is none. Never invent one to fill the line. The
+sign-off message carries it, so it must make sense without the IP.
 
 ## Testing sections (after the brief)
 

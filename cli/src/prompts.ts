@@ -1,9 +1,10 @@
 // Prompts for each step. Skills hold the method; these say which slice of it this
 // process runs and where brewery takes over.
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Ask, Finding } from "./agents.ts";
 import { activeRules, RULES_PATH } from "./docs.ts";
+import { provenance } from "./provenance.ts";
 import type { Ctx } from "./step.ts";
 import { refreshNotes, type TaskState } from "./state.ts";
 import type { ApproveContext, PlanRef } from "./approve/context.ts";
@@ -107,7 +108,7 @@ The request, verbatim:
 ${request}
 </request>`;
 
-export const fixBody = (ctx: Ctx, findings: Finding[]): string => `## Step: distill step 10 (fix the cut findings)
+export const fixBody = (ctx: Ctx, findings: Finding[], couldNotAssess: string[] = []): string => `## Step: distill step 10 (fix the cut findings)
 
 Read ${skill(ctx, "distill/SKILL.md")} step 10 and ${skill(ctx, "distill/references/distilling.md")}.
 The IP is ${ctx.state.ip}. A fresh attacker that saw only the human's words produced these
@@ -124,7 +125,12 @@ questions, at most 5, fundamental first, each fundamental one with "fundamental"
 Findings:
 \`\`\`json
 ${JSON.stringify(findings, null, 2)}
-\`\`\``;
+\`\`\`${couldNotAssess.length ? `
+
+The attacker could not assess these. Each is unchecked, not passed: check it yourself, or
+record it in Assumptions or Open questions.
+
+${couldNotAssess.map((c) => `- ${c}`).join("\n")}` : ""}`;
 
 export const applyReplyBody = (ctx: Ctx, asks: Ask[], reply: string, verdict: string): string => `## Step: distill step 12 (apply the human's reply)
 
@@ -163,7 +169,9 @@ registry, index, or barrel the task must edit.
 Result: status PASS, and \`findings\`: at most 12, most severe first, each
 {"id": "C1", "severity": "blocking" | "should-fix" | "nit", "axis": "", "where": "",
 "attack": "", "evidence": "", "fix": ""}. A finding without evidence is dropped. An empty
-list is a valid answer.
+list is a valid answer. Also \`wellReasoned\`: one line each for a part you attacked that held
+up, with its evidence. And \`couldNotAssess\`: one line each for a part you could not check,
+and why (no access, no transcript, an external system). Either may be empty; do not pad them.
 
 What the human said, verbatim:
 
@@ -346,6 +354,11 @@ ${ctx.state.branch} against ${base}. Overrides:
 - Skip step 4 (independent review). brewery already ran a multi-agent branch review.
 - Every task is already committed and Roast-verified. Do not rewrite those commits.
 - Skip step 12. brewery runs finish.
+- Use this as the Provenance section in step 8, verbatim. brewery built it from the run's
+  history. Do not add or guess agents or models.
+
+${provenance(ctx.state, ctx.config, ctx.state.ip && existsSync(ctx.state.ip) ? readFileSync(ctx.state.ip, "utf8") : null)}
+
 Result keys: \`pr\` (the PR number) and \`sha\` (the pushed head).`;
 
 export const tasteBody = (ctx: Ctx, pr: number, snap: PrSnapshot): string => `## Step: taste (one reaction on PR #${pr})
@@ -475,7 +488,9 @@ export const rubricBody = (input: { rubric: string; context: ApproveContext; cla
     : "- none";
   const verification = context.body.verification.length
     ? context.body.verification.map((r) => `- ${r.status}: ${r.scope} — ${r.evidence}`).join("\n")
-    : "- no verification table";
+    : context.body.verificationText
+      ? `- no row carries a status mark (✅, 🧭, ⚠️); the section as written:\n\n${context.body.verificationText}`
+      : "- no verification section";
   const judgeText = judge
     ? judge.status === "no_plan"
       ? "No implementation plan is referenced. Score ipMatch against the body's Why and What changed."
@@ -514,7 +529,7 @@ ${context.body.why || "(empty)"}
 
 ${context.body.whatChanged || "(empty)"}
 
-#### Claims: Verification rows
+#### Claims: Verification rows (parsed from the body's table and listed one per line here)
 
 ${verification}
 
