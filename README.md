@@ -183,9 +183,10 @@ change what gets built.**
 - Questions are triaged: only *fundamental* ones (the answer changes the feature) are asked
   up front. Every other question is answered with a recommendation in a table at the bottom
   of the IP, and expansions are parked for later.
-- Every IP carries three required sections, each rows or `None — <reason>`: `## E2E tests`
-  and `## Regression cases` (the testing plan; regression is usually `None`) and
-  `## User guide` (the end-user page each feature adds or changes). A repo with no in-app
+- Every IP carries four required sections, each rows or `None — <reason>`: `## E2E tests`
+  and `## Regression cases` (the testing plan; regression is usually `None`),
+  `## User guide` (the end-user page each feature adds or changes), and `## Design` (the
+  canvas artboards and states each task builds). A repo with no in-app
   users opts out with `| User guide | none |` under `## User guide conventions`.
 - With a Claude Design, distill and the canvas trade at checkpoints: it puts open
   questions on the canvas as stickies or A/B artboards, your pick or edit is the answer,
@@ -212,6 +213,8 @@ anything that can't be built or proven.**
 - The CLI fans it out to Claude and Codex; distill fixes the blocking findings, up to two
   rounds.
 - Missing testing-plan or user-guide sections, or a `None` with no reason, are blocking.
+  A missing `## Design` section, a UI task with no `Design:` line, or a canvas that
+  contradicts the plan is `should-fix`.
 - Standalone: `brewery cut <ip>` or `/brewery:cut` on any plan.
 
 </details>

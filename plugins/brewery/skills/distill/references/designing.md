@@ -97,16 +97,24 @@ come from the request`. An IP approved before this contract reads a missing sect
 Rules:
 
 - Every artboard a UI task builds has a row naming its tasks, and that task's details
-  block carries `Design: <artboards>`. Its states become Cases and e2e rows.
+  block carries `Design:` with each artboard and the states that task delivers:
+  `Design: Booking.dc.html (empty, loading)`. Those states, and only those, become its
+  Cases and e2e rows; an artboard shared by several tasks splits its states among them.
+- Where a task's criteria or a Decision differ from the snapshot (a Decision that keeps
+  the old copy, a state deliberately left out), the IP wins, and the task says so in its
+  criteria so Roast does not hold it to the artboard.
 - An artboard no task delivers is an Expansion. A UI task no artboard covers says so in
   its criteria.
 - Answered option artboards and `Draft —` artboards the human rejected get no row.
 
 ## The snapshot
 
-At sign-off, distill writes `project/canvas.json` and every artboard the `## Design`
-table lists to `docs/specs/<slug>/design/`, with the same filenames, exactly as read,
-beside the IP and committed with it. Approval covers the IP and the snapshot together, and
+At sign-off, distill writes `project/canvas.json`, every artboard the `## Design` table
+lists, and every `.dc.html` those artboards `<dc-import>`, to `docs/specs/<slug>/design/`
+with the same filenames, exactly as read, and puts that path on the section's
+`Snapshot:` line. Pick and Roast read the path from that line, never from the run's slug.
+Commit the snapshot with the IP before `barrel` runs: barrel's worktrees are cut from the
+branch head and never see an uncommitted snapshot. Approval covers the IP and the snapshot together, and
 git is the version: Pick and Roast build against the snapshot and never read the live
 canvas. Image and font urls (`/_blob/...`) stay as they are.
 

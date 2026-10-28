@@ -130,7 +130,8 @@ interactive, single-session run.
     A canvas that changed since the snapshot is a reply too: apply each change per
     [`designing`](references/designing.md#applying-canvas-changes), rewrite the snapshot,
     and list what each change became. A reply that rejects the plan returns to step 5
-    with the reason. When the human has approved, set `Status: approved <date>`, update execution state, and emit `PASS`
+    with the reason. When the human has approved, commit the snapshot with the IP, set
+    `Status: approved <date>`, update execution state, and emit `PASS`
     with `next: pick`. The next step is `barrel`.
 
 Do not set `approved` without an explicit approval from the human. Remaining Open
