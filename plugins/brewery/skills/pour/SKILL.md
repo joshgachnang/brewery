@@ -38,7 +38,8 @@ tool is available. Use this skill directly for an interactive, single-session ru
 4. **Build.** Follow the [`barrel`](../barrel/SKILL.md) skill from Drive step 1: every task
    tests-first ([`test`](../barrel/stages/test.md) through the `brewery:test-writer`
    subagent, red confirmed), then Pick, then Roast in a fresh subagent; the integrated
-   Roast; Brew; then `finish` until the PR is conflict-free with green CI.
+   Roast; the [`approval-ready`](../barrel/references/approval-ready.md) check; Brew; then
+   `finish` until the PR is conflict-free with green CI.
 5. **Report** as barrel does, and say that pour approved the plan itself, with the
    recommendations it assumed.
 

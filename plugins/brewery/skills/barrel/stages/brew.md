@@ -74,8 +74,11 @@ must follow the [`GitHub attention contract`](../../terreno-shared/github-attent
      slug. A missing page or index mismatch is `FAIL` with `next: pick` that names the
      row ID. An IP that lacks the section follows the user-guide legacy rule.
 
-   Then execute repository-required pre-submit checks, so suite checks see the merged
-   rows. When the root
+   Then check the branch and the PR body you will write against
+   [`approval-ready`](../references/approval-ready.md), the approval agent's plan-match,
+   architecture, tests, and evidence bars: a code gap is `FAIL` with `next: pick`, a body
+   gap is fixed in step 8. Then execute repository-required pre-submit checks, so suite
+   checks see the merged rows. When the root
    `package.json` defines a `prepush` script, run it in a fresh subagent with no parent
    conversation before the first push. A red local gate is `FAIL`; do not push it. Confirm docs
    follow the documentation contract, generated files are current, changelog/release

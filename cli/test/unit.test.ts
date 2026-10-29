@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { agentArgv } from "../src/agents.ts";
 import { DEFAULT_CONFIG, loadConfig, parseAgentsFlag } from "../src/config.ts";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +9,7 @@ import { buildMessage, formatAsks, parseReply, smsVersion } from "../src/human.t
 import { appendEvent } from "../src/events.ts";
 import { elephant, isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
 import { newState, runDir, slugify } from "../src/state.ts";
-import { brewBody, cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
+import { brewBody, cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
 import type { Ctx } from "../src/step.ts";
 import { mergeVerdicts } from "../src/step.ts";
 import { isGreen } from "../src/commands/finish.ts";
@@ -124,6 +125,34 @@ describe("build prompts", () => {
       expect(body()).toContain("Do not run e2e, Playwright, or other browser suites");
     });
   }
+
+  test("branch review judges by the repo's approval rubric, or brewery's default", () => {
+    const repo = mkdtempSync(join(tmpdir(), "brewery-rubric-"));
+    const withRepo = (r: string): Ctx => ({ ...ctx, state: { ...ctx.state, repo: r } });
+    const fallback = reviewBody(withRepo(repo), "master");
+    expect(fallback).toContain("from\nbrewery's default rubric");
+    expect(fallback).toContain("## Blocking findings");
+    expect(fallback).toContain("barrel/references/approval-ready.md");
+    const run = (...args: string[]): void => {
+      expect(spawnSync("git", args, { cwd: repo }).status).toBe(0);
+    };
+    run("init", "-q", "-b", "master");
+    mkdirSync(join(repo, "docs"));
+    writeFileSync(join(repo, "docs/approval-rubric.md"), "# Repo rubric\n\n- never call fetch directly\n");
+    run("add", ".");
+    run("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "rubric");
+    // The branch's own edit does not count; the base decides.
+    writeFileSync(join(repo, "docs/approval-rubric.md"), "# Relaxed\n");
+    const own = reviewBody(withRepo(repo), "master");
+    expect(own).toContain("from\ndocs/approval-rubric.md at master");
+    expect(own).toContain("- never call fetch directly");
+    expect(own).not.toContain("# Relaxed");
+    expect(own).not.toContain("## Blocking findings");
+  });
+
+  test("brew checks the body against the approval agent's evidence bar", () => {
+    expect(brewBody(ctx, "master")).toContain("barrel/references/approval-ready.md");
+  });
 
   test("only the integrated roast runs e2e", () => {
     const prompt = integratedRoastBody(ctx);

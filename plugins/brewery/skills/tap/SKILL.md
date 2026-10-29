@@ -23,8 +23,9 @@ Read [`triage`](references/triage.md), the
 [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
 [`push ownership`](../terreno-shared/push-ownership.md),
 [`pick-roast loop`](../terreno-shared/pick-roast-loop.md),
-[`subagent briefing`](../terreno-shared/subagent-briefing.md), and
-[`reaching the human`](../terreno-shared/reaching-the-human.md). Execution state conforms
+[`subagent briefing`](../terreno-shared/subagent-briefing.md),
+[`reaching the human`](../terreno-shared/reaching-the-human.md), and
+[`approval-ready`](../barrel/references/approval-ready.md). Execution state conforms
 to [`execution-state.schema.json`](../terreno-shared/execution-state.schema.json) and
 keeps a `ledger`.
 
@@ -87,10 +88,19 @@ No input → stop and ask for one. Never default to "all open issues".
    - Everything else follows `pick.md` and barrel's retry rules: Roast `FAIL` → retry
      with the evidence; two failures with no new hypothesis → the issue becomes `stuck`
      and is dropped like a gated task.
-6. **Submit.** Follow `brew.md` once per area. Title `[#12 #15] <what is fixed>`, using
-   each tracker's reference form. The `Why` section lists each fixed issue with its
+   - Each task meets the repository's approval rubric per
+     [`approval-ready`](../barrel/references/approval-ready.md): Pick checks the patch
+     against its Architecture rules and fixes nothing beyond the issue, and Roast holds the
+     tests to its Tests bar.
+6. **Submit.** Before each push, check the area's branch per
+   [`approval-ready`](../barrel/references/approval-ready.md): the fix IP is under the
+   plans directory and every task is delivered with nothing unrequested, the rubric's
+   architecture and tests rules hold, and the body carries the evidence the approval
+   agent credits. A code gap goes back to Build. Then follow `brew.md` once per area.
+   Title `[#12 #15] <what is fixed>`, using each tracker's reference form. The `Why` section lists each fixed issue with its
    closing keyword per [`triage`](references/triage.md#closing-issues), and one line on
-   what each issue reported. Issues the run did not fix are not mentioned in the PR.
+   what each issue reported, and ends with the fix IP's path in backticks and the task ids.
+   Issues the run did not fix are not mentioned in the PR.
    To fold fixup commits, rebase onto the merge base, not the base branch:
    `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash "$(git merge-base HEAD origin/<base>)"`.
    `git rebase --autosquash origin/<base>` also moves the branch onto the latest base,
@@ -141,6 +151,7 @@ not gates, while a concrete safe action remains.
 - close, label, assign, or comment on issues: the PR's closing keywords close fixed issues
   on merge, and everything else goes in the report
 - merge the PR or push during Build (Brew pushes; `finish` pushes after that)
+- push a branch you have not checked against [`approval-ready`](../barrel/references/approval-ready.md)
 - end a run with the PR red, unwatched, or carrying an unanswered bot comment without
   escalating it
 - commit execution state, add AI attribution, or use conventional-commit prefixes

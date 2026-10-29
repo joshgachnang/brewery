@@ -25,13 +25,14 @@ use terreno's), and `loop-engineering.md` (terreno-internal explanation no brewe
 | `subagent-briefing.md` | `references/` | per-task Roast spawns no UI/runtime verifier; the integrated Roast spawns at most one |
 | `mocking.md` | `skills/2-pick/references/` | none |
 | `testing.md` | `skills/2-pick/references/testing.md` | tests first per task (replaces the "all imagined tests" red flag), blast radius, test tiers; the Terreno testing-skills line from TerrenoLabs/terreno#1614 (open); "Planned e2e specs" links `testing-plan.md` in this directory |
-| `../barrel/stages/pick.md` | `skills/2-pick/SKILL.md` | frontmatter dropped, links, Roast is followed from `roast.md`, steps 5–7 write all of the task's tests first through `test.md` |
-| `../barrel/stages/roast.md` | `skills/3-roast/SKILL.md` | frontmatter dropped, links, step 3 checks the tests against the task's test brief and returns `retest`; per-task Roast runs `http`/`process` e2e rows and defers `browser`/`native flow` rows to the integrated Roast |
-| `../barrel/stages/brew.md` | `skills/4-brew/SKILL.md` | frontmatter dropped, links, hand-off goes to `finish` |
+| `../barrel/stages/pick.md` | `skills/2-pick/SKILL.md` | frontmatter dropped, links, Roast is followed from `roast.md`, steps 5–7 write all of the task's tests first through `test.md`, step 10 checks the patch against `approval-ready.md` |
+| `../barrel/stages/roast.md` | `skills/3-roast/SKILL.md` | frontmatter dropped, links, step 3 checks the tests against the task's test brief and returns `retest`; per-task Roast runs `http`/`process` e2e rows and defers `browser`/`native flow` rows to the integrated Roast; step 3 holds the tests to `approval-ready.md`'s Tests bar |
+| `../barrel/stages/brew.md` | `skills/4-brew/SKILL.md` | frontmatter dropped, links, hand-off goes to `finish`, step 3 checks the branch and body against `approval-ready.md` before the push |
 | `../finish/taste.md` | `skills/5-taste/SKILL.md` | frontmatter dropped, links, `finish` owns the repeat loop |
 | `../distill/references/distilling.md` | `skills/1-grow/references/grilling.md` | rewritten: triage instead of full grilling |
 
-Only `reaching-the-human.md` is original to this directory. `../barrel/stages/test.md` and
+Only `reaching-the-human.md` is original to this directory. `../barrel/stages/test.md`,
+`../barrel/references/approval-ready.md`, and
 `../../../agents/` (`test-writer`, `test-runner`) are original to brewery.
 
 Upstream terreno Pick does red-green one test at a time and forbids batching the tests

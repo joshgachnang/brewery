@@ -129,13 +129,22 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF],
   },
   "barrel/stages/pick.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "skip a guide row silently", "opts out of the user guide"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "skip a guide row silently", "opts out of the user guide", "../references/approval-ready.md"],
   },
   "barrel/stages/roast.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide-entry bar", "shipped screens", "../references/approval-ready.md"],
   },
   "barrel/stages/brew.md": {
-    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out", "`Provenance` section", "write `unknown` for the rest"],
+    phrases: ["../../terreno-shared/user-guide.md", "## User guide", "guide index", "Unless the repository opts out", "`Provenance` section", "write `unknown` for the rest", "../references/approval-ready.md"],
+  },
+  "barrel/SKILL.md": {
+    phrases: ["references/approval-ready.md", "push a branch you have not checked against"],
+  },
+  "barrel/references/approval-ready.md": {
+    phrases: ["git show origin/<base>:<path>", "Always have a plan", "Nothing unrequested", "Blocking findings", "first cell of every row", "names the blocked behavior and the exact steps", "approve.maxLines"],
+  },
+  "tap/SKILL.md": {
+    phrases: ["../barrel/references/approval-ready.md", "push a branch you have not checked against", "fix IP's path in backticks and the task ids"],
   },
   "finish/taste.md": {
     phrases: ["../terreno-shared/user-guide.md", "## User guide", "user guide pages", "guide-entry bar"],

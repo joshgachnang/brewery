@@ -17,8 +17,9 @@ how each step is done:
 Read [`lifecycle contract`](../terreno-shared/lifecycle-contract.md),
 [`push ownership`](../terreno-shared/push-ownership.md),
 [`pick-roast loop`](../terreno-shared/pick-roast-loop.md),
-[`subagent briefing`](../terreno-shared/subagent-briefing.md), and
-[`reaching the human`](../terreno-shared/reaching-the-human.md). Execution state conforms
+[`subagent briefing`](../terreno-shared/subagent-briefing.md),
+[`reaching the human`](../terreno-shared/reaching-the-human.md), and
+[`approval-ready`](references/approval-ready.md). Execution state conforms
 to [`execution-state.schema.json`](../terreno-shared/execution-state.schema.json) and
 keeps a `ledger`.
 
@@ -70,9 +71,13 @@ interactive, single-session run.
    - Context getting long → finish the current task's commit, then start Pick fresh
      from state. State is durable, so nothing is lost.
    - Inner-loop `PASS` with every task Roast-passed → Submit.
-3. **Submit.** Follow `stages/brew.md`. On `FAIL`, route by its `next`: `pick` (back to
-   Build with the evidence), `roast` (reprove the named task), or `brew` (submission-only
-   retry). On `PASS` or `PENDING` with `next: taste` → Finish.
+3. **Submit.** Before the push, check the whole branch per
+   [`approval-ready`](references/approval-ready.md): the plan delivered with nothing
+   unrequested, the repository's approval rubric's architecture rules, the tests bar, and
+   the evidence the approval agent credits. A code gap goes back to Build with the
+   evidence; a body gap is fixed in Brew. Then follow `stages/brew.md`. On `FAIL`, route
+   by its `next`: `pick` (back to Build with the evidence), `roast` (reprove the named
+   task), or `brew` (submission-only retry). On `PASS` or `PENDING` with `next: taste` → Finish.
 4. **Finish.** Invoke the `finish` skill with the PR number and the state path. It loops
    Taste until the PR is conflict-free with passing CI on every host and every
    review-bot comment answered, or it escalates after three fix rounds. Barrel never
@@ -113,6 +118,7 @@ remediation or a bounded retry first. Report them as non-human blocks, not quest
 
 - merge the PR, approve your own plan, or build Expansions
 - push during Build (Brew pushes; `finish` pushes after that)
+- push a branch you have not checked against [`approval-ready`](references/approval-ready.md)
 - end a run with the PR red, unwatched, or carrying an unanswered bot comment without
   escalating it
 - commit execution state, add AI attribution, or use conventional-commit prefixes
