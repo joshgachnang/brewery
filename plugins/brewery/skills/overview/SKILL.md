@@ -23,7 +23,7 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 
 - **IP** (implementation plan): `docs/plans/YYYY-MM-DD-<slug>.md`, a brief, decisions,
   tasks with `Depends on:` and a test brief each, plus `## E2E tests`, `## Regression
-  cases`, and `## User guide` sections.
+  cases`, `## User guide`, and `## Design` sections.
 - **Pick** builds one task against tests a separate step wrote first; **Roast** is a fresh
   agent proving that task's acceptance criteria; **Brew** opens the PR; **Taste** fixes one
   red CI snapshot or bot thread. Before the push, barrel, tap, and pour check the branch
@@ -31,6 +31,10 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
   `barrel/references/approval-ready.md`, so the PR reaches `brewery approve` already passing. These stages are terreno's, vendored in `terreno-shared/`.
 - `recipe` (optional) sits above the pipeline: it shapes a Linear project whose milestones
   each become one distill, pour, or tap request.
+- With a Claude Design, recipe and distill add questions and drafts to the canvas at
+  checkpoints and turn the human's canvas edits into plan changes; distill snapshots the
+  artboards at sign-off (`docs/specs/<slug>/design/`) and barrel builds against the
+  snapshot. See `distill/references/designing.md`.
 - The human is asked only at sign-off and at gates (a task stuck after its attempts, review
   that will not converge, CI still red after three fix rounds).
 

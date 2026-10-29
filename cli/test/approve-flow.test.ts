@@ -81,12 +81,13 @@ describe("brewery approve", () => {
     expect(out.verdict?.approve).toBe(true);
     expect(out.posted).toBe(true);
     expect(poster.calls).toEqual([{ kind: "post", event: "APPROVE", body: out.body }]);
-    expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n**Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
-    expect(out.body).toContain("#### Plan match 3/3\n\nT1 delivered; nothing beyond the plan.\n");
+    expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n✅ 🟢 **Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
+    expect(out.body).toContain("**🎯 Plan match 3/3** — T1 delivered; nothing beyond the plan.\n");
     expect(out.body).not.toContain("| Dimension |");
-    expect(out.body).toContain("#### Tests 2/3\n\nno test needed.\n");
+    expect(out.body).toContain("| 🟢 3/3 | 🟢 3/3 | 🟡 2/3 | 🟢 3/3 |");
+    expect(out.body).toContain("**🧪 Tests 2/3** — no test needed.\n");
     expect(out.body).toContain("Plan: aligned — T1 delivered.");
-    expect(out.body).toContain("Checks: pass (1) · Bot threads: 0 unresolved · Human changes requested: no · Size: ok");
+    expect(out.body).toContain("🚦 Checks: pass (1) · 🤖 Bot threads: 0 unresolved · 🙋 Human changes requested: no · 📏 Size: ok");
     expect(out.body).toContain("Floor: none · Ceiling: low · Categories: docs");
     expect(out.body).toContain("Policy: `.brewery.json` at `master@base123`, rubric brewery default, agents alpha");
     expect(markerSha(out.body)).toBe("abcdef1234567");
@@ -104,7 +105,7 @@ describe("brewery approve", () => {
     expect(out.verdict?.level).toBe("high");
     expect(out.verdict?.approve).toBe(false);
     expect(poster.calls[0].event).toBe("COMMENT");
-    expect(out.body).toContain("**Risk: high — not approved.** risk high is above the configured approval levels (low)");
+    expect(out.body).toContain("✋ 🔴 **Risk: high — not approved.** risk high is above the configured approval levels (low)");
     expect(out.body).toContain("Floor: high · Ceiling: none · Categories: auth · Model said low");
     expect(checkRun(out.verdict!).conclusion).toBe("neutral");
   });
@@ -116,7 +117,7 @@ describe("brewery approve", () => {
     ]);
     const out = await approve(ctx, deps(view(), docs, recorder()), 12, { dryRun: false });
     expect(out.verdict?.approve).toBe(false);
-    expect(out.body).toContain("- **blocking** `docs/approve.md:4` — pastes a live token · ghp_abc");
+    expect(out.body).toContain("- 🛑 **blocking** `docs/approve.md:4` — pastes a live token · ghp_abc");
     expect(checkRun(out.verdict!).conclusion).toBe("failure");
   });
 
@@ -139,7 +140,7 @@ describe("brewery approve", () => {
     const out = await approve(ctx, deps(view({ isDraft: true }), docs, poster), 12, { dryRun: false });
     expect(out.skipped).toBe("draft pull request");
     expect(out.verdict).toBeNull();
-    expect(out.body).toBe("<!-- terreno-approve:abcdef1234567 -->\n**Skipped.** draft pull request\n");
+    expect(out.body).toBe("<!-- terreno-approve:abcdef1234567 -->\n⏭️ **Skipped.** draft pull request\n");
     expect(poster.calls).toEqual([{ kind: "skip", reason: "draft pull request", body: out.body }]);
     expect(existsSync(join(runDir(ctx.dir, "approve-16"), "steps"))).toBe(false);
   });
@@ -207,9 +208,12 @@ describe("renderBody", () => {
       },
       ctx,
     );
-    expect(body).toContain("**Risk: medium — not approved.** risk medium is above the configured approval levels (low)\n\nAlso: 2 unresolved bot review threads.\n");
-    expect(body).toContain("#### Architecture 2/3\n\n—\n");
-    expect(body).toContain("Plan: none referenced.");
+    expect(body).toContain("✋ 🟡 **Risk: medium — not approved.** risk medium is above the configured approval levels (low)\n\n➕ Also: 2 unresolved bot review threads.\n");
+    expect(body).toContain("| 🟡 2/3 | 🟡 2/3 | 🔴 1/3 | 🟡 2/3 |");
+    expect(body).toContain("<details><summary>📝 Why these scores</summary>\n\n**🎯 Plan match 2/3** — a.");
+    expect(body).toContain("**🏗️ Architecture 2/3** — —\n");
+    expect(body).not.toContain("Findings (");
+    expect(body).toContain("🗺️ Plan: none referenced.");
     expect(body).toContain("rubric `docs/r.md`, agents claude, failed: codex (no structured output)");
   });
 });
