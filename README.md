@@ -260,9 +260,14 @@ Then, once every task has landed:
 
 - **integrate**: one roast over the combined branch, the only step that runs e2e and browser
   suites, with repairs committed as `Fix integration of parallel tasks`.
-- **review**: Claude and Codex review the branch in parallel; blocking findings get fixed.
-- **brew**: opens the PR. Its body records provenance: which agents and models ran cut,
-  review, the tests-first writer, and approval.
+- **review**: Claude and Codex review the branch in parallel, against the IP and the
+  repo's [approval rubric](docs/approve.md#the-rubric-file): missing or unrequested work, a
+  broken architecture or tests rule, or a rubric blocking finding is blocking, and gets fixed
+  before the push.
+- **brew**: checks the body against the evidence the approval agent credits (plan path and
+  task ids, marked Verification rows with outcomes, reviewer steps on every ⚠️ row), then
+  opens the PR. Its body records provenance: which agents and models ran cut, review, the
+  tests-first writer, and approval.
 
 Steps that keep failing escalate to Opus (`limits.escalateAfter`). A task stuck after
 `limits.pickAttempts` becomes a gate: `retry: <hint>`, `skip`, or `stop`. Ready tasks run up to
@@ -296,8 +301,8 @@ conflict, or an unanswered review-bot comment.**
   stops at sign-off like distill. `brewery pour "<request>"`.
 - **tap**: **barrel for bugs.** Give it issue numbers, tracker IDs, or a query ("the
   better-auth issues from the last day"); it groups them by root cause, writes a short
-  pre-approved fix IP, and builds one PR per area. Issues that need a product decision are
-  reported instead of built. `/brewery:tap`.
+  pre-approved fix IP, and builds one PR per area, checked against the approval rubric like
+  barrel. Issues that need a product decision are reported instead of built. `/brewery:tap`.
 
 ---
 

@@ -1,5 +1,6 @@
 // Prompts for each step. Skills hold the method; these say which slice of it this
 // process runs and where brewery takes over.
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Ask, Finding } from "./agents.ts";
@@ -11,8 +12,20 @@ import type { ApproveContext, PlanRef } from "./approve/context.ts";
 import type { Classification } from "./approve/policy.ts";
 import type { JudgeReport } from "./approve/schemas.ts";
 import type { PrSnapshot } from "./vcs.ts";
+import DEFAULT_RUBRIC from "../templates/approval-rubric.md" with { type: "text" };
 
 const skill = (ctx: Ctx, path: string): string => join(ctx.config.skillsDir, path);
+
+// The rubric the approval agent will judge this PR by. Like the agent, read it from the
+// base, so neither the branch nor a stale fork point decides it.
+const approvalRubric = (ctx: Ctx, base: string): { source: string; text: string } => {
+  const path = ctx.config.approve.rubric;
+  for (const ref of [`origin/${base}`, base]) {
+    const show = spawnSync("git", ["show", `${ref}:${path}`], { cwd: ctx.state.repo, encoding: "utf8" });
+    if (show.status === 0) return { source: `${path} at ${ref}`, text: show.stdout };
+  }
+  return { source: "brewery's default rubric", text: DEFAULT_RUBRIC };
+};
 
 // Per-task steps prove a slice with the fast tiers. Browser suites run once, on the
 // integrated branch, where cross-task behavior is visible anyway.
@@ -312,17 +325,40 @@ Evidence:
 ${evidence}
 \`\`\``;
 
-export const reviewBody = (ctx: Ctx, base: string): string => `## Step: branch review
+export const reviewBody = (ctx: Ctx, base: string): string => {
+  const rubric = approvalRubric(ctx, base);
+  return `## Step: branch review
 
 Review the whole branch against the IP at ${ctx.state.ip}, following
 ${skill(ctx, "terreno-shared/independent-review.md")}. The change is \`git diff ${base}...HEAD\`.
 Look for correctness bugs, spec drift, missing tests or docs, security and PHI exposure.
 Read only. Do not edit files, run formatters, or commit.
 
+After the push, the PR approval agent judges this branch with the rubric below (from
+${rubric.source}). Check the branch against it now, per
+${skill(ctx, "barrel/references/approval-ready.md")}:
+- Plan match: every task's behavior and acceptance criteria are in the diff, and nothing
+  beyond the IP was built. Refactors or features no task names are drift. Tests, docs,
+  changelog fragments, and regenerated output for the IP's tasks are not.
+- Architecture: every rule in the rubric's Architecture, Security, Dependencies, and
+  Changelog sections holds.
+- Tests: new logic has a test that would fail without it; no test deleted, skipped, or
+  weakened; the coverage gate the rubric names passes.
+- Evidence: each acceptance criterion's named verification exists.
+Anything the rubric lists under Blocking findings, a broken Architecture or Tests rule,
+missing claimed work, and unrequested behavior are \`blocking\`: they would keep the PR
+from approval, and brewery fixes blocking findings before it pushes. PR-body evidence is
+written later, in brew; do not report it.
+
 Result: status PASS, and \`findings\` (at most 12, most severe first), each
 {"id": "R1", "severity": "blocking" | "should-fix" | "nit", "where": "<file:line>",
 "attack": "<the defect>", "evidence": "<code quote or reproduction>", "fix": ""}.
-Blocking means it must not ship. An empty list is a valid answer.`;
+Blocking means it must not ship. An empty list is a valid answer.
+
+### Approval rubric
+
+${rubric.text}`;
+};
 
 export const reviewFixBody = (ctx: Ctx, findings: Finding[]): string => `## Step: pick REVIEW (fix branch-review findings)
 
@@ -354,6 +390,11 @@ ${ctx.state.branch} against ${base}. Overrides:
 - Skip step 4 (independent review). brewery already ran a multi-agent branch review.
 - Every task is already committed and Roast-verified. Do not rewrite those commits.
 - Skip step 12. brewery runs finish.
+- In step 3, check only the body you write, against the Evidence section of
+  ${skill(ctx, "barrel/references/approval-ready.md")}: exact headings, the IP path and task ids
+  ending \`Why\`, a status mark and an outcome on every Verification row, reviewer steps on
+  every ⚠️ row, screenshots for UI changes. brewery's branch review already checked the code
+  against the approval rubric. Do not fix code here.
 - Use this as the Provenance section in step 8, verbatim. brewery built it from the run's
   history. Do not add or guess agents or models.
 

@@ -52,8 +52,10 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    to other tasks, and where the task's criteria or a Decision differ from the snapshot,
    the IP wins. A missing case, a wrong expected value, a test that cannot fail, or a
    change that weakens a criterion is `FAIL`; mark it `retest: true` when the defect is in
-   the tests rather than the code, so the test stage writes them again. An `untestable` claim that a test could
-   disprove is the same. Add every IP `## E2E tests` row whose `Written in` names this
+   the tests rather than the code, so the test stage writes them again. An `untestable`
+   claim that a test could disprove is the same. Hold the tests to the Tests bar in
+   [`approval-ready`](../references/approval-ready.md). Add every IP `## E2E tests` row
+   whose `Written in` names this
    task, with the command that runs its spec at the row's path, following the e2e guide
    the testing plan resolves. A missing spec is `FAIL` that names the row ID. Run `http`
    and `process` rows here; a `browser` or `native flow` row only typechecks here and is

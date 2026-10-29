@@ -94,7 +94,9 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
      boundaries, no leaky/global test doubles)
    Do not let each reviewer rediscover skills or diff the whole branch. Fix material
    findings and rerun affected checks.
-10. **Check drift, docs, and runtime.** Compare the diff to the current task/IP. Update
+10. **Check drift, docs, and runtime.** Compare the diff to the current task/IP, and
+    check the patch against the plan-match and architecture rules in
+    [`approval-ready`](../references/approval-ready.md). Update
     architecture and public docs in this slice using the documentation contract. Run any
     mandatory safety verification declared by repository instructions or supporting
     skills. Leave e2e, browser, and launched-app UI verification to the integrated Roast

@@ -26,7 +26,9 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
   cases`, `## User guide`, and `## Design` sections.
 - **Pick** builds one task against tests a separate step wrote first; **Roast** is a fresh
   agent proving that task's acceptance criteria; **Brew** opens the PR; **Taste** fixes one
-  red CI snapshot or bot thread. These stages are terreno's, vendored in `terreno-shared/`.
+  red CI snapshot or bot thread. Before the push, barrel, tap, and pour check the branch
+  against the approval agent's four bars (plan match, architecture, tests, evidence) per
+  `barrel/references/approval-ready.md`, so the PR reaches `brewery approve` already passing. These stages are terreno's, vendored in `terreno-shared/`.
 - `recipe` (optional) sits above the pipeline: it shapes a Linear project whose milestones
   each become one distill, pour, or tap request.
 - With a Claude Design, recipe and distill add questions and drafts to the canvas at
