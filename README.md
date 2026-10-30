@@ -422,6 +422,7 @@ copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at
 | `cut` | Attack an IP from the requester's side |
 | `barrel` | Approved IP → tests-first build → PR → finish |
 | `finish` | PR → conflict-free, green, bots answered |
+| `verify-ui` | User-facing change → run it, required checks, Maestro on the simulator, evidence gist |
 | `pour` | distill + barrel in one shot for small features |
 | `tap` | Issues → fixed, green PRs |
 | `harvest` | Daily issue triage with your sign-off |

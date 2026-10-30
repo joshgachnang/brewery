@@ -118,7 +118,10 @@ must follow the [`GitHub attention contract`](../../terreno-shared/github-attent
    write `unknown` for the rest. Never guess a model. The PR approval agent records its
    own agents in its verdict.
    Preserve human-edited title/body; make only accurate minimal edits. Attach only
-   decisive UI/runtime artifacts without sensitive data.
+   decisive UI/runtime artifacts without sensitive data: for a user-facing change, the
+   `Verification` row carries the [`verify-ui`](../../verify-ui/SKILL.md) Result line
+   and the link to its report (the secret gist the repository's publish script
+   created, or the attached artifacts), never real user data.
 9. **Do not announce.** Do not post a PR comment for creation, readiness, check results,
    or evidence already present in the body. A top-level comment is allowed only for one
    blocking human action that cannot live in an existing review thread.

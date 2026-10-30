@@ -49,6 +49,7 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 | Plan and build a small feature in one go | `pour` | `brewery pour "<request>"` |
 | Fix issues, bugs, or Sentry errors | `tap` | — (skill only) |
 | Get one PR conflict-free and green | `finish` | `brewery finish [pr]` |
+| Prove a user-facing change works, with screenshots and video | `verify-ui` | — (skill only; Roast's UI verifier follows it) |
 | Fix every broken PR they authored here | `polish` | — (skill only) |
 | Triage the repo's open issues | `harvest` | — (skill only) |
 | See what is in flight, blocked, next | `board` | `brewery board`, `brewery status` |

@@ -85,6 +85,13 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
    deferred. The integrated Roast, after every task lands, runs the e2e suites and
    spawns at most one specialized UI/runtime verifier that interacts with the actual
    changed workflows and captures screenshots/video/logs. App launch alone is not proof.
+   That verifier follows the [`verify-ui`](../../verify-ui/SKILL.md) skill: a stack it
+   owns (ports already taken by something else are a blocker, never a shortcut),
+   adversarial steps, the required checks on every run (right page, not blank, no error
+   overlay, console clean, DOM assertion, interaction proof, screenshot), the matching
+   Maestro flow on the simulator for mobile-focused work, evidence outside the tree, and
+   a report with a Result line. A flow it could not run is `UNVERIFIED` with the
+   blocker, which is `BLOCKED` here, not `PASS`.
 6. **Prove docs.** Confirm architecture and public docs match the shipped behavior. A
    criterion that is true in code but absent or wrong in docs is `FAIL`. Check each
    `## User guide` page whose row names this task against the user-guide guide-entry bar
