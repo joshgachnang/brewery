@@ -29,8 +29,21 @@ are never committed.
 |---|---|
 | `stack.ts up / status / down` | Own database with seed data, the backend, and each app as web on fixed ports. **Refuses a port it did not open** and names the owner. `down` stops only what it started. |
 | `capture.ts --run <slug> --scenario <file>` | Signs in, runs a scenario per app and viewport, records interactions, DOM assertions, console, screenshots, and video, and scores the required checks. Exit 2 on failure with a failure screenshot. |
-| `maestro.ts --run <slug> --app <app> --flow <a,b>` | Runs the repository's Maestro flows on the app's simulator: picks the device, boots it, records, runs with a JUnit report, keeps the final and failure screenshots. Exit 2 failed, exit 3 UNVERIFIED with the blocker. |
+| `maestro.ts --run <slug> --app <app> --flow <a,b>` | Runs the repository's Maestro flows on the app's simulator: confirms the backend and Metro are the stack's own, picks the device, boots it, records, runs with a JUnit report, keeps the final and failure screenshots. Exit 2 failed, exit 3 UNVERIFIED with the blocker. |
 | `publish.ts --run <slug> --title "..."` | Creates a **secret gist**, pushes the evidence, and writes the README in the report format. Prints the URL. |
+
+Two rules the scripts must keep, because getting them wrong turns a skipped check into
+a false pass or a false failure:
+
+- **Ownership is a live process, not a pid file.** "Started by the stack" means the
+  recorded pid is alive and is (or leads the process group of) the current listener on
+  that port. A stack that crashed and was followed by a developer's Metro or a backend
+  on staging leaves the pid file behind; that port is not ours.
+- **A blocker is never a failure.** The runner tells apart a flow that ran and failed
+  (exit 2) from a flow that never ran (exit 3, UNVERIFIED with the blocker recorded:
+  stack not ours or down, no simulator or dev client, simulator would not boot, Maestro
+  or Java missing, no JUnit report written) and from a script crash (exit 1). The report
+  reads exit 3 as UNVERIFIED, not as FAIL and not as PASS.
 
 No repository scripts yet? Do the same steps by hand with Playwright and Maestro, keep
 the evidence outside the tree, and still produce the report. Do not skip a check because
