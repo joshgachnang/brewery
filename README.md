@@ -45,6 +45,7 @@ reports what it skipped.
 | Claude Code (`claude`) | default agent for every stage |
 | Codex (`codex`) | optional second opinion on cut and branch review |
 | Cursor agent (`agent`) | optional `cursor` profile |
+| Maestro, Xcode, Android SDK, Chrome | only for the screenshot skills, per slot captured |
 
 </details>
 
@@ -389,6 +390,37 @@ rollout, is in [`docs/approve.md`](docs/approve.md).
 
 </details>
 
+### Store screenshots
+
+- **screenshot-flows**: **writes the Maestro flow that captures your app's store screens.**
+  `/brewery:screenshot-flows`.
+- **screenshot-matrix**: **runs that flow on every App Store and Play size and accounts for
+  each one.** `/brewery:screenshot-matrix`.
+- **screenshot-banners**: **turns the captures into the marketing gallery, asking you which
+  screens and what text, with suggestions drawn from the app.** `/brewery:screenshot-banners`.
+
+<details>
+<summary>More</summary>
+
+The three share `storeAssets.config.json`, `NN-name` shot names, and
+`<appDir>/storeScreenshots/`, the same layout as terreno's `store-assets` skill, and need
+Bun. Capturing needs Maestro, a Mac with Xcode for iOS, and an Android emulator; rendering
+needs Chrome or Chromium.
+
+- **Flows**: one flow for all sizes, by `testID`, with every shot on every device. A lint
+  rejects coordinates, fixed waits, hard-coded accounts, and conditional shots.
+- **Sizes**: 15 iPhone and iPad slots and 3 Android slots, keyed on the pixel sizes each store
+  accepts rather than on device names. One emulator covers Android, resized per slot. A slot
+  no device can run is scaled down from a larger capture when the aspect allows, and every slot
+  gets a row in the report: captured, derived, blocked, failed, or manual. Exit 3 means
+  UNVERIFIED, never a pass.
+- **Gallery**: the first three images form one banner showing a single screen with a headline
+  and points; the rest are captioned singles. Each slot renders from its own captures at its
+  exact size with no alpha. Play's rules apply on their slots: text at most 20% of a phone
+  image, bare screens on tablets. It previews one size for your approval before rendering all.
+
+</details>
+
 ### Getting started and staying current
 
 - **install**: **sets brewery up end to end** (prerequisites, plugin, CLI, config, a repo).
@@ -423,6 +455,9 @@ copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at
 | `barrel` | Approved IP → tests-first build → PR → finish |
 | `finish` | PR → conflict-free, green, bots answered |
 | `verify-ui` | User-facing change → run it, required checks, Maestro on the simulator, evidence gist |
+| `screenshot-flows` | App → the Maestro flow that captures its store screenshots |
+| `screenshot-matrix` | Flow → one image set for every App Store and Play size, with a coverage report |
+| `screenshot-banners` | Captures → the store gallery: a three-image hero and captioned singles, with your copy |
 | `pour` | distill + barrel in one shot for small features |
 | `tap` | Issues → fixed, green PRs |
 | `harvest` | Daily issue triage with your sign-off |

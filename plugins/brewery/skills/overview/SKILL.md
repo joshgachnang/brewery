@@ -3,7 +3,7 @@ name: overview
 description: >-
   Map of brewery: what each skill and `brewery` command does, the order the pipeline runs
   them in (distill → cut → sign-off → barrel → finish), the side loops (tap, harvest,
-  polish, compound, cellar, approve, calibrate, board, rack, recipe), and which one fits the
+  polish, compound, cellar, approve, calibrate, board, rack, recipe, the screenshot skills), and which one fits the
   request in front of you. Use when asked what brewery is, how it works end to end, or
   which brewery skill or command to use; read-only, never starts a run.
 ---
@@ -50,6 +50,9 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 | Fix issues, bugs, or Sentry errors | `tap` | — (skill only) |
 | Get one PR conflict-free and green | `finish` | `brewery finish [pr]` |
 | Prove a user-facing change works, with screenshots and video | `verify-ui` | — (skill only; Roast's UI verifier follows it) |
+| Write the Maestro flow for store screenshots | `screenshot-flows` | — (skill only) |
+| Capture store screenshots at every device size | `screenshot-matrix` | — (skill only) |
+| Make the store gallery: a three-image hero and captioned screens, with their copy | `screenshot-banners` | — (skill only) |
 | Fix every broken PR they authored here | `polish` | — (skill only) |
 | Triage the repo's open issues | `harvest` | — (skill only) |
 | See what is in flight, blocked, next | `board` | `brewery board`, `brewery status` |

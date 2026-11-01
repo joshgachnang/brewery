@@ -35,6 +35,7 @@ Check each and report the version or the gap. Stop only on a missing hard requir
 | Claude Code | `claude --version` | default agent for every stage |
 | Codex | `codex --version` | second opinion on cut and review (optional; skipped with a note when absent) |
 | Cursor agent | `agent --version` or `cursor-agent --version` | optional `cursor` profile |
+| Maestro, Xcode, Android SDK, Chrome | `maestro --version`, `xcrun simctl help`, `adb version`, a Chrome or Chromium | only the screenshot skills (optional; report the gap, install nothing) |
 
 At least one of `claude` or `codex` must be present. Missing Bun: point at
 `curl -fsSL https://bun.sh/install | bash` and ask before running it.
