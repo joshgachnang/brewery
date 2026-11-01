@@ -168,6 +168,15 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["references/shaping.md", "../distill/references/distilling.md", "../distill/references/designing.md", "../terreno-shared/reaching-the-human.md", "Nothing is written to Linear before this answer", "## Open questions (recommendation assumed)", "## Expansions (follow up later)", "## Decisions", "design brief", "Claude Design"],
     within: { from: "## Never", to: "commit `.terreno/recipe/`", phrases: RECIPE_NEVER },
   },
+  "screenshot-flows/SKILL.md": {
+    phrases: ["storeAssets.config.json", "maestro/screenshots.yaml", "scripts/check.ts", "appId: ${APP_ID}", "UNVERIFIED", "never real user data or PHI", "`screenshot-matrix`"],
+  },
+  "screenshot-matrix/SKILL.md": {
+    phrases: ["scripts/slots.ts", "coverage.json", "A blocker is not a failure and not a pass", "A failed slot is never papered over", "never real user data or PHI", "`iphone-6.3`", "`ipad-13`", "`android-phone`", "`android-tablet-7`", "`android-tablet-10`", "`screenshot-banners`"],
+  },
+  "screenshot-banners/SKILL.md": {
+    phrases: ["Which screen is the hero?", "Never skip these questions", "never treat your own suggestion as their answer", "Never write a panel's copy without an answer", "Do not render every size before that answer", "at most 20% of each image", "never submit to a store", "storeAssets.config.json"],
+  },
   "recipe/references/shaping.md": {
     phrases: ["## Linear access", "## Matching fields", "## The recipe bar", "## The improve diff", "## The preview", "## Design brief", "keeps every fact, link, decision", "Size: pour | distill | tap"],
     lines: ["## Milestones", "## Design", "## Open questions (recommendation assumed)", "## Expansions (follow up later)", "## Decisions", "## Links"],
