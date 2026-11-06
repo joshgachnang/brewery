@@ -224,7 +224,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: `readResult` feeds every stage → the flow.test.ts suite passes unchanged
   - Test skills: none
 
-- [ ] **T5** — Pass handoffs to the steps that need them
+- [x] **T5** — Pass handoffs to the steps that need them
   - Depends on: T4
   - Files: cli/src/handoff.ts, cli/src/prompts.ts, cli/src/step.ts, cli/src/commands/barrel.ts, cli/src/commands/finish.ts, cli/test/handoff.test.ts
   - Criteria:
