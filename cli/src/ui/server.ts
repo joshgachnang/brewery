@@ -65,7 +65,7 @@ const sameToken = (given: string | null, token: string): boolean => {
 const json = (body: unknown, status = 200): Response => Response.json(body, { status, headers: { "cache-control": "no-store" } });
 
 export const startUi = async (options: UiOptions): Promise<UiHandle> => {
-  const ctx: RunsContext = { repo: options.repo };
+  const ctx: RunsContext = { repo: options.repo, scan: options.scan };
   const allowedHosts = new Set([urlHost(options.host).toLowerCase(), "localhost"]);
   const streams = new Set<() => void>();
 

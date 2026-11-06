@@ -346,7 +346,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: `state.answers` and `state.notes` feed every later prompt. They are written only through the existing answer and note paths (a spawned command, or the waiter's own loop), never by the server directly.
   - Test skills: none
 
-- [ ] **T10** — Find runs in zerg session workspaces
+- [x] **T10** — Find runs in zerg session workspaces
   - Depends on: T8
   - Files: cli/src/ui/runs.ts, cli/src/ui/redact.ts, cli/src/commands/ui.ts, cli/src/config.ts, cli/test/ui-scan.test.ts
   - Criteria:

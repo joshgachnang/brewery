@@ -249,7 +249,7 @@ tool output, and final result records. `command` profiles emit only step start a
 
 ## Dashboard: `brewery ui`
 
-`brewery ui [--port N] [--host H] [--repo PATH]` serves a web page of this machine's runs and
+`brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]...` serves a web page of this machine's runs and
 prints `http://<host>:<port>/?token=<t>`. It serves until killed. The page lists the runs and
 follows one run's event feed live. It moves the token into the tab's session storage and
 removes it from the address bar.
@@ -267,6 +267,24 @@ removes it from the address bar.
   `GET /api/runs` returns `{runs: [{id, source, slug, repo, phase, waiting, live, pr?,
   updatedAt}], sources}`. `live` means the run's `run.pid` is alive, or its waiting heartbeat
   is under 15 seconds old.
+- **Scanned workspaces.** `--scan GLOB` (repeatable; without it, `ui.scan` in
+  `~/.config/brewery/config.json`, a list of globs) adds one source per glob. On the zerg
+  host, `--scan '/srv/agent-workspaces/*/merged'` lists every session's runs. Wildcards
+  match within one path segment. Each matching directory with
+  `.terreno/brewery/<slug>/state.json` contributes runs `scan~<workspace>~<slug>`, where
+  `<workspace>` is the last directory name a wildcard matched (the session name). The entries
+  carry `source: "scan"` and `workspace`. The glob's `sources` entry is
+  `{id: "scan:<glob>", kind: "scan", status}`. The status is `unreadable` (with `detail`)
+  when a matched directory cannot be read; the other runs still list. It is `read-only` when a
+  run directory cannot be written; those runs are `writable: false`. Otherwise it is `ok`,
+  which includes a glob that matches nothing. Container paths in a scanned `state.json`
+  (`repo: "/workspace"`, step logs) are rebased onto the workspace, and a path that cannot be
+  rebased, or that `..` would carry out of the workspace, is dropped, never opened. A run
+  directory that resolves outside its workspace through a symlink, or whose `state.json` or
+  `events.jsonl` is a symlink, is not served. A relative `--scan` is resolved against the
+  current directory, and a relative `ui.scan` entry against the home directory. A scanned run counts as PHI only when the workspace's own
+  `.brewery.json` has `"phi": true`. Its `run.pid` belongs to the container, so only its
+  waiting heartbeat makes it `live`.
 - **Event stream.** `GET /api/runs/<id>/events` is a server-sent-event stream of the run's
   `events.jsonl`. Each complete line becomes one message whose `id` is the byte offset after
   that line, so a reconnect with `Last-Event-ID` resumes with the next line. A partial line

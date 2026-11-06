@@ -218,6 +218,12 @@ export const userConfigPath = (): string =>
 export const configuredRepos = (): Record<string, string> =>
   ((readJson(userConfigPath()) as { repos?: Record<string, string> }).repos ?? {});
 
+// `ui.scan` in the user config: globs `brewery ui` scans for workspaces when no --scan is given.
+export const configuredUiScan = (): string[] => {
+  const scan = (readJson(userConfigPath()) as { ui?: { scan?: unknown } }).ui?.scan;
+  return Array.isArray(scan) ? scan.filter((glob): glob is string => typeof glob === "string" && glob.trim() !== "") : [];
+};
+
 // Minutes a run with no TTY keeps watching reply.json before it exits 3. Read from the
 // environment only (never a repo's .brewery.json), so laptop and cron runs keep exiting at once.
 export const replyWaitMin = (): number => {

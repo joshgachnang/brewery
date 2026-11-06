@@ -67,11 +67,13 @@ Usage:
   brewery board [--merges N] [--json]
       This repo's board from its IPs and runs: in progress, blocked, next up, recent merges.
   brewery agents               Agent profiles, availability, and stage routing
-  brewery ui [--port N] [--host H] [--repo PATH]
+  brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]...
       Serve a token-guarded dashboard of this machine's runs and each run's scrubbed live
       event feed. Prints http://<host>:<port>/?token=<t> and serves until killed. Defaults:
       port 4848, host 127.0.0.1 (anything else needs --host), token from BREWERY_UI_TOKEN
       or random per start. PHI repos ("phi": true in .brewery.json) show structure only.
+      --scan GLOB (repeatable, or ui.scan in the user config) also lists the runs of every
+      matching workspace, such as '/srv/agent-workspaces/*/merged', as scan~<dir>~<slug>.
   brewery help
 
 Common flags:
@@ -118,6 +120,17 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
     else flags[name] = argv[++i];
   }
   return { positional, flags };
+};
+
+// Every value of a repeatable flag (`--scan a --scan b`, or `--scan=a`), in order.
+const flagValues = (argv: string[], name: string): string[] => {
+  const values: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith(`--${name}=`)) values.push(arg.slice(name.length + 3));
+    else if (arg === `--${name}` && argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) values.push(argv[++i]);
+  }
+  return values;
 };
 
 const str = (value: string | true | undefined): string | undefined => (typeof value === "string" ? value : undefined);
@@ -451,7 +464,7 @@ const main = async (): Promise<number> => {
     case "agents":
       return cmdAgents(flags);
     case "ui":
-      return ui({ port: str(flags.port), host: str(flags.host), repo: str(flags.repo) }, log);
+      return ui({ port: str(flags.port), host: str(flags.host), repo: str(flags.repo), scan: flagValues(rest, "scan") }, log);
     case undefined:
     case "help":
     case "--help":

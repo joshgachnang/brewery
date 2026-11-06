@@ -1,4 +1,7 @@
-// `brewery ui [--port N] [--host H] [--repo PATH]`: serve the dashboard until killed.
+// `brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]...`: serve the dashboard until killed.
+import { homedir } from "node:os";
+import { resolve } from "node:path";
+import { configuredUiScan } from "../config.ts";
 import { isLoopback, startUi } from "../ui/server.ts";
 import { repoRoot } from "../vcs.ts";
 
@@ -9,6 +12,8 @@ export interface UiFlags {
   port?: string;
   host?: string;
   repo?: string;
+  // Every --scan given; when none is, `ui.scan` from the user config.
+  scan?: string[];
 }
 
 export const ui = async (flags: UiFlags, log: (line: string) => void): Promise<number> => {
@@ -19,7 +24,9 @@ export const ui = async (flags: UiFlags, log: (line: string) => void): Promise<n
   const cwd = flags.repo ?? process.cwd();
   const repo = await repoRoot(cwd).catch(() => cwd);
   const token = process.env.BREWERY_UI_TOKEN || crypto.randomUUID();
-  const handle = await startUi({ repo, port, host, token });
+  // A relative --scan is relative to the shell; a relative `ui.scan` entry to the home directory.
+  const scan = flags.scan?.length ? flags.scan.map((glob) => resolve(glob)) : configuredUiScan().map((glob) => resolve(homedir(), glob));
+  const handle = await startUi({ repo, port, host, token, scan });
   if (!isLoopback(host)) log(`brewery ui: listening on ${host}, beyond this machine. Share the URL only with yourself.`);
   log(handle.url);
   await new Promise<void>((resolve) => {
