@@ -419,7 +419,8 @@ describe("brewery ui: gaps inside T1's criteria", () => {
     ctl.abort();
   });
 
-  test("the answer route is 501 until T9", async () => {
+  // T9 built the route; an empty body reaching its validation proves the server routes to it.
+  test("the answer route is wired: an empty body is 400", async () => {
     const cwd = makeRepo();
     writeRun(cwd, "a", "build");
     await start(cwd);
@@ -428,7 +429,7 @@ describe("brewery ui: gaps inside T1's criteria", () => {
       headers: { "X-Brewery-Token": TOKEN, "content-type": "application/json" },
       body: "{}",
     });
-    expect(res.status).toBe(501);
+    expect(res.status).toBe(400);
   });
 
   test("`brewery ui` prints a tokened URL from BREWERY_UI_TOKEN and stops on SIGTERM", async () => {

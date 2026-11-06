@@ -305,7 +305,18 @@ removes it from the address bar.
   `seq`, `seconds`, and PR numbers pass. PHI is opt in: a repo without the flag streams its
   narration unwithheld.
 
-The step detail and answer routes answer 501 for now.
+- **Answer and note.** `POST /api/runs/<id>/answer {reply}` does what `brewery answer` does
+  without racing a live process. A run whose waiting heartbeat is under 15 seconds old gets
+  the reply through its `reply.json` (202 `{via: "reply-file"}`). A local run with no live
+  waiter and no live `run.lock` holder gets a detached `brewery answer <slug> <reply>`, logging
+  to `.terreno/brewery/<slug>/ui-answer-<ts>.log` (202 `{via: "spawn", pid, log}`); that child
+  owns the run until it next waits or finishes. A run that is not waiting, one another process
+  owns, or one this server cannot write (a scanned session) answers 409 `{error, command}`,
+  where `command` is the line to run in that session. `POST /api/runs/<id>/note {text}` appends
+  a note as `brewery note` does (200). Both need a JSON body (else 415) and a non-empty
+  field (else 400).
+
+The step detail route answers 501 for now.
 
 ## Approving pull requests: `brewery approve <pr>`
 

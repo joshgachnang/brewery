@@ -316,7 +316,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: `cli.ts` `replyLoop` is used by distill, pour, barrel, and finish → the existing flow.test.ts gate and sign-off cases (no TTY, wait 0) pass unchanged
   - Test skills: none
 
-- [ ] **T9** — Answer a waiting run and add notes from the UI
+- [x] **T9** — Answer a waiting run and add notes from the UI
   - Depends on: T8
   - Files: cli/src/ui/routes/answer.ts, cli/test/ui-answer.test.ts
   - Criteria:
