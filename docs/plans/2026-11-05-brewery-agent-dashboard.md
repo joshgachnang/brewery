@@ -142,7 +142,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: none (a new read-only server). `cli.ts` gains one command.
   - Test skills: none (bun test, process layer per docs/testing/e2e.md)
 
-- [ ] **T2** — Build a run view model, and add the `usage` and `handoff` event kinds
+- [x] **T2** — Build a run view model, and add the `usage` and `handoff` event kinds
   - Depends on: none
   - Files: cli/src/ui/view.ts, cli/src/events.ts, cli/test/ui-view-model.test.ts
   - Criteria:
