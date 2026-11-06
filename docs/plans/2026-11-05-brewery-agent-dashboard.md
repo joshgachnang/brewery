@@ -203,7 +203,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: `state.history` is read by journal.ts, provenance.ts, and pipeline.ts, and the new field is optional → the existing journal and provenance cases in unit.test.ts pass unchanged.
   - Test skills: none
 
-- [ ] **T4** — Let every writing step return a handoff brief
+- [x] **T4** — Let every writing step return a handoff brief
   - Depends on: T3
   - Files: cli/src/agents.ts, cli/src/prompts.ts, cli/test/handoff-contract.test.ts
   - Criteria:

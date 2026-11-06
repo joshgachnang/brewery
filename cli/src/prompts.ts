@@ -65,7 +65,22 @@ const readOnlyResult = `- This is a read-only step. You cannot edit files or wri
   was launched with. Nothing else goes in the final answer.
 `;
 
-export const header = (ctx: Ctx, resultFile: string, opts: { readOnly?: boolean } = {}): string => {
+const handoffResult = `- Also put a \`handoff\` key in your result: a brief for whoever works on this next.
+  Shape: {"did": "<what you did, at most 400 chars>",
+          "learned": ["<what you learned about this code>"],
+          "traps": ["<traps for whoever comes next>"],
+          "files": ["<repo-relative files that matter>"]}
+  At most 8 items per list, each at most 200 chars. It must contain no PHI, no customer
+  data, and no secrets.
+`;
+
+// `handoff` asks a writing step for a brief the next step can read. Read-only steps have
+// no result file to put it in, so they are never asked.
+export const header = (
+  ctx: Ctx,
+  resultFile: string,
+  opts: { readOnly?: boolean; handoff?: boolean } = {},
+): string => {
   refreshNotes(ctx.state);
   const answers = ctx.state.answers.length
     ? `\nPrior human answers. Treat these as settled decisions; do not re-ask them.\n${ctx.state.answers
@@ -92,7 +107,7 @@ Rules for this step:
   a human decision in \`ask\` (question, recommended answer, options) with status BLOCKED.`}
 - Never add AI attribution to commits, PRs, or comments. No conventional-commit prefixes.
 - Never put PHI, customer data, or secrets in your result.
-${opts.readOnly ? readOnlyResult : `${fileResult(resultFile)}${answers}${notes}${learned}`}`;
+${opts.readOnly ? readOnlyResult : `${fileResult(resultFile)}${opts.handoff ? handoffResult : ""}${answers}${notes}${learned}`}`;
 };
 
 export const distillBody = (ctx: Ctx, request: string, ipPath: string): string => `## Step: distill (write the IP)

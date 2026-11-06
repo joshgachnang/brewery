@@ -2,6 +2,7 @@
 // repository and the files brewery hands over, so every step is a fresh context.
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { AgentProfile } from "./config.ts";
+import { scrub, scrubSecrets } from "./scrub.ts";
 
 export type Status = "PASS" | "FAIL" | "BLOCKED" | "PENDING";
 
@@ -55,7 +56,42 @@ export interface StepResult {
   testChanges?: { file: string; why: string }[];
   // roast: the failure is in the tests themselves, so the test step runs again
   retest?: boolean;
+  // writing steps: a short brief for whoever runs next, validated, capped, and scrubbed
+  handoff?: Handoff;
 }
+
+export interface Handoff {
+  did: string;
+  learned: string[];
+  traps: string[];
+  files: string[];
+}
+
+const HANDOFF_DID_MAX = 400;
+const HANDOFF_ITEM_MAX = 200;
+const HANDOFF_ITEMS_MAX = 8;
+
+const cap = (text: string, max: number): string => (text.length <= max ? text : `${text.slice(0, max - 1)}…`);
+
+const isStrings = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+// A malformed handoff is dropped rather than failing the step: it is advice, not a verdict.
+// `files` keeps digits and dates, which full scrubbing would mangle in paths.
+export const cleanHandoff = (raw: unknown): Handoff | undefined => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const { did, learned = [], traps = [], files = [] } = raw as Record<string, unknown>;
+  if (typeof did !== "string" || !did.trim()) return undefined;
+  if (!isStrings(learned) || !isStrings(traps) || !isStrings(files)) return undefined;
+  const list = (items: string[], clean: (text: string) => string): string[] =>
+    items.slice(0, HANDOFF_ITEMS_MAX).map((item) => cap(clean(item), HANDOFF_ITEM_MAX));
+  return {
+    did: cap(scrub(did), HANDOFF_DID_MAX),
+    learned: list(learned, scrub),
+    traps: list(traps, scrub),
+    files: list(files, scrubSecrets),
+  };
+};
 
 export interface RunRequest {
   name: string;
@@ -361,6 +397,11 @@ export const readResult = (resultFile: string): StepResult | string => {
   if (!result || typeof result !== "object") return "result is not an object";
   if (!STATUSES.has(String(result.status))) return `result status "${result.status}" is not PASS/FAIL/BLOCKED/PENDING`;
   if (typeof result.action !== "string" || !result.action) return "result has no action";
+  if ("handoff" in result) {
+    const { handoff, ...rest } = result;
+    const clean = cleanHandoff(handoff);
+    return (clean ? { ...rest, handoff: clean } : rest) as StepResult;
+  }
   return result as StepResult;
 };
 
