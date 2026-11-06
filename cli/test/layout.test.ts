@@ -400,9 +400,9 @@ describe("the dashboard is documented", () => {
     expect(readme).toMatch(/brewery ui --peer zerg=<[^>]+>#<[^>]+>/);
   });
 
-  test("the regression suite carries BREW-new-1 for the dashboard", () => {
+  test("the regression suite carries BREW-003 for the dashboard", () => {
     const regression = rootText("docs/regression/brewery.md");
-    expect(regression).toMatch(/^\| BREW-new-1 \|/m);
+    expect(regression).toMatch(/^\| BREW-003 \|/m);
     expect(regression).toContain("brewery ui");
   });
 
