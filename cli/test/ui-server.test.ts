@@ -211,13 +211,6 @@ describe("brewery ui: auth and routing", () => {
     expect((await api("/api/runs/local~nope/events")).status).toBe(404);
   });
 
-  test("the step route is 501 until a later task", async () => {
-    const cwd = makeRepo();
-    writeRun(cwd, "a", "build");
-    await start(cwd);
-    expect((await api("/api/runs/local~a/steps/1")).status).toBe(501);
-  });
-
   test("returned url carries the token and the bound port", async () => {
     await start(makeRepo());
     expect(ui?.port).toBeGreaterThan(0);

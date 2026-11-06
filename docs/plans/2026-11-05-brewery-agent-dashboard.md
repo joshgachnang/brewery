@@ -275,7 +275,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: none (read-only)
   - Test skills: none
 
-- [ ] **T7** — Show a step's prompt, result, handoffs, and log tail
+- [x] **T7** — Show a step's prompt, result, handoffs, and log tail
   - Depends on: T1, T5
   - Files: cli/src/ui/routes/step.ts, cli/test/ui-step.test.ts
   - Criteria:

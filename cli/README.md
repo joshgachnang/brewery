@@ -329,7 +329,14 @@ removes it from the address bar.
   a note as `brewery note` does (200). Both need a JSON body (else 415) and a non-empty
   field (else 400).
 
-The step detail route answers 501 for now.
+- **Step detail.** `GET /api/runs/<id>/steps/<seq>` returns one step for the page's drawer:
+  `{seq, stage, task?, agent, prompt?, result?, handoffIn, handoffOut?, logTail?, phiWithheld}`.
+  `handoffIn` lists the handoffs from earlier steps that the run's `handoff` events addressed to
+  this seq. `logTail` holds the last 80 narration lines parsed from the step's log, never raw
+  JSON. Every string is scrubbed. A running step has no `result`. In a PHI run, the route
+  returns structure only: no prompt, log tail, or handoffs, and `result` is reduced to
+  `{status, counts: {fail, block, ask, findings}}`. A seq that is not a number gets 400, and
+  one the run never started gets 404.
 
 ## Approving pull requests: `brewery approve <pr>`
 
