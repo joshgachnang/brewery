@@ -271,6 +271,11 @@ Then, once every task has landed:
   opens the PR. Its body records provenance: which agents and models ran cut, review, the
   tests-first writer, and approval.
 
+Each test, pick, roast, brew, and taste step leaves a short handoff brief (what it did and
+learned, traps, files) that later steps read: a task's retry pick reads its earlier picks and
+roasts, integrate and review read each task's last passing pick, and roast gets only the files and traps, as claims to verify. See
+[handoffs between steps](cli/README.md#handoffs-between-steps).
+
 Steps that keep failing escalate to Opus (`limits.escalateAfter`). A task stuck after
 `limits.pickAttempts` becomes a gate: `retry: <hint>`, `skip`, or `stop`. Ready tasks run up to
 `limits.parallelTasks` at once, except two tasks that declare the same `Files:` entry.
@@ -493,7 +498,7 @@ Subagents: `brewery:test-writer` (writes a task's tests from its brief) and
 | `brewery status [slug]` | Runs and what waits on you |
 | `brewery board` | The repo's board |
 | `brewery agents` | Agent availability and stage routing |
-| `brewery ui` | Dashboard of runs (this machine's, plus zerg workspaces with `--scan` and other `brewery ui` instances with `--peer`) and their live, scrubbed event feed |
+| `brewery ui` | Dashboard of runs (this machine's, plus zerg workspaces with `--scan` and other `brewery ui` instances with `--peer`) and their live, scrubbed event feed; answers waiting runs from the page. See [running it on the zerg host](cli/README.md#running-brewery-ui-on-the-zerg-host) |
 
 Exit codes: 0 done, 3 waiting on you, 4 cellar or calibrate over its change limit, 1 error.
 The full reference (routing, limits, parallel builds, events, what is enforced and how) is

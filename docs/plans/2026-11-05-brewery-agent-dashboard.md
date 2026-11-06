@@ -418,7 +418,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: none
   - Test skills: none
 
-- [ ] **T13** — Document `brewery ui`, handoffs, and running it on the zerg host
+- [x] **T13** — Document `brewery ui`, handoffs, and running it on the zerg host
   - Depends on: T5, T12
   - Files: cli/README.md, README.md, plugins/brewery/skills/overview/SKILL.md, plugins/brewery/.claude-plugin/plugin.json, plugins/brewery/.cursor-plugin/plugin.json, plugins/brewery/.codex-plugin/plugin.json, .claude-plugin/marketplace.json, .cursor-plugin/marketplace.json, .agents/plugins/marketplace.json, docs/regression/brewery.md, cli/test/layout.test.ts
   - Criteria:
