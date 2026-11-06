@@ -67,13 +67,15 @@ Usage:
   brewery board [--merges N] [--json]
       This repo's board from its IPs and runs: in progress, blocked, next up, recent merges.
   brewery agents               Agent profiles, availability, and stage routing
-  brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]...
+  brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]... [--peer NAME=URL#TOKEN]...
       Serve a token-guarded dashboard of this machine's runs and each run's scrubbed live
       event feed. Prints http://<host>:<port>/?token=<t> and serves until killed. Defaults:
       port 4848, host 127.0.0.1 (anything else needs --host), token from BREWERY_UI_TOKEN
       or random per start. PHI repos ("phi": true in .brewery.json) show structure only.
       --scan GLOB (repeatable, or ui.scan in the user config) also lists the runs of every
       matching workspace, such as '/srv/agent-workspaces/*/merged', as scan~<dir>~<slug>.
+      --peer NAME=URL#TOKEN (repeatable, or ui.peers in the user config) merges another
+      brewery ui's runs in as NAME~<id> and proxies their routes; the token stays server-side.
   brewery help
 
 Common flags:
@@ -464,7 +466,7 @@ const main = async (): Promise<number> => {
     case "agents":
       return cmdAgents(flags);
     case "ui":
-      return ui({ port: str(flags.port), host: str(flags.host), repo: str(flags.repo), scan: flagValues(rest, "scan") }, log);
+      return ui({ port: str(flags.port), host: str(flags.host), repo: str(flags.repo), scan: flagValues(rest, "scan"), peer: flagValues(rest, "peer") }, log);
     case undefined:
     case "help":
     case "--help":

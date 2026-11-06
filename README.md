@@ -493,7 +493,7 @@ Subagents: `brewery:test-writer` (writes a task's tests from its brief) and
 | `brewery status [slug]` | Runs and what waits on you |
 | `brewery board` | The repo's board |
 | `brewery agents` | Agent availability and stage routing |
-| `brewery ui` | Dashboard of runs (this machine's, plus zerg workspaces with `--scan`) and their live, scrubbed event feed |
+| `brewery ui` | Dashboard of runs (this machine's, plus zerg workspaces with `--scan` and other `brewery ui` instances with `--peer`) and their live, scrubbed event feed |
 
 Exit codes: 0 done, 3 waiting on you, 4 cellar or calibrate over its change limit, 1 error.
 The full reference (routing, limits, parallel builds, events, what is enforced and how) is

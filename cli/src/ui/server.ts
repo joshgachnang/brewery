@@ -8,15 +8,11 @@ import { redactLine } from "./redact.ts";
 import { answerRoute } from "./routes/answer.ts";
 import { stepRoute } from "./routes/step.ts";
 import { STATE_UNREADABLE, stateWatcher, viewRoute } from "./routes/view.ts";
+import { checkPeers, peerFor, peerRuns, proxyToPeer, type Peer } from "./peers.ts";
 import { findRun, listRuns, runUnreadable, type RunRef, type RunsContext } from "./runs.ts";
 import { resumeOffset, tailer } from "./tail.ts";
 
-// T11 fills these in; T1 accepts and ignores them so the signature is stable.
-export interface Peer {
-  id: string;
-  url: string;
-  token: string;
-}
+export type { Peer } from "./peers.ts";
 
 export interface UiOptions {
   repo: string;
@@ -68,6 +64,24 @@ export const startUi = async (options: UiOptions): Promise<UiHandle> => {
   const ctx: RunsContext = { repo: options.repo, scan: options.scan };
   const allowedHosts = new Set([urlHost(options.host).toLowerCase(), "localhost"]);
   const streams = new Set<() => void>();
+  const peers = checkPeers(options.peers ?? []);
+  // Open requests to peers, aborted when this server stops.
+  const upstream = new Set<AbortController>();
+  const track = (ctl: AbortController): (() => void) => {
+    upstream.add(ctl);
+    return () => upstream.delete(ctl);
+  };
+
+  // Local and scanned runs, plus every peer's, fetched in parallel; a down peer only adds
+  // an `unreachable` source.
+  const allRuns = async (): Promise<ReturnType<typeof listRuns>> => {
+    const own = listRuns(ctx);
+    if (!peers.length) return own;
+    const remote = await Promise.all(peers.map((peer) => peerRuns(peer)));
+    const runs = [...own.runs, ...remote.flatMap((r) => r.runs)];
+    runs.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return { runs, sources: [...own.sources, ...remote.map((r) => r.source)] };
+  };
 
   const hostAllowed = (req: Request): boolean => {
     const host = req.headers.get("host");
@@ -163,7 +177,12 @@ export const startUi = async (options: UiOptions): Promise<UiHandle> => {
     if (parts[0] !== "runs") return json({ error: "not found" }, 404);
     if (parts.length === 1) {
       if (req.method !== "GET") return json({ error: "method not allowed" }, 405);
-      return json(listRuns(ctx));
+      return allRuns().then((body) => json(body));
+    }
+    const remote = peerFor(parts[1] ?? "", peers);
+    if (remote) {
+      const rest = parts.slice(2).map((part) => `/${encodeURIComponent(part)}`).join("");
+      return proxyToPeer(req, remote, rest, track);
     }
     const run = findRun(parts[1] ?? "", ctx);
     if (!run) {
@@ -211,6 +230,7 @@ export const startUi = async (options: UiOptions): Promise<UiHandle> => {
     port,
     stop: async () => {
       for (const close of [...streams]) close();
+      for (const ctl of [...upstream]) ctl.abort();
       await server.stop(true);
     },
   };

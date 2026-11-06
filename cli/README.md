@@ -249,7 +249,7 @@ tool output, and final result records. `command` profiles emit only step start a
 
 ## Dashboard: `brewery ui`
 
-`brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]...` serves a web page of this machine's runs and
+`brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]... [--peer NAME=URL#TOKEN]...` serves a web page of this machine's runs and
 prints `http://<host>:<port>/?token=<t>`. It serves until killed. The page lists the runs and
 follows one run's event feed live. It moves the token into the tab's session storage and
 removes it from the address bar.
@@ -285,6 +285,19 @@ removes it from the address bar.
   current directory, and a relative `ui.scan` entry against the home directory. A scanned run counts as PHI only when the workspace's own
   `.brewery.json` has `"phi": true`. Its `run.pid` belongs to the container, so only its
   waiting heartbeat makes it `live`.
+- **Peers.** `--peer NAME=URL#TOKEN` (repeatable; without it, `ui.peers` in
+  `~/.config/brewery/config.json`, a list of the same strings) merges another `brewery ui`
+  instance, such as the zerg host's, into this one. Its runs list as `NAME~<its run id>`
+  (`zerg~local~x`, `zerg~scan~<workspace>~<slug>`) with `source: "NAME"`, and its
+  `sources` entry is `{id: "NAME", kind: "peer", status}`. A peer that answers with an error,
+  refuses the connection, or does not answer the run list within 3 seconds is `unreachable`,
+  with `detail` set to its status code (`401` for a wrong token), `timeout`,
+  `connection failed`, or `bad response` (not a run list); local runs still list. Every per-run route under `NAME~…` (view, step,
+  events, answer, note) is proxied to the peer, which returns its own status and body
+  unchanged; the event stream passes `Last-Event-ID` through. This server adds the peer's
+  token itself and drops the query string, so the browser never sees a peer token and the
+  peer never sees this one. A proxied request whose peer cannot be reached answers 502.
+  `NAME` is letters, digits, `.`, `_`, or `-`, and cannot be `local` or `scan`.
 - **Event stream.** `GET /api/runs/<id>/events` is a server-sent-event stream of the run's
   `events.jsonl`. Each complete line becomes one message whose `id` is the byte offset after
   that line, so a reconnect with `Last-Event-ID` resumes with the next line. A partial line

@@ -1,7 +1,8 @@
-// `brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]...`: serve the dashboard until killed.
+// `brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]... [--peer NAME=URL#TOKEN]...`: serve the dashboard until killed.
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { configuredUiScan } from "../config.ts";
+import { configuredUiPeers, configuredUiScan } from "../config.ts";
+import { parsePeer } from "../ui/peers.ts";
 import { isLoopback, startUi } from "../ui/server.ts";
 import { repoRoot } from "../vcs.ts";
 
@@ -14,6 +15,8 @@ export interface UiFlags {
   repo?: string;
   // Every --scan given; when none is, `ui.scan` from the user config.
   scan?: string[];
+  // Every --peer given (`<name>=<url>#<token>`); when none is, `ui.peers` from the user config.
+  peer?: string[];
 }
 
 export const ui = async (flags: UiFlags, log: (line: string) => void): Promise<number> => {
@@ -26,7 +29,8 @@ export const ui = async (flags: UiFlags, log: (line: string) => void): Promise<n
   const token = process.env.BREWERY_UI_TOKEN || crypto.randomUUID();
   // A relative --scan is relative to the shell; a relative `ui.scan` entry to the home directory.
   const scan = flags.scan?.length ? flags.scan.map((glob) => resolve(glob)) : configuredUiScan().map((glob) => resolve(homedir(), glob));
-  const handle = await startUi({ repo, port, host, token, scan });
+  const peers = (flags.peer?.length ? flags.peer : configuredUiPeers()).map(parsePeer);
+  const handle = await startUi({ repo, port, host, token, scan, peers });
   if (!isLoopback(host)) log(`brewery ui: listening on ${host}, beyond this machine. Share the URL only with yourself.`);
   log(handle.url);
   await new Promise<void>((resolve) => {

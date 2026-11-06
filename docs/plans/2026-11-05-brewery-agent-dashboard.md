@@ -63,7 +63,7 @@ kind for zerg runs, because scanning the workspaces on the host needs no change 
 | T8 | A waiting run picks up replies from a file | T1, T3 | cli/src/human.ts, cli/src/cli.ts | E6 |
 | T9 | Answer and note from the UI | T8 | cli/src/ui/routes/answer.ts | E7 |
 | T10 | Scan zerg workspaces for runs | T8 | cli/src/ui/runs.ts | E8 |
-| T11 | Peers: one view across machines | T10 | cli/src/ui/peers.ts, server | E9 |
+| T11 | Peers: one view across machines | T9, T10 | cli/src/ui/peers.ts, server | E9 |
 | T12 | The dashboard page | T6, T7, T9, T11 | cli/src/ui/page.html | E10, BREW-new-1 |
 | T13 | Docs, overview skill, regression case | T5, T12 | READMEs, overview skill, manifests | layout test |
 
@@ -372,8 +372,8 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: `findRun` is used by every route → the T1 local cases still pass
   - Test skills: none
 
-- [ ] **T11** — Show runs from other `brewery ui` instances in one view
-  - Depends on: T10
+- [x] **T11** — Show runs from other `brewery ui` instances in one view
+  - Depends on: T9, T10
   - Files: cli/src/ui/peers.ts, cli/src/ui/server.ts, cli/src/commands/ui.ts, cli/src/config.ts, cli/test/ui-peers.test.ts
   - Criteria:
     - `--peer <name>=<url>#<token>` (repeatable, or `ui.peers` in the global config) merges each peer's run list into this one, as `<name>~<peer run id>`.

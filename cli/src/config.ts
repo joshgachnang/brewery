@@ -224,6 +224,13 @@ export const configuredUiScan = (): string[] => {
   return Array.isArray(scan) ? scan.filter((glob): glob is string => typeof glob === "string" && glob.trim() !== "") : [];
 };
 
+// `ui.peers` in the user config: `<name>=<url>#<token>` strings for the other `brewery ui`
+// instances to merge in when no --peer is given.
+export const configuredUiPeers = (): string[] => {
+  const peers = (readJson(userConfigPath()) as { ui?: { peers?: unknown } }).ui?.peers;
+  return Array.isArray(peers) ? peers.filter((spec): spec is string => typeof spec === "string" && spec.trim() !== "") : [];
+};
+
 // Minutes a run with no TTY keeps watching reply.json before it exits 3. Read from the
 // environment only (never a repo's .brewery.json), so laptop and cron runs keep exiting at once.
 export const replyWaitMin = (): number => {
