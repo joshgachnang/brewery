@@ -211,11 +211,10 @@ describe("brewery ui: auth and routing", () => {
     expect((await api("/api/runs/local~nope/events")).status).toBe(404);
   });
 
-  test("view and step routes are 501 until later tasks", async () => {
+  test("the step route is 501 until a later task", async () => {
     const cwd = makeRepo();
     writeRun(cwd, "a", "build");
     await start(cwd);
-    expect((await api("/api/runs/local~a")).status).toBe(501);
     expect((await api("/api/runs/local~a/steps/1")).status).toBe(501);
   });
 

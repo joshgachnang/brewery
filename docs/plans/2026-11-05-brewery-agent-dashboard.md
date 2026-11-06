@@ -259,7 +259,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: prompt bodies change for pick, roast, integrate, review fix, brew, and taste → the flow.test.ts and review.test.ts cases that match prompt text still pass. A test-first run still rejects a Pick that changes tests without a reason.
   - Test skills: none
 
-- [ ] **T6** — Serve a run's view and push state changes
+- [x] **T6** — Serve a run's view and push state changes
   - Depends on: T1, T2
   - Files: cli/src/ui/routes/view.ts, cli/test/ui-view.test.ts
   - Criteria:

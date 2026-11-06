@@ -160,3 +160,27 @@ export const findRun = (id: string, ctx: RunsContext): RunRef | undefined => {
   const repo = safeIndex()[slug];
   return typeof repo === "string" ? localRef(repo, slug) : undefined;
 };
+
+// `local~<slug>` → the slug, or undefined for another source or an unsafe slug.
+const localSlug = (id: string): string | undefined => {
+  const sep = id.indexOf("~");
+  if (sep < 0) return undefined;
+  const source = id.slice(0, sep);
+  const slug = id.slice(sep + 1);
+  if (source !== LOCAL || !slug || slug.includes("/") || slug.includes("\\") || slug === "." || slug === "..") return undefined;
+  return slug;
+};
+
+// Where a slug's run may live: the start repo first, then the index.
+const candidateRoots = (slug: string, ctx: RunsContext): string[] => {
+  const indexed = safeIndex()[slug];
+  return [ctx.repo, ...(typeof indexed === "string" ? [indexed] : [])];
+};
+
+// True when `findRun` found nothing but the run's state.json is on disk: the run exists
+// and its state is unreadable (corrupt, or mid-write by a foreign tool).
+export const runUnreadable = (id: string, ctx: RunsContext): boolean => {
+  const slug = localSlug(id);
+  if (!slug || findRun(id, ctx)) return false;
+  return candidateRoots(slug, ctx).some((root) => existsSync(join(stateRunDir(root, slug), "state.json")));
+};

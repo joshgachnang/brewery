@@ -7,8 +7,8 @@ import pageText from "./page.html" with { type: "text" };
 import { redactLine } from "./redact.ts";
 import { answerRoute } from "./routes/answer.ts";
 import { stepRoute } from "./routes/step.ts";
-import { viewRoute } from "./routes/view.ts";
-import { findRun, listRuns, type RunRef, type RunsContext } from "./runs.ts";
+import { STATE_UNREADABLE, stateWatcher, viewRoute } from "./routes/view.ts";
+import { findRun, listRuns, runUnreadable, type RunRef, type RunsContext } from "./runs.ts";
 import { resumeOffset, tailer } from "./tail.ts";
 
 // T11 fills these in; T1 accepts and ignores them so the signature is stable.
@@ -38,6 +38,8 @@ export interface UiHandle {
 const page = pageText as unknown as string;
 
 const POLL_MS = 200;
+// state.json is checked for a new mtime this often; a change pushes `event: state`.
+const STATE_POLL_MS = 1_000;
 const HEARTBEAT_MS = 15_000;
 
 const LOOPBACK = new Set(["127.0.0.1", "::1", "localhost"]);
@@ -108,11 +110,19 @@ export const startUi = async (options: UiOptions): Promise<UiHandle> => {
           }
         };
         const poll = setInterval(pump, POLL_MS);
+        const watch = stateWatcher(run);
+        // No `id:` line: Last-Event-ID is an events.jsonl offset, and a view is not one.
+        const pushState = (): void => {
+          const view = watch();
+          if (view) send(`event: state\ndata: ${JSON.stringify(view)}\n\n`);
+        };
+        const statePoll = setInterval(pushState, STATE_POLL_MS);
         const ping = setInterval(() => send(": ping\n\n"), HEARTBEAT_MS);
         close = () => {
           if (!open) return;
           open = false;
           clearInterval(poll);
+          clearInterval(statePoll);
           clearInterval(ping);
           streams.delete(close);
           try {
@@ -156,7 +166,12 @@ export const startUi = async (options: UiOptions): Promise<UiHandle> => {
       return json(listRuns(ctx));
     }
     const run = findRun(parts[1] ?? "", ctx);
-    if (!run) return json({ error: "no such run" }, 404);
+    if (!run) {
+      // A run whose state.json does not parse exists but is broken: its view says so.
+      const bareGet = parts.length === 2 && req.method === "GET";
+      if (bareGet && runUnreadable(parts[1] ?? "", ctx)) return json({ error: STATE_UNREADABLE }, 500);
+      return json({ error: "no such run" }, 404);
+    }
     const [, , sub, arg, extra] = parts;
     if (extra !== undefined) return json({ error: "not found" }, 404);
     if (sub === undefined && req.method === "GET") return viewRoute(req, run, {});
@@ -171,6 +186,8 @@ export const startUi = async (options: UiOptions): Promise<UiHandle> => {
     port: options.port,
     // SSE streams stay open; the heartbeat keeps proxies from dropping them.
     idleTimeout: 0,
+    // A route that throws gets a fixed JSON body, never Bun's page with source and stack.
+    error: () => json({ error: "internal error" }, 500),
     fetch: (req) => {
       const url = new URL(req.url);
       if (url.pathname.startsWith("/api/")) return api(req, url);

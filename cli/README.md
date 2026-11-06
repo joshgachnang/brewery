@@ -260,6 +260,14 @@ removes it from the address bar.
   that line, so a reconnect with `Last-Event-ID` resumes with the next line. A partial line
   waits for its newline. The server polls the file with `stat`, so it works before the file
   exists and under gVisor.
+- **Run view.** `GET /api/runs/<id>` returns the run's view model: pipeline strip, tasks
+  with their test/pick/roast step cards, active steps, routes (the repo's configured
+  agents unless the run has used others), waiting, PR, totals, and handoffs. A run whose
+  `state.json` is corrupt answers 500 `{error}`; an unknown id answers 404.
+- **State push.** The event stream also sends `event: state` messages, with the fresh view
+  as `data` and no `id`, whenever `state.json`'s mtime changes (checked every second). A
+  corrupt write is skipped and the stream stays open. Nothing is pushed on connect, so a
+  client that must not miss a change opens the stream before it fetches the view.
 - **Scrubbing.** Every event is scrubbed with the same rules as CI logs (tokens, emails,
   phone numbers, and so on) before it leaves the server. In a repo whose `.brewery.json` has
   `"phi": true`, every string except the top-level structural fields (`kind`, `t`, `stage`, `task`,
@@ -267,7 +275,7 @@ removes it from the address bar.
   `seq`, `seconds`, and PR numbers pass. PHI is opt in: a repo without the flag streams its
   narration unwithheld.
 
-The run view, step detail, and answer routes answer 501 for now.
+The step detail and answer routes answer 501 for now.
 
 ## Approving pull requests: `brewery approve <pr>`
 
