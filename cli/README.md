@@ -235,6 +235,40 @@ lines as they arrive and appends `narration` events for assistant text and brief
 summaries, such as `Read groupQueue.ts` or `Bash: bun test`. It ignores malformed lines,
 tool output, and final result records. `command` profiles emit only step start and end.
 
+## Dashboard: `brewery ui`
+
+`brewery ui [--port N] [--host H] [--repo PATH]` serves a web page of this machine's runs and
+prints `http://<host>:<port>/?token=<t>`. It serves until killed. The page lists the runs and
+follows one run's event feed live. It moves the token into the tab's session storage and
+removes it from the address bar.
+
+- **Binding.** The defaults are port 4848 and host `127.0.0.1`. Binding to any other address
+  needs an explicit `--host`; there is no environment or config fallback.
+  Requests must name that exact address (or `localhost`) in `Host`, so pass the specific
+  address clients use, such as a tailnet IP, rather than `0.0.0.0`.
+- **Token.** It is random per start, or `BREWERY_UI_TOKEN` when set (set it to keep the same
+  URL across restarts). Every `/api/*` request needs it, as an `X-Brewery-Token` header or
+  `?token=`. A request whose `Host` (or `Origin`) is neither the bound host nor `localhost`
+  gets 403.
+- **Runs.** The list holds every run in the slug index plus every run under `--repo`
+  (default: the current repository), newest `state.json` first. Run IDs are `local~<slug>`.
+  `GET /api/runs` returns `{runs: [{id, source, slug, repo, phase, waiting, live, pr?,
+  updatedAt}], sources}`. `live` means the run's `run.pid` is alive, or its waiting heartbeat
+  is under 15 seconds old.
+- **Event stream.** `GET /api/runs/<id>/events` is a server-sent-event stream of the run's
+  `events.jsonl`. Each complete line becomes one message whose `id` is the byte offset after
+  that line, so a reconnect with `Last-Event-ID` resumes with the next line. A partial line
+  waits for its newline. The server polls the file with `stat`, so it works before the file
+  exists and under gVisor.
+- **Scrubbing.** Every event is scrubbed with the same rules as CI logs (tokens, emails,
+  phone numbers, and so on) before it leaves the server. In a repo whose `.brewery.json` has
+  `"phi": true`, every string except the top-level structural fields (`kind`, `t`, `stage`, `task`,
+  `agent`, `status`, `waitingKind`, `state`) becomes `"(withheld: phi)"`. Numbers such as
+  `seq`, `seconds`, and PR numbers pass. PHI is opt in: a repo without the flag streams its
+  narration unwithheld.
+
+The run view, step detail, and answer routes answer 501 for now.
+
 ## Approving pull requests: `brewery approve <pr>`
 
 One head, one verdict, one review posted as the terreno-approval-agent GitHub App: `APPROVE` when

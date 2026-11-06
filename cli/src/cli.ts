@@ -15,6 +15,7 @@ import { barrel } from "./commands/barrel.ts";
 import { cutReport, cutSummary, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
+import { ui } from "./commands/ui.ts";
 import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
 import { githubForge } from "./forge.ts";
@@ -66,6 +67,11 @@ Usage:
   brewery board [--merges N] [--json]
       This repo's board from its IPs and runs: in progress, blocked, next up, recent merges.
   brewery agents               Agent profiles, availability, and stage routing
+  brewery ui [--port N] [--host H] [--repo PATH]
+      Serve a token-guarded dashboard of this machine's runs and each run's scrubbed live
+      event feed. Prints http://<host>:<port>/?token=<t> and serves until killed. Defaults:
+      port 4848, host 127.0.0.1 (anything else needs --host), token from BREWERY_UI_TOKEN
+      or random per start. PHI repos ("phi": true in .brewery.json) show structure only.
   brewery help
 
 Common flags:
@@ -440,6 +446,8 @@ const main = async (): Promise<number> => {
       return cmdBoard(flags);
     case "agents":
       return cmdAgents(flags);
+    case "ui":
+      return ui({ port: str(flags.port), host: str(flags.host), repo: str(flags.repo) }, log);
     case undefined:
     case "help":
     case "--help":

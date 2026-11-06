@@ -110,7 +110,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
 
 ## Tasks
 
-- [ ] **T1** — Serve the run list and a scrubbed live event stream with `brewery ui`
+- [x] **T1** — Serve the run list and a scrubbed live event stream with `brewery ui`
   - Depends on: none
   - Files: cli/src/commands/ui.ts, cli/src/ui/server.ts, cli/src/ui/runs.ts, cli/src/ui/tail.ts, cli/src/ui/redact.ts, cli/src/ui/routes/view.ts, cli/src/ui/routes/step.ts, cli/src/ui/routes/answer.ts, cli/src/ui/page.html, cli/src/text.d.ts, cli/src/cli.ts, cli/README.md, README.md, cli/test/ui-server.test.ts
   - Criteria: `brewery ui [--port N] [--host H] [--repo PATH]` prints `http://<host>:<port>/?token=<t>` and serves until it is killed.

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>brewery</title>
+<style>
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 1rem; color: #1d1d1f; background: #fafafa; }
+  h1 { font-size: 1.1rem; margin: 0 0 1rem; }
+  ul { list-style: none; padding: 0; margin: 0 0 1rem; }
+  li button { width: 100%; text-align: left; padding: .5rem; margin-bottom: .25rem; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
+  li button[aria-pressed="true"] { border-color: #3b6fd8; }
+  .waiting { color: #b4561a; font-weight: 600; }
+  pre { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: .5rem; white-space: pre-wrap; word-break: break-word; max-height: 70vh; overflow: auto; }
+  .error { color: #b00020; }
+</style>
+</head>
+<body>
+<h1>brewery runs</h1>
+<p id="status" data-testid="ui-status">Loading…</p>
+<ul id="runs" data-testid="ui-run-list"></ul>
+<pre id="feed" data-testid="ui-feed" hidden></pre>
+<script>
+  "use strict";
+  // Take the token from the URL once, keep it for this tab, and drop it from the address bar.
+  const params = new URLSearchParams(location.search);
+  if (params.has("token")) {
+    sessionStorage.setItem("brewery-token", params.get("token"));
+    params.delete("token");
+    const query = params.toString();
+    history.replaceState(null, "", location.pathname + (query ? `?${query}` : "") + location.hash);
+  }
+  const token = sessionStorage.getItem("brewery-token") || "";
+  const statusEl = document.getElementById("status");
+  const runsEl = document.getElementById("runs");
+  const feedEl = document.getElementById("feed");
+  let source;
+
+  const follow = (id, button) => {
+    if (source) source.close();
+    for (const b of runsEl.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b === button));
+    feedEl.hidden = false;
+    feedEl.textContent = "";
+    // EventSource cannot send headers, so the token rides in the query.
+    source = new EventSource(`/api/runs/${encodeURIComponent(id)}/events?token=${encodeURIComponent(token)}`);
+    source.onmessage = (event) => {
+      feedEl.textContent += `${event.data}\n`;
+      feedEl.scrollTop = feedEl.scrollHeight;
+    };
+  };
+
+  const load = async () => {
+    const res = await fetch("/api/runs", { headers: { "X-Brewery-Token": token } });
+    if (!res.ok) {
+      statusEl.className = "error";
+      statusEl.textContent = res.status === 401 ? "Open the URL brewery ui printed (it carries the token)." : `Error ${res.status}`;
+      return;
+    }
+    const { runs } = await res.json();
+    statusEl.textContent = runs.length ? `${runs.length} run(s)` : "No runs yet.";
+    runsEl.textContent = "";
+    for (const run of runs) {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.dataset.testid = `ui-run-${run.id}`;
+      button.setAttribute("aria-pressed", "false");
+      button.textContent = `${run.slug} · ${run.phase}${run.pr ? ` · PR #${run.pr}` : ""}${run.live ? " · live" : ""} · ${run.source}`;
+      if (run.waiting) {
+        const flag = document.createElement("span");
+        flag.className = "waiting";
+        flag.textContent = " · waiting on you";
+        button.append(flag);
+      }
+      button.addEventListener("click", () => follow(run.id, button));
+      li.append(button);
+      runsEl.append(li);
+    }
+  };
+
+  load().catch((error) => {
+    statusEl.className = "error";
+    statusEl.textContent = String(error);
+  });
+</script>
+</body>
+</html>
