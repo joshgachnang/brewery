@@ -218,6 +218,17 @@ export const userConfigPath = (): string =>
 export const configuredRepos = (): Record<string, string> =>
   ((readJson(userConfigPath()) as { repos?: Record<string, string> }).repos ?? {});
 
+// Minutes a run with no TTY keeps watching reply.json before it exits 3. Read from the
+// environment only (never a repo's .brewery.json), so laptop and cron runs keep exiting at once.
+export const replyWaitMin = (): number => {
+  const fromEnv = process.env.BREWERY_REPLY_WAIT_MIN;
+  const raw = fromEnv !== undefined && fromEnv.trim() !== ""
+    ? Number(fromEnv)
+    : (readJson(userConfigPath()) as { replyWaitMin?: unknown }).replyWaitMin;
+  const minutes = typeof raw === "number" ? raw : Number.NaN;
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+};
+
 // `--agents pick=claude,roast=claude+codex+local`
 export const parseAgentsFlag = (flag: string): Partial<Record<Stage, string[]>> => {
   const out: Partial<Record<Stage, string[]>> = {};

@@ -232,7 +232,8 @@ anything that can't be built or proven.**
   2), `no: <why>`, or answers without approval (applied, then asked again).
 - At the terminal, the CLI asks right there. Otherwise it prints the message, pings ntfy
   (no content in the ping), saves state, and exits 3. Reply from anywhere with
-  `brewery answer <slug> "ok"`.
+  `brewery answer <slug> "ok"`, or write `{"reply": "ok"}` to the run's `reply.json` while
+  it waits (see `BREWERY_REPLY_WAIT_MIN` in [cli/README.md](cli/README.md#human-loop)).
 - An `Elephant:` line names the likeliest risk nobody has raised, or `none`.
 - Only you approve. brewery owns the IP's `Status:` line and resets one an agent set.
 

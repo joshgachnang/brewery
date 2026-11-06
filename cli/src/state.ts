@@ -60,7 +60,8 @@ export interface RunState {
   // Started by `brewery pour`: an approval, by brewery or by a later answer, goes on to build.
   oneShot?: boolean;
   pr?: number;
-  waiting?: { kind: "signoff" | "gate"; asks: Ask[]; message: string; since: string; task?: string };
+  // `heartbeat` is rewritten while a process waits on a reply, so a reader can tell a live waiter.
+  waiting?: { kind: "signoff" | "gate"; asks: Ask[]; message: string; since: string; task?: string; heartbeat?: string };
   answers: Answer[];
   notes?: string[];
   cutRounds: number;

@@ -172,6 +172,17 @@ reply right there instead. Reply from anywhere with `brewery answer <slug> "<rep
 - sign-off: `ok`, `ok, 2b`, `no: <why>`, or answers without approval (applied, then asked again)
 - gates: `1a`, `retry: <hint>`, `skip` (task), `ship` (integration or review), `stop`
 
+A waiting process also takes a reply written to `.terreno/brewery/<slug>/reply.json` as
+`{"reply": "ok", "at": "<ISO time>"}`. It checks that file every 2 s and deletes it once it
+takes the reply. At a terminal, whichever comes first wins, the typed line or the file.
+With no terminal, the process watches the file for `replyWaitMin` minutes before it exits 3.
+That value comes only from `BREWERY_REPLY_WAIT_MIN` or `replyWaitMin` in the user config,
+never from a repo's `.brewery.json`. It defaults to 0, which exits at once. While it waits,
+the process rewrites `waiting.heartbeat` in `state.json` every 5 s, so `brewery ui` can
+tell a live waiter. If the file is malformed, the process leaves it in place, emits a
+`reply.json unreadable` note, and keeps waiting. `--no-wait` skips both the terminal and
+the wait.
+
 `brewery status` lists runs and what is waiting on you. Each step's prompt, log, and result
 are in `.terreno/brewery/<slug>/steps/`.
 

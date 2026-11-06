@@ -16,10 +16,10 @@ import { cutReport, cutSummary, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
 import { ui } from "./commands/ui.ts";
-import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
+import { FAN_OUT, loadConfig, replyWaitMin, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
 import { githubForge } from "./forge.ts";
-import { readReplyFromTty } from "./human.ts";
+import { waitForReply } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";
 import type { Ctx } from "./step.ts";
@@ -77,11 +77,13 @@ Usage:
 Common flags:
   --agents stage=a+b,...   Override routing, e.g. pick=claude,roast=claude+codex+local
   --repo <dir>             Target repository (default: current directory)
-  --no-wait                Never read a reply from the terminal
+  --no-wait                Never wait for a reply (terminal or reply.json)
   --go                     After approval, keep going into barrel
   --parallel N             Max concurrent task builds for this run (1 = sequential)
 
 Config: ${userConfigPath()} and <repo>/.brewery.json.
+A run with no terminal watches .terreno/brewery/<slug>/reply.json for BREWERY_REPLY_WAIT_MIN
+(or the user config's replyWaitMin) minutes before exiting 3; the default 0 exits at once.
 Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar or calibrate proposed
 more changes than allowed (no PR), 1 error.`;
 
@@ -139,10 +141,12 @@ const afterApproval = async (ctx: Ctx, go: boolean): Promise<number> => {
   return (await barrel(ctx, githubCi)) === "done" ? 0 : WAITING;
 };
 
-// When someone is at the terminal, take the reply right here instead of exiting.
+// Take the reply right here instead of exiting: from the terminal when someone is at it, or
+// from reply.json for up to replyWaitMin minutes. --no-wait exits at once.
 const replyLoop = async (ctx: Ctx, interactive: boolean, go: boolean): Promise<number> => {
   while (ctx.state.waiting) {
-    const reply = readReplyFromTty(interactive);
+    const tty = interactive && process.stdin.isTTY ? process.stdin : null;
+    const reply = await waitForReply({ state: ctx.state, tty, replyWaitMin: interactive ? replyWaitMin() : 0 });
     if (!reply) return WAITING;
     const outcome = await answer(ctx, reply);
     if (outcome === "approved") return afterApproval(ctx, go);

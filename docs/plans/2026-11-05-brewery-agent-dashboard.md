@@ -294,7 +294,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: none (read-only)
   - Test skills: none
 
-- [ ] **T8** — Let a waiting run pick up a reply written to a file
+- [x] **T8** — Let a waiting run pick up a reply written to a file
   - Depends on: T1, T3
   - Files: cli/src/human.ts, cli/src/cli.ts, cli/src/state.ts, cli/src/config.ts, cli/test/reply-pickup.test.ts
   - Criteria:
