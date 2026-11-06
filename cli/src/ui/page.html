@@ -4,26 +4,143 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
 <title>brewery</title>
 <style>
-  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; padding: 1rem; color: #1d1d1f; background: #fafafa; }
-  h1 { font-size: 1.1rem; margin: 0 0 1rem; }
-  ul { list-style: none; padding: 0; margin: 0 0 1rem; }
-  li button { width: 100%; text-align: left; padding: .5rem; margin-bottom: .25rem; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; font: inherit; }
-  li button[aria-pressed="true"] { border-color: #3b6fd8; }
-  .waiting { color: #b4561a; font-weight: 600; }
-  pre { background: #fff; border: 1px solid #ddd; border-radius: 6px; padding: .5rem; white-space: pre-wrap; word-break: break-word; max-height: 70vh; overflow: auto; }
-  .error { color: #b00020; }
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #dcdcd8;
+    --accent: #3b6fd8; --pass: #1f8a4c; --fail: #c0392b; --blocked: #b4561a; --pending: #8a6d00;
+    --running: #3b6fd8; --skipped: #a0a0a6; --wait-bg: #fff4e5; --wait-line: #f0b46a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141416; --panel: #1e1e22; --fg: #ececf0; --muted: #9a9aa2; --line: #34343a;
+      --accent: #7aa2ff; --pass: #4cc283; --fail: #ff6b5e; --blocked: #f0a060; --pending: #e0c050;
+      --running: #7aa2ff; --skipped: #6a6a72; --wait-bg: #33281a; --wait-line: #8a6030;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 0; color: var(--fg); background: var(--bg); }
+  button { font: inherit; color: inherit; }
+  h1 { font-size: 1.05rem; margin: 0; }
+  h2 { font-size: .95rem; margin: 1.2rem 0 .5rem; }
+  h3 { font-size: .8rem; margin: .8rem 0 .3rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .muted { color: var(--muted); }
+  .error { color: var(--fail); }
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+  aside { border-right: 1px solid var(--line); padding: 1rem; background: var(--panel); }
+  main { padding: 1rem; min-width: 0; }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); }
+  }
+  .source { margin-bottom: 1rem; }
+  .source-head { display: flex; justify-content: space-between; gap: .5rem; font-weight: 600; font-size: .85rem; }
+  .source-status { font-weight: 400; font-size: .75rem; }
+  .source-status.ok { color: var(--pass); }
+  .source-status.unreadable, .source-status.unreachable { color: var(--fail); }
+  .source-status.read-only { color: var(--muted); }
+  ul { list-style: none; padding: 0; margin: .3rem 0 0; }
+  .run { width: 100%; text-align: left; padding: .45rem .5rem; margin-bottom: .25rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); cursor: pointer; display: flex; flex-direction: column; gap: .1rem; }
+  .run[aria-pressed="true"] { border-color: var(--accent); }
+  .run-top { display: flex; align-items: center; gap: .4rem; }
+  .run-meta { font-size: .75rem; color: var(--muted); }
+  .live-dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--skipped); flex: none; }
+  .live-dot[data-live="true"] { background: var(--pass); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pass) 25%, transparent); }
+  .badge { font-size: .7rem; padding: .05rem .4rem; border-radius: 999px; background: var(--blocked); color: #fff; margin-left: auto; white-space: nowrap; }
+  .strip { display: flex; gap: .25rem; flex-wrap: wrap; margin: .6rem 0; }
+  .stage { flex: 1 1 0; min-width: 4.5rem; text-align: center; padding: .4rem .3rem; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); font-size: .8rem; }
+  .stage[data-status="done"] { color: var(--pass); }
+  .stage[data-status="active"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .stage[data-status="waiting"] { background: var(--blocked); border-color: var(--blocked); color: #fff; font-weight: 600; }
+  .stage[data-status="skipped"] { color: var(--skipped); text-decoration: line-through; }
+  .stage[data-status="todo"] { color: var(--muted); }
+  .banner { background: var(--wait-bg); border: 1px solid var(--wait-line); border-radius: 8px; padding: .75rem; margin: .8rem 0; }
+  .banner ol { margin: .4rem 0; padding-left: 1.3rem; }
+  .banner li { margin-bottom: .3rem; }
+  textarea { width: 100%; min-height: 4rem; font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .4rem; }
+  .actions { display: flex; gap: .5rem; align-items: center; margin-top: .4rem; flex-wrap: wrap; }
+  .btn { padding: .35rem .8rem; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  .btn.secondary { background: transparent; color: var(--accent); }
+  code.cmd { display: block; padding: .4rem; margin-top: .4rem; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; white-space: pre-wrap; word-break: break-all; }
+  .totals { display: flex; gap: 1rem; flex-wrap: wrap; font-size: .85rem; }
+  .totals b { font-variant-numeric: tabular-nums; }
+  .lanes { display: flex; flex-direction: column; gap: .5rem; }
+  .task { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .5rem; }
+  .task-head { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+  .lane-row { display: grid; grid-template-columns: 3.5rem 1fr; gap: .4rem; align-items: start; margin-top: .3rem; }
+  .lane-name { font-size: .75rem; color: var(--muted); padding-top: .25rem; }
+  .cards { display: flex; gap: .3rem; flex-wrap: wrap; }
+  .card { text-align: left; border: 1px solid var(--line); border-left: 4px solid var(--skipped); border-radius: 6px; background: var(--bg); padding: .3rem .45rem; cursor: pointer; font-size: .78rem; max-width: 100%; }
+  .card[data-status="PASS"] { border-left-color: var(--pass); }
+  .card[data-status="FAIL"] { border-left-color: var(--fail); }
+  .card[data-status="BLOCKED"] { border-left-color: var(--blocked); }
+  .card[data-status="PENDING"] { border-left-color: var(--pending); }
+  .card[data-status="running"] { border-left-color: var(--running); }
+  .card.highlight { outline: 2px solid var(--accent); }
+  .handoff-links { display: flex; gap: .3rem; flex-wrap: wrap; margin-top: .15rem; }
+  .handoff-links a { color: var(--accent); font-size: .72rem; cursor: pointer; text-decoration: underline; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .5rem; }
+  .agent { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--running); border-radius: 8px; padding: .5rem; min-width: 0; cursor: pointer; text-align: left; }
+  .agent pre { margin: .3rem 0 0; font-size: .72rem; max-height: 9rem; overflow: auto; white-space: pre-wrap; word-break: break-word; color: var(--muted); }
+  .fanout { display: flex; gap: .5rem; grid-column: 1 / -1; overflow-x: auto; }
+  .fanout > .agent { flex: 1 1 260px; }
+  table { border-collapse: collapse; width: 100%; font-size: .82rem; background: var(--panel); }
+  th, td { text-align: left; border-bottom: 1px solid var(--line); padding: .3rem .4rem; }
+  .from-run { color: var(--pass); }
+  .from-config { color: var(--muted); }
+  .feed { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .5rem; white-space: pre-wrap; word-break: break-word; max-height: 40vh; overflow: auto; font-size: .75rem; margin: 0; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100vw); background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(0,0,0,.15); padding: 1rem; overflow: auto; transform: translateX(100%); transition: transform .15s ease; z-index: 10; }
+  .drawer.open { transform: none; }
+  .drawer pre { white-space: pre-wrap; word-break: break-word; font-size: .75rem; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: .5rem; max-height: 40vh; overflow: auto; }
+  .drawer-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+  .empty { color: var(--muted); font-size: .85rem; }
 </style>
 </head>
 <body>
-<h1>brewery runs</h1>
-<p id="status" data-testid="ui-status">Loading…</p>
-<ul id="runs" data-testid="ui-run-list"></ul>
-<pre id="feed" data-testid="ui-feed" hidden></pre>
+<div class="layout">
+  <aside data-testid="ui-sidebar">
+    <h1>brewery runs</h1>
+    <p id="status" class="muted" data-testid="ui-status">Loading…</p>
+    <div id="sources" data-testid="ui-run-list"></div>
+  </aside>
+  <main id="main" data-testid="ui-main">
+    <p class="empty" id="pick">Pick a run on the left.</p>
+    <section id="run" hidden data-testid="ui-run">
+      <h1 id="run-title"></h1>
+      <div id="run-pr" class="muted"></div>
+      <div class="strip" id="strip" data-testid="ui-pipeline"></div>
+      <div id="banner"></div>
+      <div class="totals" id="totals" data-testid="ui-totals"></div>
+      <h2>Active agents</h2>
+      <div class="grid" id="active" data-testid="ui-active"></div>
+      <h2>Tasks</h2>
+      <div class="lanes" id="lanes" data-testid="ui-lanes"></div>
+      <h2>Routes</h2>
+      <table data-testid="ui-routes"><thead><tr><th>Stage</th><th>Agents</th><th>From</th></tr></thead><tbody id="routes"></tbody></table>
+      <h2>Note</h2>
+      <textarea id="note-text" data-testid="ui-note-input" placeholder="Add a note for the run's next step"></textarea>
+      <div class="actions">
+        <button class="btn secondary" id="note-send" data-testid="ui-note-button">Add note</button>
+        <span id="note-status" class="muted"></span>
+      </div>
+      <code class="cmd" id="note-command" hidden></code>
+      <h2>Event feed</h2>
+      <pre class="feed" id="feed" data-testid="ui-feed"></pre>
+    </section>
+  </main>
+</div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" data-testid="ui-drawer">
+  <div class="drawer-head">
+    <h2 id="drawer-title">Step</h2>
+    <button class="btn secondary" id="drawer-close" data-testid="ui-drawer-close">Close</button>
+  </div>
+  <div id="drawer-body"></div>
+</div>
 <script>
   "use strict";
   // Take the token from the URL once, keep it for this tab, and drop it from the address bar.
+  // Every request sends it as the X-Brewery-Token header, so it never appears in a URL again.
   const params = new URLSearchParams(location.search);
   if (params.has("token")) {
     sessionStorage.setItem("brewery-token", params.get("token"));
@@ -32,55 +149,482 @@
     history.replaceState(null, "", location.pathname + (query ? `?${query}` : "") + location.hash);
   }
   const token = sessionStorage.getItem("brewery-token") || "";
-  const statusEl = document.getElementById("status");
-  const runsEl = document.getElementById("runs");
-  const feedEl = document.getElementById("feed");
-  let source;
+  const headers = (extra) => ({ "X-Brewery-Token": token, ...(extra || {}) });
 
-  const follow = (id, button) => {
-    if (source) source.close();
-    for (const b of runsEl.querySelectorAll("button")) b.setAttribute("aria-pressed", String(b === button));
-    feedEl.hidden = false;
-    feedEl.textContent = "";
-    // EventSource cannot send headers, so the token rides in the query.
-    source = new EventSource(`/api/runs/${encodeURIComponent(id)}/events?token=${encodeURIComponent(token)}`);
-    source.onmessage = (event) => {
-      feedEl.textContent += `${event.data}\n`;
-      feedEl.scrollTop = feedEl.scrollHeight;
-    };
+  const $ = (id) => document.getElementById(id);
+  // Builds an element; strings become text nodes, so no server text is ever parsed as HTML.
+  const h = (tag, attrs, ...children) => {
+    const el = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs || {})) {
+      if (value === undefined || value === null || value === false) continue;
+      if (key === "class") el.className = value;
+      else if (key === "text") el.textContent = value;
+      else if (key.startsWith("on")) el.addEventListener(key.slice(2), value);
+      else el.setAttribute(key, String(value));
+    }
+    for (const child of children.flat()) if (child !== undefined && child !== null && child !== false) el.append(child);
+    return el;
   };
 
-  const load = async () => {
-    const res = await fetch("/api/runs", { headers: { "X-Brewery-Token": token } });
+  const STAGE_LABELS = { distill: "distill", cut: "cut", signoff: "sign-off", barrel: "barrel", finish: "finish" };
+  const fmtSeconds = (s) => {
+    s = Math.max(0, Math.round(s || 0));
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+    return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+  };
+  const fmtTokens = (n) => (n === undefined ? "–" : n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(1)}k` : String(n));
+  const fmtCost = (c) => (c === undefined ? "–" : `$${c.toFixed(2)}`);
+  // Only an absolute http(s) URL becomes a link: a peer's data must not inject javascript:
+  // or point back at this page (sign-off writes a placeholder like "#123").
+  const safeUrl = (url) => {
+    try {
+      return ["http:", "https:"].includes(new URL(url).protocol);
+    } catch {
+      return false;
+    }
+  };
+  const elapsed = (startedAt) => (startedAt ? (Date.now() - Date.parse(startedAt)) / 1000 : 0);
+
+  // The raw feed keeps only its newest lines; the view model carries the rest.
+  const FEED_LINES = 500;
+  let current = null; // { id, rid, view, stream, lastEventId, generation }
+  let runList = [];
+
+  // ---- Run list, grouped by source ----
+  const renderRuns = (runs, sources) => {
+    const box = $("sources");
+    box.textContent = "";
+    const ids = [...new Set([...sources.map((s) => s.id), ...runs.map((r) => r.source)])];
+    for (const id of ids) {
+      const src = sources.find((s) => s.id === id) || { id, status: "ok" };
+      const mine = runs.filter((r) => r.source === id);
+      const list = h("ul", {});
+      for (const run of mine) {
+        const button = h("button", {
+          class: "run",
+          "data-testid": `ui-run-${run.id}`,
+          "aria-pressed": String(current?.id === run.id),
+          onclick: () => follow(run.id),
+        },
+          h("span", { class: "run-top" },
+            h("span", { class: "live-dot", "data-live": String(Boolean(run.live)), title: run.live ? "live" : "not running" }),
+            h("strong", { text: run.slug }),
+            run.waiting ? h("span", { class: "badge", "data-testid": `ui-run-needs-you-${run.id}`, text: "needs you" }) : null),
+          h("span", { class: "run-meta", text: `${run.phase}${run.pr ? ` · PR #${run.pr}` : ""}${run.workspace ? ` · ${run.workspace}` : ""}` }));
+        list.append(h("li", {}, button));
+      }
+      if (!mine.length) list.append(h("li", { class: "empty", text: "No runs." }));
+      box.append(h("div", { class: "source", "data-testid": `ui-source-${id}` },
+        h("div", { class: "source-head" },
+          h("span", { text: id }),
+          h("span", { class: `source-status ${src.status}`, title: src.detail || "", text: src.status })),
+        list));
+    }
+  };
+
+  const loadRuns = async () => {
+    const res = await fetch("/api/runs", { headers: headers() });
     if (!res.ok) {
-      statusEl.className = "error";
-      statusEl.textContent = res.status === 401 ? "Open the URL brewery ui printed (it carries the token)." : `Error ${res.status}`;
+      $("status").className = "error";
+      $("status").textContent = res.status === 401 ? "Open the URL brewery ui printed (it carries the token)." : `Error ${res.status}`;
       return;
     }
-    const { runs } = await res.json();
-    statusEl.textContent = runs.length ? `${runs.length} run(s)` : "No runs yet.";
-    runsEl.textContent = "";
-    for (const run of runs) {
-      const li = document.createElement("li");
-      const button = document.createElement("button");
-      button.dataset.testid = `ui-run-${run.id}`;
-      button.setAttribute("aria-pressed", "false");
-      button.textContent = `${run.slug} · ${run.phase}${run.pr ? ` · PR #${run.pr}` : ""}${run.live ? " · live" : ""} · ${run.source}`;
-      if (run.waiting) {
-        const flag = document.createElement("span");
-        flag.className = "waiting";
-        flag.textContent = " · waiting on you";
-        button.append(flag);
-      }
-      button.addEventListener("click", () => follow(run.id, button));
-      li.append(button);
-      runsEl.append(li);
+    const { runs, sources } = await res.json();
+    runList = runs;
+    $("status").className = "muted";
+    $("status").textContent = runs.length ? `${runs.length} run(s)` : "No runs yet.";
+    renderRuns(runs, sources || []);
+  };
+
+  // ---- Run view ----
+  const cardLabel = (card) => `#${card.seq} ${card.agent} · ${card.status === "running" ? fmtSeconds(elapsed(card.startedAt)) : `${card.status}${card.seconds !== undefined ? ` · ${fmtSeconds(card.seconds)}` : ""}`}`;
+
+  // Links from a card to the cards it handed off to and received a handoff from.
+  const handoffLinks = (seq, view) => {
+    const out = view.handoffs.filter((x) => x.from === seq).map((x) => h("a", { onclick: (e) => { e.stopPropagation(); jumpTo(x.to); }, text: `handoff → #${x.to}` }));
+    const inn = view.handoffs.filter((x) => x.to === seq).map((x) => h("a", { onclick: (e) => { e.stopPropagation(); jumpTo(x.from); }, text: `handoff ← #${x.from}` }));
+    return out.length || inn.length ? h("span", { class: "handoff-links" }, inn, out) : null;
+  };
+
+  const jumpTo = (seq) => {
+    const el = document.querySelector(`[data-seq="${seq}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("highlight");
+      setTimeout(() => el.classList.remove("highlight"), 1500);
+    }
+    openDrawer(seq);
+  };
+
+  const stepCard = (card, view) =>
+    h("div", { class: "card", "data-status": card.status, "data-seq": card.seq, "data-testid": `ui-card-${card.seq}`, role: "button", tabindex: "0", onclick: () => openDrawer(card.seq), onkeydown: (e) => { if (e.key === "Enter") openDrawer(card.seq); } },
+      h("div", card.status === "running" ? { "data-elapsed": card.startedAt, text: cardLabel(card) } : { text: cardLabel(card) }),
+      card.action ? h("div", { class: "muted", text: card.action }) : null,
+      handoffLinks(card.seq, view));
+
+  const agentCard = (card, view) =>
+    h("div", { class: "agent", "data-seq": card.seq, "data-testid": `ui-agent-${card.seq}`, role: "button", tabindex: "0", onclick: () => openDrawer(card.seq) },
+      h("div", {}, h("strong", { text: card.agent }), ` · ${card.stage}${card.task ? ` ${card.task}` : ""}`),
+      h("div", { class: "muted", "data-elapsed": card.startedAt, text: `#${card.seq} · ${fmtSeconds(elapsed(card.startedAt))}` }),
+      handoffLinks(card.seq, view),
+      h("pre", { "data-narration": card.seq, text: card.narration.slice(-8).join("\n") || "…" }));
+
+  const renderStrip = (view) => {
+    const strip = $("strip");
+    strip.textContent = "";
+    for (const { stage, status } of view.pipeline) {
+      strip.append(h("div", { class: "stage", "data-status": status, "data-testid": `ui-stage-${stage}`, title: status, text: STAGE_LABELS[stage] || stage }));
     }
   };
 
-  load().catch((error) => {
-    statusEl.className = "error";
-    statusEl.textContent = String(error);
+  const renderBanner = (view) => {
+    const box = $("banner");
+    box.textContent = "";
+    const w = view.waiting;
+    if (!w) return;
+    // A PHI run sends the asks as a count and withholds the message.
+    const phi = typeof w.asks === "number";
+    const body = [];
+    if (phi) {
+      const count = w.asks === 1 ? "1 question waiting" : `${w.asks} questions waiting`;
+      body.push(h("p", { text: `${count}. Read them at the terminal or in the IP.` }));
+    } else {
+      body.push(h("p", { text: w.message }));
+      if (w.asks.length) {
+        body.push(h("ol", {}, w.asks.map((a) =>
+          h("li", {}, h("div", { text: a.q }),
+            a.rec ? h("div", { class: "muted", text: `Recommended: ${a.rec}` }) : null,
+            a.opts?.length ? h("div", { class: "muted", text: `Options: ${a.opts.join(" · ")}` }) : null))));
+      }
+    }
+    const input = h("textarea", { "data-testid": "ui-answer-input", placeholder: w.kind === "signoff" ? "approve, or what to change" : "your reply" });
+    const status = h("span", { class: "muted", "data-testid": "ui-answer-status" });
+    const command = h("code", { class: "cmd", "data-testid": "ui-answer-command", hidden: true });
+    const send = async () => {
+      const reply = input.value.trim();
+      if (!reply) return;
+      status.textContent = "Sending…";
+      command.hidden = true;
+      const out = await post("answer", { reply });
+      if (out.status === 409 && out.body.command) {
+        // No live waiter this server can reach: the reply must be run in the run's own session.
+        status.textContent = `${out.body.error || "Run this in the run's session"}:`;
+        command.textContent = out.body.command;
+        command.hidden = false;
+      } else if (out.ok) {
+        status.textContent = out.body.via === "spawn" ? "Started brewery answer." : "Sent.";
+        input.value = "";
+      } else {
+        status.textContent = out.body.error || `Error ${out.status}`;
+      }
+    };
+    box.append(h("div", { class: "banner", "data-testid": "ui-waiting-banner" },
+      h("strong", { text: w.kind === "signoff" ? "Waiting for sign-off" : "Waiting on you" }),
+      h("span", { class: "muted", "data-waiter": "", text: w.live ? "" : " (no live waiter)" }),
+      body, input,
+      h("div", { class: "actions" }, h("button", { class: "btn", "data-testid": "ui-answer-button", onclick: send }, "Answer"), status),
+      command));
+  };
+
+  const renderTotals = (view) => {
+    const t = view.totals;
+    const tokens = t.inputTokens === undefined ? "–" : `${fmtTokens(t.inputTokens)} in / ${fmtTokens(t.outputTokens)} out`;
+    $("totals").textContent = "";
+    $("totals").append(
+      h("span", {}, "Agent time ", h("b", { text: fmtSeconds(t.seconds) })),
+      h("span", {}, "Tokens ", h("b", { text: tokens })),
+      h("span", {}, "Cost ", h("b", { text: fmtCost(t.costUsd) })));
+  };
+
+  const renderActive = (view) => {
+    const box = $("active");
+    box.textContent = "";
+    if (!view.active.length) {
+      box.append(h("p", { class: "empty", text: "No agent is running." }));
+      return;
+    }
+    // Steps of the same stage and task running at once are a fan-out: draw them side by side.
+    const groups = new Map();
+    for (const card of view.active) {
+      const key = `${card.stage}|${card.task || ""}`;
+      groups.set(key, [...(groups.get(key) || []), card]);
+    }
+    for (const cards of groups.values()) {
+      if (cards.length > 1) box.append(h("div", { class: "fanout", "data-testid": "ui-fanout" }, cards.map((c) => agentCard(c, view))));
+      else box.append(agentCard(cards[0], view));
+    }
+  };
+
+  const renderLanes = (view) => {
+    const box = $("lanes");
+    box.textContent = "";
+    if (!view.tasks.length) box.append(h("p", { class: "empty", text: "No tasks yet." }));
+    for (const task of view.tasks) {
+      box.append(h("div", { class: "task", "data-testid": `ui-task-${task.id}` },
+        h("div", { class: "task-head" }, h("strong", { text: task.id }), task.title !== task.id ? h("span", { text: task.title }) : null,
+          h("span", { class: "muted", text: `${task.status} · ${task.attempts} attempt${task.attempts === 1 ? "" : "s"}` })),
+        ["test", "pick", "roast"].map((lane) =>
+          h("div", { class: "lane-row", "data-lane": lane },
+            h("span", { class: "lane-name", text: lane }),
+            h("div", { class: "cards" }, task.lanes[lane].length ? task.lanes[lane].map((c) => stepCard(c, view)) : h("span", { class: "empty", text: "–" }))))));
+    }
+    // Steps no task lane claims (distill, cut, brew, finish, an unknown task) still get cards.
+    const claimed = new Set(view.tasks.flatMap((t) => [...t.lanes.test, ...t.lanes.pick, ...t.lanes.roast].map((c) => c.seq)));
+    const other = view.steps.filter((c) => !claimed.has(c.seq));
+    if (other.length) {
+      box.append(h("div", { class: "task", "data-testid": "ui-task-run" },
+        h("div", { class: "task-head" }, h("strong", { text: "Run steps" })),
+        h("div", { class: "cards" }, other.map((c) => stepCard(c, view)))));
+    }
+  };
+
+  const renderRoutes = (view) => {
+    const body = $("routes");
+    body.textContent = "";
+    for (const [stage, route] of Object.entries(view.routes)) {
+      body.append(h("tr", {},
+        h("td", { text: stage }),
+        h("td", { text: route.agents.join(", ") || "–" }),
+        h("td", { class: route.from === "run" ? "from-run" : "from-config", text: route.from })));
+    }
+  };
+
+  const render = () => {
+    if (!current?.view) return;
+    const view = current.view;
+    const run = runList.find((r) => r.id === current.id);
+    $("run-title").textContent = run ? `${run.slug} · ${run.phase}` : current.id;
+    $("run-pr").textContent = "";
+    if (view.pr) {
+      const label = `PR #${view.pr.number}`;
+      $("run-pr").append(safeUrl(view.pr.url) ? h("a", { href: view.pr.url, target: "_blank", rel: "noopener noreferrer", text: label }) : label, view.pr.ci ? ` · CI ${view.pr.ci}` : "");
+    }
+    renderStrip(view);
+    // The banner holds a reply being typed: redraw it only when the wait itself changed.
+    const waitKey = JSON.stringify(view.waiting ? { ...view.waiting, live: undefined } : null);
+    if (waitKey !== current.waitKey) {
+      current.waitKey = waitKey;
+      renderBanner(view);
+    }
+    const liveNote = document.querySelector("[data-waiter]");
+    if (liveNote) liveNote.textContent = view.waiting?.live ? "" : " (no live waiter)";
+    renderTotals(view);
+    renderActive(view);
+    renderLanes(view);
+    renderRoutes(view);
+  };
+
+  const loadView = async () => {
+    if (!current) return;
+    const { id, rid } = current;
+    const res = await fetch(`/api/runs/${rid}`, { headers: headers() });
+    if (current?.id !== id) return;
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      $("run-title").textContent = `${id}: ${body.error || `error ${res.status}`}`;
+      return;
+    }
+    current.view = await res.json();
+    render();
+  };
+
+  // Many events in a burst (a step starting, usage, handoffs) refetch the view once.
+  let refetch;
+  const scheduleView = () => {
+    clearTimeout(refetch);
+    refetch = setTimeout(() => loadView().catch(() => {}), 300);
+  };
+
+  // ---- Event stream: fetch, so the token goes in a header, and resume by Last-Event-ID ----
+  const onEvent = (type, data) => {
+    if (!current) return;
+    if (type === "state") {
+      try {
+        current.view = JSON.parse(data);
+        render();
+      } catch {}
+      loadRuns().catch(() => {});
+      return;
+    }
+    const feed = $("feed");
+    const atBottom = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 4;
+    feed.append(document.createTextNode(`${data}\n`));
+    while (feed.childNodes.length > FEED_LINES) feed.firstChild.remove();
+    if (atBottom) feed.scrollTop = feed.scrollHeight;
+    let event;
+    try {
+      event = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (event.kind === "narration" && current.view) {
+      const card = current.view.steps.find((c) => c.seq === event.seq);
+      if (card) {
+        card.narration = [...card.narration, event.text].slice(-20);
+        const pre = document.querySelector(`[data-narration="${event.seq}"]`);
+        if (pre) pre.textContent = card.narration.slice(-8).join("\n");
+      }
+      return;
+    }
+    scheduleView();
+  };
+
+  const stream = async (generation) => {
+    let delay = 1000;
+    while (current && current.generation === generation) {
+      const { rid } = current;
+      const controller = new AbortController();
+      current.abort = () => controller.abort();
+      try {
+        const extra = current.lastEventId ? { "Last-Event-ID": current.lastEventId } : {};
+        const res = await fetch(`/api/runs/${rid}/events`, { headers: headers(extra), signal: controller.signal });
+        if (!res.ok || !res.body) throw new Error(`events ${res.status}`);
+        delay = 1000;
+        // Open the stream first, then read the view, so no state change falls between them.
+        loadView().catch(() => {});
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buffer = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let cut;
+          while ((cut = buffer.indexOf("\n\n")) >= 0) {
+            const block = buffer.slice(0, cut);
+            buffer = buffer.slice(cut + 2);
+            let type = "message";
+            const data = [];
+            for (const line of block.split("\n")) {
+              if (line.startsWith(":")) continue;
+              const colon = line.indexOf(":");
+              const field = colon < 0 ? line : line.slice(0, colon);
+              const val = colon < 0 ? "" : line.slice(colon + 1).replace(/^ /, "");
+              if (field === "id") current.lastEventId = val;
+              else if (field === "event") type = val;
+              else if (field === "data") data.push(val);
+            }
+            if (data.length && current?.generation === generation) onEvent(type, data.join("\n"));
+          }
+        }
+      } catch {
+        // Dropped or refused: retry below.
+      }
+      if (!current || current.generation !== generation) return;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      delay = Math.min(delay * 2, 15000);
+    }
+  };
+
+  let generations = 0;
+  const follow = (id) => {
+    current?.abort?.();
+    // Ids like `zerg~slug` go in the path encoded once.
+    current = { id, rid: encodeURIComponent(id), view: null, lastEventId: "", generation: ++generations, waitKey: undefined };
+    $("pick").hidden = true;
+    $("run").hidden = false;
+    $("feed").textContent = "";
+    $("banner").textContent = "";
+    $("note-command").hidden = true;
+    $("note-status").textContent = "";
+    for (const b of document.querySelectorAll(".run")) b.setAttribute("aria-pressed", String(b.dataset.testid === `ui-run-${id}`));
+    closeDrawer();
+    stream(current.generation);
+  };
+
+  // ---- Answer and note ----
+  const post = async (action, payload) => {
+    const { rid } = current;
+    const path = action === "answer" ? `/api/runs/${rid}/answer` : `/api/runs/${rid}/note`;
+    try {
+      const res = await fetch(path, { method: "POST", headers: headers({ "content-type": "application/json" }), body: JSON.stringify(payload) });
+      const body = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, body };
+    } catch (error) {
+      return { ok: false, status: 0, body: { error: String(error) } };
+    }
+  };
+
+  $("note-send").addEventListener("click", async () => {
+    const text = $("note-text").value.trim();
+    if (!text || !current) return;
+    $("note-status").textContent = "Sending…";
+    $("note-command").hidden = true;
+    const out = await post("note", { text });
+    if (out.status === 409 && out.body.command) {
+      $("note-status").textContent = `${out.body.error || "Run this in the run's session"}:`;
+      $("note-command").textContent = out.body.command;
+      $("note-command").hidden = false;
+    } else if (out.ok) {
+      $("note-status").textContent = "Noted.";
+      $("note-text").value = "";
+    } else {
+      $("note-status").textContent = out.body.error || `Error ${out.status}`;
+    }
+  });
+
+  // ---- Drawer: one step's detail ----
+  const closeDrawer = () => $("drawer").classList.remove("open");
+  $("drawer-close").addEventListener("click", closeDrawer);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeDrawer(); });
+
+  const handoffBlock = (handoff) =>
+    h("div", {},
+      h("p", { text: handoff.did }),
+      ["learned", "traps", "files"].map((key) => handoff[key]?.length
+        ? [h("h3", { text: key }), h("ul", {}, handoff[key].map((item) => h("li", { text: `• ${item}` })))]
+        : null));
+
+  let drawerTicket = 0;
+  const openDrawer = async (seq) => {
+    if (!current) return;
+    const { id, rid } = current;
+    const ticket = ++drawerTicket;
+    const body = $("drawer-body");
+    $("drawer-title").textContent = `Step #${seq}`;
+    body.textContent = "Loading…";
+    $("drawer").classList.add("open");
+    let res;
+    let detail;
+    try {
+      res = await fetch(`/api/runs/${rid}/steps/${seq}`, { headers: headers() });
+      detail = await res.json().catch(() => ({}));
+    } catch (error) {
+      if (ticket === drawerTicket) body.textContent = String(error);
+      return;
+    }
+    // A later click (or another run) owns the drawer now.
+    if (current?.id !== id || ticket !== drawerTicket) return;
+    body.textContent = "";
+    if (!res.ok) {
+      body.append(h("p", { class: "error", text: detail.error || `Error ${res.status}` }));
+      return;
+    }
+    $("drawer-title").textContent = `#${detail.seq} ${detail.stage}${detail.task ? ` ${detail.task}` : ""} · ${detail.agent}`;
+    if (detail.phiWithheld) body.append(h("p", { class: "muted", text: "PHI run: prompt, log, and handoffs are withheld." }));
+    if (current.view) body.append(handoffLinks(detail.seq, current.view) || "");
+    if (detail.result) body.append(h("h3", { text: "Result" }), h("pre", { text: JSON.stringify(detail.result, null, 2) }));
+    if (detail.handoffIn?.length) {
+      body.append(h("h3", { text: "Handoffs in" }));
+      for (const x of detail.handoffIn) body.append(h("div", {}, h("a", { onclick: () => jumpTo(x.seq), text: `from #${x.seq}` }), handoffBlock(x.handoff)));
+    }
+    if (detail.handoffOut) body.append(h("h3", { text: "Handoff out" }), handoffBlock(detail.handoffOut));
+    if (detail.logTail?.length) body.append(h("h3", { text: "Log tail" }), h("pre", { text: detail.logTail.join("\n") }));
+    if (detail.prompt) body.append(h("h3", { text: "Prompt" }), h("pre", { text: detail.prompt }));
+  };
+
+  // Running cards' elapsed time ticks without a refetch.
+  setInterval(() => {
+    for (const el of document.querySelectorAll("[data-elapsed]")) {
+      el.textContent = el.textContent.replace(/· .*$/, `· ${fmtSeconds(elapsed(el.dataset.elapsed))}`);
+    }
+  }, 1000);
+  // The run list refreshes on its own; the followed run streams.
+  setInterval(() => loadRuns().catch(() => {}), 10000);
+
+  loadRuns().catch((error) => {
+    $("status").className = "error";
+    $("status").textContent = String(error);
   });
 </script>
 </body>

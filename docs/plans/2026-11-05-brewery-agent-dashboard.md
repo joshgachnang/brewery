@@ -391,7 +391,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: none (read-only, plus proxying answers that B checks)
   - Test skills: none
 
-- [ ] **T12** — Build the dashboard page
+- [x] **T12** — Build the dashboard page
   - Depends on: T6, T7, T9, T11
   - Files: cli/src/ui/page.html, cli/test/ui-page.test.ts
   - Criteria: one self-contained HTML file (inline CSS and JS, no CDN, no build step) that renders only `RunView`, step details, sources, and the event stream.
