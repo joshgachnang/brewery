@@ -82,10 +82,21 @@ const EDIT_TOOLS = "Edit,Write,NotebookEdit";
 // Everything a read-only child may see. Credentials for GitHub and the App never appear.
 const READ_ONLY_ENV_KEYS = ["PATH", "HOME", "TMPDIR", "USER", "SHELL", "LANG", "TERM", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"];
 
+// Token and cost totals for one step, as the agent itself reported them. Each agent's
+// own counts are kept: Claude's input excludes cache reads, Codex's input includes them.
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  costUsd?: number;
+}
+
 export interface RunOutcome {
   result: StepResult;
   exitCode: number | null;
   seconds: number;
+  // Absent when the agent printed no usage records (command agents never do).
+  usage?: Usage;
 }
 
 const tomlString = (value: string): string => JSON.stringify(value);
@@ -296,6 +307,48 @@ export const parseNarrationLine = (type: AgentProfile["type"], line: string): st
   return [];
 };
 
+const count = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
+
+// Claude reports usage once, on its final `result` record; Codex reports it on every
+// `turn.completed`. Other agents report nothing brewery can read.
+export const parseUsageLine = (type: AgentProfile["type"], line: string): Usage | null => {
+  if (type !== "claude" && type !== "codex") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const event = record(parsed);
+  if (event?.type !== (type === "claude" ? "result" : "turn.completed")) return null;
+  const usage = record(event.usage);
+  const inputTokens = count(usage?.input_tokens);
+  const outputTokens = count(usage?.output_tokens);
+  if (inputTokens === undefined || outputTokens === undefined) return null;
+  const cacheReadTokens = count(type === "claude" ? usage?.cache_read_input_tokens : usage?.cached_input_tokens);
+  const costUsd = type === "claude" ? count(event.total_cost_usd) : undefined;
+  return {
+    inputTokens,
+    outputTokens,
+    ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+    ...(costUsd !== undefined ? { costUsd } : {}),
+  };
+};
+
+const addUsage = (total: Usage | undefined, next: Usage): Usage => {
+  if (!total) return next;
+  const sum = (a?: number, b?: number): number | undefined => a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
+  const cacheReadTokens = sum(total.cacheReadTokens, next.cacheReadTokens);
+  const costUsd = sum(total.costUsd, next.costUsd);
+  return {
+    inputTokens: total.inputTokens + next.inputTokens,
+    outputTokens: total.outputTokens + next.outputTokens,
+    ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
+    ...(costUsd !== undefined ? { costUsd } : {}),
+  };
+};
+
 export const readResult = (resultFile: string): StepResult | string => {
   if (!existsSync(resultFile)) return "agent exited without writing its result file";
   let raw: unknown;
@@ -336,27 +389,33 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
     timeout: req.timeoutMin * 60_000,
   });
   let stdoutText = "";
-  const pump = async (stream: ReadableStream<Uint8Array>, narrate: boolean): Promise<void> => {
+  let usage: Usage | undefined;
+  // Every complete stdout line feeds both the narration feed and the usage totals.
+  const stdoutLine = (line: string): void => {
+    const lineUsage = parseUsageLine(req.profile.type, line);
+    // Claude's result record is already the session total; Codex reports each turn.
+    if (lineUsage) usage = req.profile.type === "codex" ? addUsage(usage, lineUsage) : lineUsage;
+    if (!req.onNarration) return;
+    for (const narration of parseNarrationLine(req.profile.type, line)) req.onNarration(narration);
+  };
+  const pump = async (stream: ReadableStream<Uint8Array>, isStdout: boolean): Promise<void> => {
     const decoder = new TextDecoder();
     let pending = "";
     const consume = (text: string): void => {
       appendFileSync(req.logFile, text);
-      if (narrate && req.readOnly) stdoutText += text;
-      if (!narrate || !req.onNarration) return;
+      if (!isStdout) return;
+      if (req.readOnly) stdoutText += text;
       pending += text;
       let boundary = pending.indexOf("\n");
       while (boundary !== -1) {
-        const line = pending.slice(0, boundary);
+        stdoutLine(pending.slice(0, boundary));
         pending = pending.slice(boundary + 1);
-        for (const narration of parseNarrationLine(req.profile.type, line)) req.onNarration(narration);
         boundary = pending.indexOf("\n");
       }
     };
     for await (const chunk of stream) consume(decoder.decode(chunk, { stream: true }));
     consume(decoder.decode());
-    if (narrate && req.onNarration && pending) {
-      for (const narration of parseNarrationLine(req.profile.type, pending)) req.onNarration(narration);
-    }
+    if (isStdout && pending) stdoutLine(pending);
   };
   await Promise.all([pump(proc.stdout, true), pump(proc.stderr, false), proc.exited]);
   const seconds = Math.round((Date.now() - started) / 1000);
@@ -371,5 +430,5 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
           fail: [{ need: "a result file", want: req.resultFile, got: parsed, ev: req.logFile }],
         }
       : parsed;
-  return { result, exitCode: proc.exitCode, seconds };
+  return { result, exitCode: proc.exitCode, seconds, ...(usage ? { usage } : {}) };
 };

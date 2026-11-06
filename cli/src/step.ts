@@ -95,6 +95,7 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       onNarration: (text) => appendEvent(state, { kind: "narration", seq, text }),
     });
     ctx.log(`  ${label}: ${outcome.result.status} in ${outcome.seconds}s — ${outcome.result.action}`);
+    if (outcome.usage) appendEvent(state, { kind: "usage", seq, ...outcome.usage });
     appendEvent(state, { kind: "step.end", seq, status: outcome.result.status, action: outcome.result.action, seconds: outcome.seconds });
     state.history.push({
       seq,
@@ -105,6 +106,7 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       seconds: outcome.seconds,
       log: `${base}.log`,
       task: opts.task,
+      ...(outcome.usage ? { usage: outcome.usage } : {}),
       ...(opts.escalated && ctx.config.escalate[stage]?.includes(agent) ? { escalated: true } : {}),
     });
     saveState(state);

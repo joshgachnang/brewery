@@ -184,7 +184,7 @@ None — no Claude Design canvas. The layout is specified in T12's Criteria.
   - Blast radius: `events.ts` is imported by every emitter. Adding union members changes no emitted output → the existing narration and flow tests pass unchanged.
   - Test skills: none
 
-- [ ] **T3** — Record tokens and cost for every step
+- [x] **T3** — Record tokens and cost for every step
   - Depends on: T2
   - Files: cli/src/agents.ts, cli/src/step.ts, cli/src/state.ts, cli/test/fixtures/fake-agent.ts, cli/test/usage.test.ts
   - Criteria:

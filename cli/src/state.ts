@@ -3,7 +3,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { Ask, Finding, Status } from "./agents.ts";
+import type { Ask, Finding, Status, Usage } from "./agents.ts";
 import { writePipeline } from "./pipeline.ts";
 
 export type Phase = "distill" | "signoff" | "approved" | "build" | "integrate" | "review" | "brew" | "finish" | "done";
@@ -36,6 +36,8 @@ export interface HistoryEntry {
   task?: string;
   // Ran on the stage's escalation route, not its normal one.
   escalated?: boolean;
+  // Tokens and cost the agent reported for this step; absent when it reported none.
+  usage?: Usage;
 }
 
 export interface Answer {

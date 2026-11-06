@@ -19,6 +19,8 @@ interface Entry {
   waitFor?: string[];
   waitForTask?: { id: string; status: string };
   sleepAfterResultMs?: number;
+  // Raw JSON lines printed to stdout before the result is written (e.g. a Claude `result` usage record).
+  stdout?: unknown[];
 }
 
 const prompt = await new Response(Bun.stdin.stream()).text();
@@ -75,6 +77,7 @@ for (const [path, content] of Object.entries(entry.write ?? {})) {
   mkdirSync(dirname(join(process.cwd(), path)), { recursive: true });
   writeFileSync(join(process.cwd(), path), content);
 }
+for (const line of entry.stdout ?? []) console.log(JSON.stringify(line));
 if (entry.structured !== undefined) {
   console.log(JSON.stringify({ type: "result", is_error: false, structured_output: entry.structured }));
 } else if (!entry.noResult) {

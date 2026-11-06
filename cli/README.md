@@ -217,6 +217,7 @@ state.
 | `step.start` | `seq`, `stage`, optional `task`, `agent` | Before an agent process starts |
 | `step.end` | `seq`, `status`, `action`, `seconds` | After its result is read, including failed results |
 | `narration` | `seq`, `text` | As Claude or Codex emits assistant text or starts a tool; one line, at most 300 characters |
+| `usage` | `seq`, `inputTokens`, `outputTokens`, optional `cacheReadTokens`, `costUsd` | Once per step, just before `step.end`, when the agent reported usage. Claude's final `result` record gives tokens and cost; Codex's `turn.completed` records give tokens only, summed over the step. Counts are the agent's own: Claude's `inputTokens` excludes cache reads, Codex's includes them. Command and Cursor agents emit none. The same totals are stored as `usage` on the step's `state.json` history entry |
 | `waiting` | `waitingKind` (`signoff` or `gate`), `message`, optional `ip` | When brewery stops for a human answer |
 | `resumed` | — | When brewery accepts an answer to a waiting run |
 | `note` | `text` | When a human answer is recorded |
