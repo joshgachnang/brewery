@@ -2,12 +2,12 @@
 // wrote, and the tail of its log as narration lines. Every string is scrubbed. A PHI run
 // gets structure only: no prompt, log tail, or handoffs, and the result reduced to its
 // status and counts.
-import { closeSync, openSync, readFileSync, readSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, openSync, readFileSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { cleanHandoff, parseNarrationLine, type Handoff, type StepResult } from "../../agents.ts";
 import { DEFAULT_CONFIG, loadConfig, type AgentProfile } from "../../config.ts";
 import { scrub } from "../../scrub.ts";
-import type { RunRef } from "../runs.ts";
+import { inRunDir, type RunRef } from "../runs.ts";
 
 // The drawer shows this many narration lines from the end of the log.
 export const LOG_TAIL_LINES = 80;
@@ -79,16 +79,31 @@ const findStep = (run: RunRef, events: Record<string, unknown>[], seq: number): 
 const stepBase = (run: RunRef, step: StepRef): string =>
   join(run.runDir, "steps", `${String(step.seq).padStart(3, "0")}-${step.stage}${step.task ? `-${step.task}` : ""}-${step.agent}`);
 
-const readText = (path: string): string | undefined => {
+// Opens a step artifact for reading, refusing a link (O_NOFOLLOW) and, for a scanned run,
+// any path whose directory resolves outside the run directory.
+const openArtifact = (run: RunRef, path: string): number | undefined => {
+  if (!inRunDir(run, path)) return undefined;
   try {
-    return readFileSync(path, "utf8");
+    return openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   } catch {
     return undefined;
   }
 };
 
-const readResult = (base: string): Record<string, unknown> | undefined => {
-  const text = readText(`${base}.result.json`);
+const readText = (run: RunRef, path: string): string | undefined => {
+  const fd = openArtifact(run, path);
+  if (fd === undefined) return undefined;
+  try {
+    return readFileSync(fd, "utf8");
+  } catch {
+    return undefined;
+  } finally {
+    closeSync(fd);
+  }
+};
+
+const readResult = (run: RunRef, base: string): Record<string, unknown> | undefined => {
+  const text = readText(run, `${base}.result.json`);
   if (text === undefined) return undefined;
   try {
     const parsed = JSON.parse(text) as unknown;
@@ -112,20 +127,20 @@ const handoffOf = (result: Record<string, unknown> | undefined): Handoff | undef
 };
 
 // The last bytes of the log; the first, possibly partial, line is dropped when cut.
-const readLogEnd = (path: string): string | undefined => {
-  let fd: number | undefined;
+const readLogEnd = (run: RunRef, path: string): string | undefined => {
+  const fd = openArtifact(run, path);
+  if (fd === undefined) return undefined;
   try {
-    const size = statSync(path).size;
+    const size = fstatSync(fd).size;
     const length = Math.min(size, LOG_READ_BYTES);
     const buffer = Buffer.alloc(length);
-    fd = openSync(path, "r");
     const read = readSync(fd, buffer, 0, length, size - length);
     const text = buffer.subarray(0, read).toString("utf8");
     return length < size ? text.slice(text.indexOf("\n") + 1) : text;
   } catch {
     return undefined;
   } finally {
-    if (fd !== undefined) closeSync(fd);
+    closeSync(fd);
   }
 };
 
@@ -143,7 +158,7 @@ const parserTypes = (run: RunRef, agent: string): AgentProfile["type"][] => {
 };
 
 const logTailOf = (run: RunRef, step: StepRef, base: string): string[] | undefined => {
-  const text = readLogEnd(`${base}.log`);
+  const text = readLogEnd(run, `${base}.log`);
   if (text === undefined) return undefined;
   const types = parserTypes(run, step.agent);
   const lines: string[] = [];
@@ -173,7 +188,7 @@ const handoffsIn = (run: RunRef, events: Record<string, unknown>[], seq: number)
     if (event.kind !== "handoff" || event.to !== seq || typeof event.from !== "number") continue;
     if (received.some((r) => r.seq === event.from)) continue;
     const source = findStep(run, events, event.from);
-    const handoff = source ? handoffOf(readResult(stepBase(run, source))) : undefined;
+    const handoff = source ? handoffOf(readResult(run, stepBase(run, source))) : undefined;
     if (handoff) received.push({ seq: event.from, handoff });
   }
   return received;
@@ -187,14 +202,14 @@ export const stepRoute = (_req: Request, run: RunRef, params: Record<string, str
   const step = findStep(run, events, seq);
   if (!step) return json({ error: "no such step" }, 404);
   const base = stepBase(run, step);
-  const result = readResult(base);
+  const result = readResult(run, base);
 
   if (run.phi) {
     const detail: StepDetail = { ...step, ...(result ? { result: reducedResult(result) } : {}), phiWithheld: true };
     return json(detail);
   }
 
-  const prompt = readText(`${base}.prompt.md`);
+  const prompt = readText(run, `${base}.prompt.md`);
   const handoffOut = handoffOf(result);
   const logTail = logTailOf(run, step, base);
   const detail: StepDetail = {

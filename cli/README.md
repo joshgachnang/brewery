@@ -358,13 +358,13 @@ removes it from the address bar.
 
 - **Answer and note.** `POST /api/runs/<id>/answer {reply}` does what `brewery answer` does
   without racing a live process. A run whose waiting heartbeat is under 15 seconds old gets
-  the reply through its `reply.json` (202 `{via: "reply-file"}`). A writable run (local, or a
-  scanned workspace this server's user can write) with no live waiter and no live `run.lock`
-  holder gets a detached `brewery answer <slug> <reply>`, logging
-  to `.terreno/brewery/<slug>/ui-answer-<ts>.log` (202 `{via: "spawn", pid, log}`); that child
-  owns the run until it next waits or finishes. A run that is not waiting, one another process
-  owns, or one this server cannot write (a read-only scanned workspace) answers 409 `{error, command}`,
-  where `command` is the line to run in that session. `POST /api/runs/<id>/note {text}` appends
+  the reply through its `reply.json` (202 `{via: "reply-file"}`). A local run with
+  no live waiter and no live `run.lock` holder gets a detached `brewery answer <slug> <reply>`,
+  logging to `.terreno/brewery/<slug>/ui-answer-<ts>.log` (202 `{via: "spawn", pid, log}`);
+  that child owns the run until it next waits or finishes. A scanned run is never answered by a
+  process on this host. A run that is not waiting, one another process owns, a scanned run with
+  no live waiter, or one this server cannot write answers 409 `{error, command}`, where
+  `command` is the line to run in that session. `POST /api/runs/<id>/note {text}` appends
   a note as `brewery note` does (200). Both need a JSON body (else 415) and a non-empty
   field (else 400).
 
@@ -403,10 +403,9 @@ put the glob in the zerg host's `ui.scan` and the peer string in the laptop's `u
   `BREWERY_REPLY_WAIT_MIN=240` in the zerg image's environment, beside
   `BREWERY_SKILLS_DIR`, and a waiting drone keeps its heartbeat fresh for four hours. An
   answer from the page goes into its `reply.json`, which the drone takes and deletes. After
-  the drone has exited, a workspace the host user can write gets a detached `brewery answer`
-  started on the host (as that user, with the host's environment and `--repo` set to the
-  workspace). A read-only workspace, or one whose run lock is held, answers 409 with the
-  `brewery answer` command to run in that session instead.
+  the drone has exited, the page answers 409 with the `brewery answer` command to run in that
+  workspace's session. The host never starts `brewery answer` for a container's run, because
+  that would continue the run's steps outside the container.
 - **Permissions.** Run directories are written by the containers. A workspace the host
   user cannot read shows as `unreadable` in `sources`, and one it cannot write is
   `read-only`, so a run there that no live drone is waiting on gets the command instead.

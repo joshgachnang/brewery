@@ -2,7 +2,7 @@
 // files, `.brewery.json`, and the PHI flag only through the fields it returns, never
 // through `state.repo`, so later sources (zerg scan roots, peers) change no route.
 import { accessSync, constants, existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { basename, isAbsolute, join, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import { readIndex, runDir as stateRunDir, type Phase, type RunState } from "../state.ts";
 
 export interface RunRef {
@@ -252,6 +252,19 @@ const contained = (wsDir: string, runDir: string): boolean => {
   const realRun = realOf(runDir);
   if (!realWs || !realRun || !within(realRun, realWs)) return false;
   return !["state.json", "events.jsonl"].some((name) => isLink(join(runDir, name)));
+};
+
+// A file a route opens under a scanned run's directory: not a link itself, and its parent
+// resolves inside the run directory, so a linked `steps/` cannot carry the read elsewhere.
+// A missing file passes; the caller's read simply finds nothing. Local runs are this
+// machine's own and are not checked.
+export const inRunDir = (run: RunRef, path: string): boolean => {
+  if (run.source !== SCAN) return true;
+  if (isLink(path)) return false;
+  const realRun = realOf(run.runDir);
+  const realParent = realOf(dirname(path));
+  if (!realRun || !realParent) return !existsSync(path);
+  return within(realParent, realRun);
 };
 
 const scanRef = (ws: Workspace, slug: string): RunRef | undefined => {

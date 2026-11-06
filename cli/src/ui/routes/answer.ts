@@ -1,15 +1,16 @@
 // POST /api/runs/:id/answer {reply} and /note {text}: what `brewery answer` and
 // `brewery note` do, from the page, without racing a live process.
 //   - A live waiter (heartbeat < 15 s) gets the reply through reply.json.
-//   - A writable run with no waiter and no lock holder gets a detached `brewery answer`.
+//   - A local run with no waiter and no lock holder gets a detached `brewery answer`.
+//     A scanned run's process lives in its container; this host never starts one for it.
 //   - Anything else is 409 with the command to run in the run's own session.
 // The server has already checked the token and the Origin.
 import { spawn } from "node:child_process";
-import { closeSync, existsSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { closeSync, constants, existsSync, openSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { appendEvent } from "../../events.ts";
 import { appendNote, runDir, type RunState } from "../../state.ts";
-import type { RunRef } from "../runs.ts";
+import { inRunDir, type RunRef } from "../runs.ts";
 
 const WAITER_FRESH_MS = 15_000;
 // A child spawned this recently may not have taken run.lock yet; a second answer waits for it.
@@ -76,16 +77,27 @@ const readBody = async (req: Request, field: string): Promise<{ value: string } 
   return { value };
 };
 
-const writeReply = (run: RunRef, reply: string): void => {
+// A new file only: O_EXCL refuses any existing name, a planted link included, so a write
+// never follows a link out of the run directory.
+const NEW_FILE = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW;
+
+const writeReply = (run: RunRef, reply: string): boolean => {
   const path = join(run.runDir, "reply.json");
-  const tmp = `${path}.${process.pid}.tmp`;
-  writeFileSync(tmp, `${JSON.stringify({ reply, at: new Date().toISOString() })}\n`);
+  const tmp = `${path}.${process.pid}.${Date.now()}.tmp`;
+  if (!inRunDir(run, tmp) || !inRunDir(run, path)) return false;
+  const fd = openSync(tmp, NEW_FILE, 0o644);
+  try {
+    writeFileSync(fd, `${JSON.stringify({ reply, at: new Date().toISOString() })}\n`);
+  } finally {
+    closeSync(fd);
+  }
   renameSync(tmp, path);
+  return true;
 };
 
 const spawnAnswer = (run: RunRef, reply: string): { pid: number; log: string } | undefined => {
   const log = join(run.runDir, `ui-answer-${new Date().toISOString().replace(/[:.]/g, "-")}.log`);
-  const fd = openSync(log, "a");
+  const fd = openSync(log, NEW_FILE, 0o644);
   const argv = COMPILED ? [] : [CLI_SOURCE];
   try {
     const child = spawn(process.execPath, [...argv, "answer", run.state.slug, reply, "--repo", run.repoRoot], {
@@ -114,9 +126,10 @@ const answer = async (req: Request, run: RunRef): Promise<Response> => {
   const command = `brewery answer ${shellWord(run.state.slug)} ${shellQuote(reply)}`;
   if (!run.writable || !sameDir(run)) return json({ error: "this run can only be answered in its own session", command }, 409);
   if (liveWaiter(run.state)) {
-    writeReply(run, reply);
+    if (!writeReply(run, reply)) return json({ error: "this run can only be answered in its own session", command }, 409);
     return json({ via: "reply-file" }, 202);
   }
+  if (run.source !== "local") return json({ error: "no live waiter; answer in the run's own session", command }, 409);
   if (lockHeld(run)) return json({ error: "another brewery process owns this run", command }, 409);
   const child = spawnAnswer(run, reply);
   if (!child) return json({ error: "could not start brewery answer", command }, 500);

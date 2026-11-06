@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { newState, type Phase, type RunState } from "../src/state.ts";
 import { findRun } from "../src/ui/runs.ts";
@@ -335,5 +335,110 @@ describe("brewery ui --scan: a workspace cannot reach outside itself", () => {
     const src = body.sources.find((s) => s.kind === "scan");
     expect(src?.status).toBe("unreadable");
     expect(src?.detail).toContain(join(root, "ws1", "merged", ".terreno", "brewery", "feat"));
+  });
+});
+
+// A step entry in history, so the step route can find seq's file names.
+const histEntry = (seq: number): RunState["history"][number] => ({
+  seq,
+  stage: "pick",
+  task: "T1",
+  agent: "claude",
+  status: "PASS",
+  action: "next",
+  seconds: 1,
+  log: `/workspace/.terreno/brewery/feat/steps/${String(seq).padStart(3, "0")}-pick-T1-claude.log`,
+});
+const stepName = (seq: number): string => `${String(seq).padStart(3, "0")}-pick-T1-claude`;
+
+describe("brewery ui --scan: step artifacts cannot be links out of the workspace", () => {
+  const SECRET = "secret-host-file-content";
+
+  test("a symlinked step prompt, result, or log is not served", async () => {
+    const root = tmp();
+    const dir = writeScanRun(root, "ws1", "feat", { history: [histEntry(1)] });
+    const outside = join(root, "hostsecret.txt");
+    writeFileSync(outside, `${SECRET}\n`);
+    writeFileSync(join(root, "hostresult.json"), JSON.stringify({ status: "PASS", action: "x", summary: SECRET }));
+    mkdirSync(join(dir, "steps"), { recursive: true });
+    symlinkSync(outside, join(dir, "steps", `${stepName(1)}.prompt.md`));
+    symlinkSync(join(root, "hostresult.json"), join(dir, "steps", `${stepName(1)}.result.json`));
+    symlinkSync(outside, join(dir, "steps", `${stepName(1)}.log`));
+    await start([`${root}/*/merged`]);
+    const res = await api("/api/runs/scan~ws1~feat/steps/1");
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain(SECRET);
+    const body = JSON.parse(text) as { prompt?: string; result?: unknown };
+    expect(body.prompt).toBeUndefined();
+    expect(body.result).toBeUndefined();
+  });
+
+  test("a symlinked steps/ directory is not served, and neither are the handoffs read through it", async () => {
+    const root = tmp();
+    const dir = writeScanRun(root, "ws1", "feat", { history: [histEntry(1), histEntry(2)] });
+    const elsewhere = join(root, "elsewhere");
+    mkdirSync(elsewhere, { recursive: true });
+    writeFileSync(join(elsewhere, `${stepName(2)}.prompt.md`), `${SECRET}\n`);
+    const handoff = { did: SECRET, learned: [], traps: [], files: [] };
+    writeFileSync(join(elsewhere, `${stepName(1)}.result.json`), JSON.stringify({ status: "PASS", action: "x", summary: "s", handoff }));
+    symlinkSync(elsewhere, join(dir, "steps"));
+    writeFileSync(join(dir, "events.jsonl"), line({ kind: "handoff", from: 1, to: 2 }));
+    await start([`${root}/*/merged`]);
+    const res = await api("/api/runs/scan~ws1~feat/steps/2");
+    expect(res.status).toBe(200);
+    const text = await res.text();
+    expect(text).not.toContain(SECRET);
+    expect((JSON.parse(text) as { handoffIn: unknown[] }).handoffIn).toEqual([]);
+  });
+
+  test("a plain step prompt inside the workspace is still served", async () => {
+    const root = tmp();
+    const dir = writeScanRun(root, "ws1", "feat", { history: [histEntry(1)] });
+    mkdirSync(join(dir, "steps"), { recursive: true });
+    writeFileSync(join(dir, "steps", `${stepName(1)}.prompt.md`), "build T1\n");
+    await start([`${root}/*/merged`]);
+    const body = (await (await api("/api/runs/scan~ws1~feat/steps/1")).json()) as { prompt?: string };
+    expect(body.prompt).toBe("build T1\n");
+  });
+});
+
+describe("brewery ui --scan: answering a scanned run", () => {
+  const post = (path: string, body: unknown): Promise<Response> =>
+    fetch(`http://127.0.0.1:${ui?.port}${path}`, {
+      method: "POST",
+      headers: { "X-Brewery-Token": TOKEN, "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+  test("a writable scanned run waiting with no live waiter → 409 with the command, and nothing is spawned", async () => {
+    const root = tmp();
+    const waiting: RunState["waiting"] = { kind: "signoff", asks: [], message: "Approve?", since: new Date().toISOString() };
+    const dir = writeScanRun(root, "ws1", "feat", { phase: "signoff" as Phase, waiting });
+    expect(findRun("scan~ws1~feat", { repo: tmp(), scan: [`${root}/*/merged`] })?.writable).toBe(true);
+    await start([`${root}/*/merged`]);
+    const res = await post("/api/runs/scan~ws1~feat/answer", { reply: "ok" });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string; command: string };
+    expect(body.error).toContain("no live waiter");
+    expect(body.command).toBe('brewery answer feat "ok"');
+    expect(readdirSync(dir).filter((f) => f.startsWith("ui-answer-"))).toEqual([]);
+    expect(readdirSync(dir)).not.toContain("reply.json");
+  });
+
+  test("a writable scanned run with a live waiter still gets reply.json", async () => {
+    const root = tmp();
+    const waiting: RunState["waiting"] = {
+      kind: "signoff",
+      asks: [],
+      message: "Approve?",
+      since: new Date().toISOString(),
+      heartbeat: new Date().toISOString(),
+    };
+    const dir = writeScanRun(root, "ws1", "feat", { phase: "signoff" as Phase, waiting });
+    await start([`${root}/*/merged`]);
+    const res = await post("/api/runs/scan~ws1~feat/answer", { reply: "ok" });
+    expect(res.status).toBe(202);
+    expect(readdirSync(dir)).toContain("reply.json");
   });
 });
