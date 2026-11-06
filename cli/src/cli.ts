@@ -15,10 +15,11 @@ import { barrel } from "./commands/barrel.ts";
 import { cutReport, cutSummary, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
-import { FAN_OUT, loadConfig, STAGES, userConfigPath } from "./config.ts";
+import { ui } from "./commands/ui.ts";
+import { FAN_OUT, loadConfig, replyWaitMin, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
 import { githubForge } from "./forge.ts";
-import { readReplyFromTty } from "./human.ts";
+import { waitForReply } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";
 import type { Ctx } from "./step.ts";
@@ -66,16 +67,27 @@ Usage:
   brewery board [--merges N] [--json]
       This repo's board from its IPs and runs: in progress, blocked, next up, recent merges.
   brewery agents               Agent profiles, availability, and stage routing
+  brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]... [--peer NAME=URL#TOKEN]...
+      Serve a token-guarded dashboard of this machine's runs and each run's scrubbed live
+      event feed. Prints http://<host>:<port>/?token=<t> and serves until killed. Defaults:
+      port 4848, host 127.0.0.1 (anything else needs --host), token from BREWERY_UI_TOKEN
+      or random per start. PHI repos ("phi": true in .brewery.json) show structure only.
+      --scan GLOB (repeatable, or ui.scan in the user config) also lists the runs of every
+      matching workspace, such as '/srv/agent-workspaces/*/merged', as scan~<dir>~<slug>.
+      --peer NAME=URL#TOKEN (repeatable, or ui.peers in the user config) merges another
+      brewery ui's runs in as NAME~<id> and proxies their routes; the token stays server-side.
   brewery help
 
 Common flags:
   --agents stage=a+b,...   Override routing, e.g. pick=claude,roast=claude+codex+local
   --repo <dir>             Target repository (default: current directory)
-  --no-wait                Never read a reply from the terminal
+  --no-wait                Never wait for a reply (terminal or reply.json)
   --go                     After approval, keep going into barrel
   --parallel N             Max concurrent task builds for this run (1 = sequential)
 
 Config: ${userConfigPath()} and <repo>/.brewery.json.
+A run with no terminal watches .terreno/brewery/<slug>/reply.json for BREWERY_REPLY_WAIT_MIN
+(or the user config's replyWaitMin) minutes before exiting 3; the default 0 exits at once.
 Exit codes: 0 done or approved, 3 waiting on the human, 4 cellar or calibrate proposed
 more changes than allowed (no PR), 1 error.`;
 
@@ -112,6 +124,17 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
   return { positional, flags };
 };
 
+// Every value of a repeatable flag (`--scan a --scan b`, or `--scan=a`), in order.
+const flagValues = (argv: string[], name: string): string[] => {
+  const values: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg.startsWith(`--${name}=`)) values.push(arg.slice(name.length + 3));
+    else if (arg === `--${name}` && argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) values.push(argv[++i]);
+  }
+  return values;
+};
+
 const str = (value: string | true | undefined): string | undefined => (typeof value === "string" ? value : undefined);
 
 const log = (line: string): void => console.log(line);
@@ -133,10 +156,12 @@ const afterApproval = async (ctx: Ctx, go: boolean): Promise<number> => {
   return (await barrel(ctx, githubCi)) === "done" ? 0 : WAITING;
 };
 
-// When someone is at the terminal, take the reply right here instead of exiting.
+// Take the reply right here instead of exiting: from the terminal when someone is at it, or
+// from reply.json for up to replyWaitMin minutes. --no-wait exits at once.
 const replyLoop = async (ctx: Ctx, interactive: boolean, go: boolean): Promise<number> => {
   while (ctx.state.waiting) {
-    const reply = readReplyFromTty(interactive);
+    const tty = interactive && process.stdin.isTTY ? process.stdin : null;
+    const reply = await waitForReply({ state: ctx.state, tty, replyWaitMin: interactive ? replyWaitMin() : 0 });
     if (!reply) return WAITING;
     const outcome = await answer(ctx, reply);
     if (outcome === "approved") return afterApproval(ctx, go);
@@ -440,6 +465,8 @@ const main = async (): Promise<number> => {
       return cmdBoard(flags);
     case "agents":
       return cmdAgents(flags);
+    case "ui":
+      return ui({ port: str(flags.port), host: str(flags.host), repo: str(flags.repo), scan: flagValues(rest, "scan"), peer: flagValues(rest, "peer") }, log);
     case undefined:
     case "help":
     case "--help":

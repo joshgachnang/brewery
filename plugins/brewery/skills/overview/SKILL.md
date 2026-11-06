@@ -57,6 +57,7 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 | Triage the repo's open issues | `harvest` | — (skill only) |
 | See what is in flight, blocked, next | `board` | `brewery board`, `brewery status` |
 | Answer a waiting run | — | `brewery answer <slug> "<reply>"` |
+| Watch every run live (this machine, zerg sessions, peers) and answer it from a page | — | `brewery ui` |
 | Record a learning after a hard session | `compound` | automatic at the end of a CLI run that struggled |
 | Turn recurring problems into rules (nightly) | `cellar` | `brewery cellar <owner/name>` |
 | Review a PR and approve the low-risk ones | — | `brewery approve <pr>` |
@@ -73,6 +74,11 @@ as its own `claude -p` / `codex exec` process, owns commits, CI waits, limits, a
 human loop, and exits 3 while it waits on the human. Prefer the CLI for anything that
 should run unattended or survive a closed laptop; prefer the skill when the human is
 present and wants to steer.
+
+In the CLI, each test, pick, roast, brew, and taste step writes a `handoff` brief that a
+fixed routing table passes to the next step on that work; roast gets only its files and
+traps, as claims to verify. The contract and table are in `cli/README.md` (Handoffs between
+steps).
 
 ## Where things live
 

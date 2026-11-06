@@ -218,6 +218,30 @@ export const userConfigPath = (): string =>
 export const configuredRepos = (): Record<string, string> =>
   ((readJson(userConfigPath()) as { repos?: Record<string, string> }).repos ?? {});
 
+// `ui.scan` in the user config: globs `brewery ui` scans for workspaces when no --scan is given.
+export const configuredUiScan = (): string[] => {
+  const scan = (readJson(userConfigPath()) as { ui?: { scan?: unknown } }).ui?.scan;
+  return Array.isArray(scan) ? scan.filter((glob): glob is string => typeof glob === "string" && glob.trim() !== "") : [];
+};
+
+// `ui.peers` in the user config: `<name>=<url>#<token>` strings for the other `brewery ui`
+// instances to merge in when no --peer is given.
+export const configuredUiPeers = (): string[] => {
+  const peers = (readJson(userConfigPath()) as { ui?: { peers?: unknown } }).ui?.peers;
+  return Array.isArray(peers) ? peers.filter((spec): spec is string => typeof spec === "string" && spec.trim() !== "") : [];
+};
+
+// Minutes a run with no TTY keeps watching reply.json before it exits 3. Read from the
+// environment only (never a repo's .brewery.json), so laptop and cron runs keep exiting at once.
+export const replyWaitMin = (): number => {
+  const fromEnv = process.env.BREWERY_REPLY_WAIT_MIN;
+  const raw = fromEnv !== undefined && fromEnv.trim() !== ""
+    ? Number(fromEnv)
+    : (readJson(userConfigPath()) as { replyWaitMin?: unknown }).replyWaitMin;
+  const minutes = typeof raw === "number" ? raw : Number.NaN;
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+};
+
 // `--agents pick=claude,roast=claude+codex+local`
 export const parseAgentsFlag = (flag: string): Partial<Record<Stage, string[]>> => {
   const out: Partial<Record<Stage, string[]>> = {};

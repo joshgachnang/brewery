@@ -232,7 +232,8 @@ anything that can't be built or proven.**
   2), `no: <why>`, or answers without approval (applied, then asked again).
 - At the terminal, the CLI asks right there. Otherwise it prints the message, pings ntfy
   (no content in the ping), saves state, and exits 3. Reply from anywhere with
-  `brewery answer <slug> "ok"`.
+  `brewery answer <slug> "ok"`, or write `{"reply": "ok"}` to the run's `reply.json` while
+  it waits (see `BREWERY_REPLY_WAIT_MIN` in [cli/README.md](cli/README.md#human-loop)).
 - An `Elephant:` line names the likeliest risk nobody has raised, or `none`.
 - Only you approve. brewery owns the IP's `Status:` line and resets one an agent set.
 
@@ -269,6 +270,11 @@ Then, once every task has landed:
   task ids, marked Verification rows with outcomes, reviewer steps on every ⚠️ row), then
   opens the PR. Its body records provenance: which agents and models ran cut, review, the
   tests-first writer, and approval.
+
+Each test, pick, roast, brew, and taste step leaves a short handoff brief (what it did and
+learned, traps, files) that later steps read: a task's retry pick reads its earlier picks and
+roasts, integrate and review read each task's last passing pick, and roast gets only the files and traps, as claims to verify. See
+[handoffs between steps](cli/README.md#handoffs-between-steps).
 
 Steps that keep failing escalate to Opus (`limits.escalateAfter`). A task stuck after
 `limits.pickAttempts` becomes a gate: `retry: <hint>`, `skip`, or `stop`. Ready tasks run up to
@@ -492,6 +498,7 @@ Subagents: `brewery:test-writer` (writes a task's tests from its brief) and
 | `brewery status [slug]` | Runs and what waits on you |
 | `brewery board` | The repo's board |
 | `brewery agents` | Agent availability and stage routing |
+| `brewery ui` | Dashboard of runs (this machine's, plus zerg workspaces with `--scan` and other `brewery ui` instances with `--peer`) and their live, scrubbed event feed; answers waiting runs from the page. See [running it on the zerg host](cli/README.md#running-brewery-ui-on-the-zerg-host) |
 
 Exit codes: 0 done, 3 waiting on you, 4 cellar or calibrate over its change limit, 1 error.
 The full reference (routing, limits, parallel builds, events, what is enforced and how) is

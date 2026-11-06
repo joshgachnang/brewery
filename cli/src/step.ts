@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { availability, runAgent, type ReadOnly, type StepResult } from "./agents.ts";
 import { FAN_OUT, type Config, type Stage } from "./config.ts";
 import { appendEvent } from "./events.ts";
+import { handoffSection, handoffsFor, isClaimsOnly, SOURCE_STAGES } from "./handoff.ts";
 import { header } from "./prompts.ts";
 import { runDir, saveState, type RunState } from "./state.ts";
 
@@ -82,11 +83,15 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
     const label = `${stage}${opts.task ? ` ${opts.task}` : ""} (${agent})`;
     ctx.log(`▸ ${label}`);
     appendEvent(state, { kind: "step.start", seq, stage, ...(opts.task ? { task: opts.task } : {}), agent });
+    const routed = handoffsFor(state, { stage, task: opts.task });
+    for (const r of routed) appendEvent(state, { kind: "handoff", from: r.seq, to: seq });
+    const handoffs = handoffSection(routed, isClaimsOnly(stage, opts.task));
+    const asksHandoff = SOURCE_STAGES.has(stage) && !opts.readOnly;
     const outcome = await runAgent({
       name: label,
       profile: config.agents[agent],
       cwd: opts.cwd ?? state.repo,
-      prompt: `${header(opts.cwd ? { ...ctx, state: { ...state, repo: opts.cwd } } : ctx, resultFile, { readOnly: Boolean(opts.readOnly) })}\n\n${body}`,
+      prompt: `${header(opts.cwd ? { ...ctx, state: { ...state, repo: opts.cwd } } : ctx, resultFile, { readOnly: Boolean(opts.readOnly), handoff: asksHandoff })}\n\n${body}${handoffs ? `\n\n${handoffs}` : ""}`,
       promptFile: `${base}.prompt.md`,
       resultFile,
       logFile: `${base}.log`,
@@ -95,6 +100,7 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       onNarration: (text) => appendEvent(state, { kind: "narration", seq, text }),
     });
     ctx.log(`  ${label}: ${outcome.result.status} in ${outcome.seconds}s — ${outcome.result.action}`);
+    if (outcome.usage) appendEvent(state, { kind: "usage", seq, ...outcome.usage });
     appendEvent(state, { kind: "step.end", seq, status: outcome.result.status, action: outcome.result.action, seconds: outcome.seconds });
     state.history.push({
       seq,
@@ -105,6 +111,7 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       seconds: outcome.seconds,
       log: `${base}.log`,
       task: opts.task,
+      ...(outcome.usage ? { usage: outcome.usage } : {}),
       ...(opts.escalated && ctx.config.escalate[stage]?.includes(agent) ? { escalated: true } : {}),
     });
     saveState(state);

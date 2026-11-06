@@ -172,6 +172,17 @@ reply right there instead. Reply from anywhere with `brewery answer <slug> "<rep
 - sign-off: `ok`, `ok, 2b`, `no: <why>`, or answers without approval (applied, then asked again)
 - gates: `1a`, `retry: <hint>`, `skip` (task), `ship` (integration or review), `stop`
 
+A waiting process also takes a reply written to `.terreno/brewery/<slug>/reply.json` as
+`{"reply": "ok", "at": "<ISO time>"}`. It checks that file every 2 s and deletes it once it
+takes the reply. At a terminal, whichever comes first wins, the typed line or the file.
+With no terminal, the process watches the file for `replyWaitMin` minutes before it exits 3.
+That value comes only from `BREWERY_REPLY_WAIT_MIN` or `replyWaitMin` in the user config,
+never from a repo's `.brewery.json`. It defaults to 0, which exits at once. While it waits,
+the process rewrites `waiting.heartbeat` in `state.json` every 5 s, so `brewery ui` can
+tell a live waiter. If the file is malformed, the process leaves it in place, emits a
+`reply.json unreadable` note, and keeps waiting. `--no-wait` skips both the terminal and
+the wait.
+
 `brewery status` lists runs and what is waiting on you. Each step's prompt, log, and result
 are in `.terreno/brewery/<slug>/steps/`.
 
@@ -217,6 +228,8 @@ state.
 | `step.start` | `seq`, `stage`, optional `task`, `agent` | Before an agent process starts |
 | `step.end` | `seq`, `status`, `action`, `seconds` | After its result is read, including failed results |
 | `narration` | `seq`, `text` | As Claude or Codex emits assistant text or starts a tool; one line, at most 300 characters |
+| `usage` | `seq`, `inputTokens`, `outputTokens`, optional `cacheReadTokens`, `costUsd` | Once per step, just before `step.end`, when the agent reported usage. Claude's final `result` record gives tokens and cost; Codex's `turn.completed` records give tokens only, summed over the step. Counts are the agent's own: Claude's `inputTokens` excludes cache reads, Codex's includes them. Command and Cursor agents emit none. The same totals are stored as `usage` on the step's `state.json` history entry |
+| `handoff` | `from`, `to` (both step `seq`s) | Once per routed brief, just after the receiving step's `step.start`, when step `from`'s handoff was put into step `to`'s prompt (see [Handoffs between steps](#handoffs-between-steps)) |
 | `waiting` | `waitingKind` (`signoff` or `gate`), `message`, optional `ip` | When brewery stops for a human answer |
 | `resumed` | — | When brewery accepts an answer to a waiting run |
 | `note` | `text` | When a human answer is recorded |
@@ -234,6 +247,171 @@ The raw JSONL output remains in each step's `.log` file. Brewery reads complete 
 lines as they arrive and appends `narration` events for assistant text and brief tool
 summaries, such as `Read groupQueue.ts` or `Bash: bun test`. It ignores malformed lines,
 tool output, and final result records. `command` profiles emit only step start and end.
+
+## Handoffs between steps
+
+Steps of the writing stages (`test`, `pick`, `roast`, `brew`, `taste`) are asked to put a
+`handoff` key in their result file: a short brief for whoever works on that code next.
+Read-only steps have no result file, so they are never asked.
+
+```json
+{"handoff": {"did": "what this step did", "learned": ["about this code"], "traps": ["for whoever comes next"], "files": ["cli/src/handoff.ts"]}}
+```
+
+- **Contract.** `did` is a non-empty string of at most 400 characters. `learned`, `traps`,
+  and `files` are string lists of at most 8 items, each at most 200 characters; longer
+  values are cut. `did`, `learned`, and `traps` are scrubbed like CI logs; `files` loses
+  secrets only, so paths keep their digits and dates. A malformed handoff is dropped and the
+  step's verdict stands: a handoff is advice, not a result. It must hold no PHI, customer
+  data, or secrets.
+- **Delivery.** brewery appends the routed briefs to the receiving step's prompt under
+  `## Handoffs from earlier steps`, one `### Step <seq>: <stage> <task> (<agent>), <status>`
+  entry each, newest last, at most 6. Each one emits a `handoff` event, which is how
+  `brewery ui` links the two step cards and fills the step drawer's handoffs in and out.
+
+The routing table is fixed in `cli/src/handoff.ts`: what a step reads depends only on its
+stage and task, never on a model's choice.
+
+| Receiving step | Reads the handoffs of | Gets |
+| --- | --- | --- |
+| `pick <task>` | the newest `test <task>`, and every earlier `pick <task>` and `roast <task>` (retries) | the whole brief |
+| `roast <task>` | the newest `pick <task>` | `files` and `traps` only, under "Claims from the implementer: verify them, do not trust them." |
+| `pick INTEGRATE`, `pick REVIEW` | each task's last passing `pick` | the whole brief |
+| `roast INTEGRATE` | each task's last passing `pick` | `files` and `traps` only |
+| `roast REVIEW` | the newest `pick REVIEW` | `files` and `traps` only |
+| `brew` | each task's last passing `pick` | the whole brief |
+| `taste` | the newest `brew`, and every earlier `taste` | the whole brief |
+
+Every other step (`distill`, `cut`, `test`, `approve`, `calibrate`, `cellar`, and so on)
+receives none.
+
+## Dashboard: `brewery ui`
+
+`brewery ui [--port N] [--host H] [--repo PATH] [--scan GLOB]... [--peer NAME=URL#TOKEN]...` serves a web page of this machine's runs and
+prints `http://<host>:<port>/?token=<t>`. It serves until killed. The page lists the runs and
+follows one run's event feed live. It moves the token into the tab's session storage and
+removes it from the address bar.
+
+- **Binding.** The defaults are port 4848 and host `127.0.0.1`. Binding to any other address
+  needs an explicit `--host`; there is no environment or config fallback.
+  Requests must name that exact address (or `localhost`) in `Host`, so pass the specific
+  address clients use, such as a tailnet IP, rather than `0.0.0.0`.
+- **Token.** It is random per start, or `BREWERY_UI_TOKEN` when set (set it to keep the same
+  URL across restarts). Every `/api/*` request needs it, as an `X-Brewery-Token` header or
+  `?token=`. A request whose `Host` (or `Origin`) is neither the bound host nor `localhost`
+  gets 403.
+- **Runs.** The list holds every run in the slug index plus every run under `--repo`
+  (default: the current repository), newest `state.json` first. Run IDs are `local~<slug>`.
+  `GET /api/runs` returns `{runs: [{id, source, slug, repo, phase, waiting, live, pr?,
+  updatedAt}], sources}`. `live` means the run's `run.pid` is alive, or its waiting heartbeat
+  is under 15 seconds old.
+- **Scanned workspaces.** `--scan GLOB` (repeatable; without it, `ui.scan` in
+  `~/.config/brewery/config.json`, a list of globs) adds one source per glob. On the zerg
+  host, `--scan '/srv/agent-workspaces/*/merged'` lists every session's runs. Wildcards
+  match within one path segment. Each matching directory with
+  `.terreno/brewery/<slug>/state.json` contributes runs `scan~<workspace>~<slug>`, where
+  `<workspace>` is the last directory name a wildcard matched (the session name). The entries
+  carry `source: "scan"` and `workspace`. The glob's `sources` entry is
+  `{id: "scan:<glob>", kind: "scan", status}`. The status is `unreadable` (with `detail`)
+  when a matched directory cannot be read; the other runs still list. It is `read-only` when a
+  run directory cannot be written; those runs are `writable: false`. Otherwise it is `ok`,
+  which includes a glob that matches nothing. Container paths in a scanned `state.json`
+  (`repo: "/workspace"`, step logs) are rebased onto the workspace, and a path that cannot be
+  rebased, or that `..` would carry out of the workspace, is dropped, never opened. A run
+  directory that resolves outside its workspace through a symlink, or whose `state.json` or
+  `events.jsonl` is a symlink, is not served. A relative `--scan` is resolved against the
+  current directory, and a relative `ui.scan` entry against the home directory. A scanned run counts as PHI only when the workspace's own
+  `.brewery.json` has `"phi": true`. Its `run.pid` belongs to the container, so only its
+  waiting heartbeat makes it `live`.
+- **Peers.** `--peer NAME=URL#TOKEN` (repeatable; without it, `ui.peers` in
+  `~/.config/brewery/config.json`, a list of the same strings) merges another `brewery ui`
+  instance, such as the zerg host's, into this one. Its runs list as `NAME~<its run id>`
+  (`zerg~local~x`, `zerg~scan~<workspace>~<slug>`) with `source: "NAME"`, and its
+  `sources` entry is `{id: "NAME", kind: "peer", status}`. A peer that answers with an error,
+  refuses the connection, or does not answer the run list within 3 seconds is `unreachable`,
+  with `detail` set to its status code (`401` for a wrong token), `timeout`,
+  `connection failed`, or `bad response` (not a run list); local runs still list. Every per-run route under `NAME~…` (view, step,
+  events, answer, note) is proxied to the peer, which returns its own status and body
+  unchanged; the event stream passes `Last-Event-ID` through. This server adds the peer's
+  token itself and drops the query string, so the browser never sees a peer token and the
+  peer never sees this one. A proxied request whose peer cannot be reached answers 502.
+  `NAME` is letters, digits, `.`, `_`, or `-`, and cannot be `local` or `scan`.
+- **Event stream.** `GET /api/runs/<id>/events` is a server-sent-event stream of the run's
+  `events.jsonl`. Each complete line becomes one message whose `id` is the byte offset after
+  that line, so a reconnect with `Last-Event-ID` resumes with the next line. A partial line
+  waits for its newline. The server polls the file with `stat`, so it works before the file
+  exists and under gVisor.
+- **Run view.** `GET /api/runs/<id>` returns the run's view model: pipeline strip, tasks
+  with their test/pick/roast step cards, active steps, routes (the repo's configured
+  agents unless the run has used others), waiting, PR, totals, and handoffs. A run whose
+  `state.json` is corrupt answers 500 `{error}`; an unknown id answers 404.
+- **State push.** The event stream also sends `event: state` messages, with the fresh view
+  as `data` and no `id`, whenever `state.json`'s mtime changes (checked every second). A
+  corrupt write is skipped and the stream stays open. Nothing is pushed on connect, so a
+  client that must not miss a change opens the stream before it fetches the view.
+- **Scrubbing.** Every event is scrubbed with the same rules as CI logs (tokens, emails,
+  phone numbers, and so on) before it leaves the server. In a repo whose `.brewery.json` has
+  `"phi": true`, every string except the top-level structural fields (`kind`, `t`, `stage`, `task`,
+  `agent`, `status`, `waitingKind`, `state`) becomes `"(withheld: phi)"`. Numbers such as
+  `seq`, `seconds`, and PR numbers pass. PHI is opt in: a repo without the flag streams its
+  narration unwithheld.
+
+- **Answer and note.** `POST /api/runs/<id>/answer {reply}` does what `brewery answer` does
+  without racing a live process. A run whose waiting heartbeat is under 15 seconds old gets
+  the reply through its `reply.json` (202 `{via: "reply-file"}`). A local run with
+  no live waiter and no live `run.lock` holder gets a detached `brewery answer <slug> <reply>`,
+  logging to `.terreno/brewery/<slug>/ui-answer-<ts>.log` (202 `{via: "spawn", pid, log}`);
+  that child owns the run until it next waits or finishes. A scanned run is never answered by a
+  process on this host. A run that is not waiting, one another process owns, a scanned run with
+  no live waiter, or one this server cannot write answers 409 `{error, command}`, where
+  `command` is the line to run in that session. `POST /api/runs/<id>/note {text}` appends
+  a note as `brewery note` does (200). Both need a JSON body (else 415) and a non-empty
+  field (else 400).
+
+- **Step detail.** `GET /api/runs/<id>/steps/<seq>` returns one step for the page's drawer:
+  `{seq, stage, task?, agent, prompt?, result?, handoffIn, handoffOut?, logTail?, phiWithheld}`.
+  `handoffIn` lists the handoffs from earlier steps that the run's `handoff` events addressed to
+  this seq. `logTail` holds the last 80 narration lines parsed from the step's log, never raw
+  JSON. Every string is scrubbed. A running step has no `result`. In a PHI run, the route
+  returns structure only: no prompt, log tail, or handoffs, and `result` is reduced to
+  `{status, counts: {fail, block, ask, findings}}`. A seq that is not a number gets 400, and
+  one the run never started gets 404.
+
+## Running `brewery ui` on the zerg host
+
+One page can follow every zerg session's runs and this laptop's. On the zerg host, as the
+user that can read `/srv/agent-workspaces`, run:
+
+```sh
+BREWERY_UI_TOKEN=<zerg token> brewery ui --host <tailnet ip> --scan '/srv/agent-workspaces/*/merged'
+```
+
+`--host` binds the tailnet address only, and a fixed `BREWERY_UI_TOKEN` keeps the URL, and
+the laptop's peer line, valid across restarts. It prints `http://<tailnet ip>:4848/?token=…`,
+which a phone on the tailnet can open directly. On the laptop, merge it in:
+
+```sh
+brewery ui --peer zerg=<zerg url>#<zerg token>
+```
+
+where `<zerg url>` is `http://<tailnet ip>:4848`. The zerg runs list as
+`zerg~scan~<session>~<slug>`, beside this machine's `local~<slug>` runs. To skip the flags,
+put the glob in the zerg host's `ui.scan` and the peer string in the laptop's `ui.peers`.
+
+- **Answering drones.** A drone has no terminal, so it waits only as long as
+  `BREWERY_REPLY_WAIT_MIN` (or `replyWaitMin` in its user config) allows. Set
+  `BREWERY_REPLY_WAIT_MIN=240` in the zerg image's environment, beside
+  `BREWERY_SKILLS_DIR`, and a waiting drone keeps its heartbeat fresh for four hours. An
+  answer from the page goes into its `reply.json`, which the drone takes and deletes. After
+  the drone has exited, the page answers 409 with the `brewery answer` command to run in that
+  workspace's session. The host never starts `brewery answer` for a container's run, because
+  that would continue the run's steps outside the container.
+- **Permissions.** Run directories are written by the containers. A workspace the host
+  user cannot read shows as `unreadable` in `sources`, and one it cannot write is
+  `read-only`, so a run there that no live drone is waiting on gets the command instead.
+- **PHI.** This page carries every session's runs, so before putting it on the tailnet,
+  check that every PHI repo's `.brewery.json` on master has `"phi": true`. PHI is opt in: a
+  repo without the flag streams its agents' narration, messages, and results unwithheld.
 
 ## Approving pull requests: `brewery approve <pr>`
 

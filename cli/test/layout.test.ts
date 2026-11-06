@@ -366,6 +366,54 @@ describe("README, overview, and install stay current", () => {
   });
 });
 
+describe("the dashboard is documented", () => {
+  const cliReadme = (): string => rootText("cli/README.md");
+  const eventsTable = (): string => {
+    const readme = cliReadme();
+    const start = readme.indexOf("## Progress events");
+    return readme.slice(start, readme.indexOf("\n## ", start + 1));
+  };
+
+  test("the overview skill points at brewery ui for watching every run", () => {
+    const overview = flatten(skillText("overview/SKILL.md"));
+    expect(overview).toContain("`brewery ui`");
+    expect(overview).toMatch(/Watch every run live/i);
+  });
+
+  test("the cli README events table lists usage and handoff", () => {
+    const table = eventsTable();
+    expect(table).toContain("| `usage` |");
+    expect(table).toContain("| `handoff` |");
+  });
+
+  test("the cli README documents the handoff contract and routing table", () => {
+    const readme = flatten(cliReadme());
+    expect(readme).toMatch(/^#+ .*handoff/im);
+    for (const field of ["did", "learned", "traps", "files"]) expect(readme).toContain(field);
+    expect(readme).toMatch(/routing table/i);
+  });
+
+  test("the cli README has a zerg host section with the exact commands", () => {
+    const readme = cliReadme();
+    expect(readme).toMatch(/^#+ .*zerg host/im);
+    expect(readme).toContain("brewery ui --host <tailnet ip> --scan '/srv/agent-workspaces/*/merged'");
+    expect(readme).toMatch(/brewery ui --peer zerg=<[^>]+>#<[^>]+>/);
+  });
+
+  test("the regression suite carries BREW-003 for the dashboard", () => {
+    const regression = rootText("docs/regression/brewery.md");
+    expect(regression).toMatch(/^\| BREW-003 \|/m);
+    expect(regression).toContain("brewery ui");
+  });
+
+  test("the manifests moved past 0.12.0 together", () => {
+    const versions = MANIFESTS.map(manifestVersion);
+    expect(new Set(versions).size).toBe(1);
+    const [major, minor, patch] = versions[0].split(".").map(Number);
+    expect(major * 1e6 + minor * 1e3 + patch).toBeGreaterThan(12_000);
+  });
+});
+
 describe("pipeline projection", () => {
   const building = (repo: string): RunState => {
     const state = newState({ slug: "greet", repo, ip: join(repo, "docs/plans/2026-10-12-greet.md"), base: "master", phase: "build" });

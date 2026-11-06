@@ -13,7 +13,11 @@ export type BreweryEvent =
   | { kind: "pr"; number: number; url: string }
   | { kind: "ci"; state: "pass" | "fail" | "pending" }
   | { kind: "done" }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  // Token and cost totals for one step, read from the agent's own usage records.
+  | { kind: "usage"; seq: number; inputTokens: number; outputTokens: number; cacheReadTokens?: number; costUsd?: number }
+  // Step `from` wrote a handoff brief that was passed into step `to`'s prompt.
+  | { kind: "handoff"; from: number; to: number };
 
 export const appendEvent = (state: RunState, event: BreweryEvent): void => {
   const path = join(runDir(state.repo, state.slug), "events.jsonl");
