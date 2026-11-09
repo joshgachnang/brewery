@@ -103,6 +103,8 @@ export interface RunRequest {
   logFile: string;
   timeoutMin: number;
   onNarration?: (text: string) => void;
+  // How long an agent may sit idle after ending its turn with its result written.
+  settleMs?: number;
   // A verifier step: no edits, no hooks, an allowlisted environment, and a JSON-schema
   // answer on stdout instead of a result file. Used by `brewery approve`.
   readOnly?: ReadOnly;
@@ -220,7 +222,16 @@ export const readOnlyEnv = (profile: AgentProfile, parent: Record<string, string
   return env;
 };
 
-const childEnv = (profile: AgentProfile, req: RunRequest): Record<string, string> => {
+// Claude Code cuts a Bash call off at 10 minutes unless told otherwise. A package suite can
+// outlast that, and the agent then pays for it twice: the cut-off run, then a poll loop or a
+// rerun. The cap stays under the default step timeout so a hung command still ends.
+export const BASH_MAX_TIMEOUT_MS = 45 * 60_000;
+
+// An agent that has written its result and ended its turn is done. Left alone it can sit
+// on a background command or a scheduled wakeup until the step timeout.
+export const SETTLE_MS = 60_000;
+
+export const childEnv = (profile: AgentProfile, req: Pick<RunRequest, "readOnly" | "promptFile" | "resultFile">): Record<string, string> => {
   const env: Record<string, string> = {};
   if (req.readOnly) Object.assign(env, readOnlyEnv(profile, process.env));
   else {
@@ -230,6 +241,7 @@ const childEnv = (profile: AgentProfile, req: RunRequest): Record<string, string
     }
   }
   return {
+    ...(profile.type === "claude" && !req.readOnly ? { BASH_MAX_TIMEOUT_MS: String(BASH_MAX_TIMEOUT_MS) } : {}),
     ...env,
     ...profile.env,
     BREWERY_PROMPT_FILE: req.promptFile,
@@ -343,6 +355,21 @@ export const parseNarrationLine = (type: AgentProfile["type"], line: string): st
   return [];
 };
 
+// Claude prints a `result` record each time it ends a turn. A background task or a
+// scheduled wakeup can start another turn in the same process, which begins with an
+// `assistant` record.
+export const turnSignal = (type: AgentProfile["type"], line: string): "ended" | "resumed" | null => {
+  if (type !== "claude") return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  const kind = record(parsed)?.type;
+  return kind === "result" ? "ended" : kind === "assistant" ? "resumed" : null;
+};
+
 const count = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 
@@ -431,8 +458,24 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
   });
   let stdoutText = "";
   let usage: Usage | undefined;
+  let settle: ReturnType<typeof setTimeout> | undefined;
+  // A turn that ends with a valid result on disk starts the clock; a new turn stops it.
+  const watchTurn = (line: string): void => {
+    if (req.readOnly) return;
+    const signal = turnSignal(req.profile.type, line);
+    if (!signal) return;
+    clearTimeout(settle);
+    settle = undefined;
+    if (signal !== "ended" || typeof readResult(req.resultFile) === "string") return;
+    const settleMs = req.settleMs ?? SETTLE_MS;
+    settle = setTimeout(() => {
+      appendFileSync(req.logFile, `\n# brewery: the agent wrote its result and ended its turn; stopped it after ${Math.round(settleMs / 1000)}s idle\n`);
+      proc.kill();
+    }, settleMs);
+  };
   // Every complete stdout line feeds both the narration feed and the usage totals.
   const stdoutLine = (line: string): void => {
+    watchTurn(line);
     const lineUsage = parseUsageLine(req.profile.type, line);
     // Claude's result record is already the session total; Codex reports each turn.
     if (lineUsage) usage = req.profile.type === "codex" ? addUsage(usage, lineUsage) : lineUsage;
@@ -459,6 +502,7 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
     if (isStdout && pending) stdoutLine(pending);
   };
   await Promise.all([pump(proc.stdout, true), pump(proc.stderr, false), proc.exited]);
+  clearTimeout(settle);
   const seconds = Math.round((Date.now() - started) / 1000);
   const parsed = readResult(req.resultFile);
   const result: StepResult =

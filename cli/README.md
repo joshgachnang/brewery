@@ -248,6 +248,24 @@ lines as they arrive and appends `narration` events for assistant text and brief
 summaries, such as `Read groupQueue.ts` or `Bash: bun test`. It ignores malformed lines,
 tool output, and final result records. `command` profiles emit only step start and end.
 
+### Long commands and the end of a step
+
+A Claude step runs with `BASH_MAX_TIMEOUT_MS` set to 45 minutes, so one Bash call can hold a
+package test suite instead of being cut off at Claude Code's 10 minutes and rerun. Set the
+variable yourself, in the environment or in the agent profile's `env`, to change it.
+
+Per-task steps divide the testing. Pick runs lint, typecheck, the task's tests, and the
+tests near the code it changed. Roast runs each touched package's suite once, with the
+repository's parallel or sharded test command when it has one. The integrated roast runs
+the full command and the browser suites. Every step keeps a long command's whole output in
+a log file and reads failures from it.
+
+A step ends when its agent writes the result file and ends its turn. If the Claude process
+is still alive 60 seconds later with no new turn (a background command, a scheduled
+wakeup), brewery stops it and uses the result as written; the step log records that. A turn
+that ends before the result file exists is left alone, so an agent waiting on its own
+subagents is not cut short.
+
 ## Handoffs between steps
 
 Steps of the writing stages (`test`, `pick`, `roast`, `brew`, `taste`) are asked to put a

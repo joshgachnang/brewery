@@ -477,7 +477,8 @@ copied from [shade](https://github.com/joshgachnang/shade)'s `.claude/skills` at
 | `overview` | Which skill or command to use |
 
 Subagents: `brewery:test-writer` (writes a task's tests from its brief) and
-`brewery:test-runner` (runs a suite and returns only the failures).
+`brewery:test-runner` (runs a test command, keeps its whole output in a log file, and
+returns only the failures, by name).
 
 ### CLI
 

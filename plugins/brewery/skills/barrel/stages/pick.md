@@ -83,10 +83,13 @@ Read the shared [`lifecycle contract`](../../terreno-shared/lifecycle-contract.m
 7. **Fulfill.** Implement the minimum code that makes the tests pass. Prefer real
    integrations and narrow injected fakes at true external boundaries. The tests are the
    contract: do not weaken, skip, or delete them. A test that is genuinely wrong may be
-   changed with a one-line reason per file, which Roast reviews. Run suites through the
-   `brewery:test-runner` subagent when the output would be long.
+   changed with a one-line reason per file, which Roast reviews. Run test commands through
+   the `brewery:test-runner` subagent when the output would be long; it keeps the whole
+   output in a log file.
 8. **Clean the Kitchen.** Once the vertical slice is green, refactor names/structure,
-   remove debug/dead code, and rerun the affected repository-prescribed checks.
+   remove debug/dead code, and rerun the affected checks: the task's tests and the tests
+   for the code you changed and its direct callers, plus lint and typecheck. The package
+   suite is Roast's to run, once; do not run it here.
 9. **Review independently.** Build one task-scoped briefing (criteria, file list, this
    slice's patch). In fresh contexts, give **that briefing** to:
    - implementation/spec review
