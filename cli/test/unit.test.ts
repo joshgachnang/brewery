@@ -9,7 +9,7 @@ import { buildMessage, formatAsks, parseReply, smsVersion } from "../src/human.t
 import { appendEvent } from "../src/events.ts";
 import { elephant, isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
 import { newState, runDir, slugify } from "../src/state.ts";
-import { brewBody, cutBody, distillBody, fixBody, integratedRoastBody, pickBody, reviewBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
+import { brewBody, cutBody, distillBody, fixBody, header, integratedRoastBody, pickBody, reviewBody, reviewFixBody, roastBody, roastReviewFixBody } from "../src/prompts.ts";
 import type { Ctx } from "../src/step.ts";
 import { mergeVerdicts } from "../src/step.ts";
 import { isGreen } from "../src/commands/finish.ts";
@@ -125,6 +125,40 @@ describe("build prompts", () => {
       expect(body()).toContain("Do not run e2e, Playwright, or other browser suites");
     });
   }
+
+  for (const [name, body] of [
+    ["pick", () => pickBody(ctx, "T1", "Add greeting")],
+    ["review fix", () => reviewFixBody(ctx, [])],
+  ] as const) {
+    test(`${name} runs the tests near its change and leaves the package suite to Roast`, () => {
+      expect(body()).toContain("the test files for the code you changed and its direct callers");
+      expect(body()).toContain("Do not\n  run a whole package or repository suite; Roast runs it once after you.");
+      expect(body()).not.toContain("Run each package's suite once");
+    });
+  }
+
+  for (const [name, body] of [
+    ["roast", () => roastBody(ctx, "T1", "Add greeting", "master")],
+    ["roast review fix", () => roastReviewFixBody(ctx, [])],
+  ] as const) {
+    test(`${name} runs each touched package's suite once, sharded when the repo can`, () => {
+      expect(body()).toContain("Run each package's suite once, with the repository's parallel or\n  sharded test command when it has one.");
+      expect(body()).not.toContain("Do not\n  run a whole package or repository suite");
+    });
+  }
+
+  test("every build step keeps a long command's whole output in a log", () => {
+    for (const body of [pickBody(ctx, "T1", "Add greeting"), roastBody(ctx, "T1", "Add greeting", "master")]) {
+      expect(body).toContain("send its whole output to\n  a log file");
+      expect(body).toContain("Never rerun a suite to see output you\n  already have on disk.");
+    }
+  });
+
+  test("the header tells a step to finish in the foreground and reserves PENDING", () => {
+    const text = header(ctx, "/repo/.terreno/x.result.json");
+    expect(text).toContain("never end your turn with work still running or a wakeup scheduled");
+    expect(text).toContain("Use status PENDING only where this\n  step's instructions name it.");
+  });
 
   test("branch review judges by the repo's approval rubric, or brewery's default", () => {
     const repo = mkdtempSync(join(tmpdir(), "brewery-rubric-"));

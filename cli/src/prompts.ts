@@ -27,12 +27,33 @@ const approvalRubric = (ctx: Ctx, base: string): { source: string; text: string 
   return { source: "brewery's default rubric", text: DEFAULT_RUBRIC };
 };
 
-// Per-task steps prove a slice with the fast tiers. Browser suites run once, on the
-// integrated branch, where cross-task behavior is visible anyway.
-const fastTestsOnly = `- Run only fast checks for the packages this task touches: lint, typecheck, and unit and
-  integration tests. Do not run e2e, Playwright, or other browser suites, and do not launch
+// Browser suites run once, on the integrated branch, where cross-task behavior is visible
+// anyway.
+const noBrowserSuites = `Do not run e2e, Playwright, or other browser suites, and do not launch
   the app for UI verification. brewery runs those once in the integrated roast. You may
   write or update an e2e spec; check that it typechecks, not that it passes.`;
+
+// A suite that takes minutes is only worth its wait once, and only when a cut-off summary
+// cannot force a second run.
+const longCommands = `- Give a command that runs for minutes a timeout that covers it, send its whole output to
+  a log file, and read failures from that log. Never rerun a suite to see output you
+  already have on disk.`;
+
+// Pick proves its own slice. The package suite is Roast's, in a separate step, so running
+// it here as well only repeats that wait.
+const pickChecks = `- Keep your own checks narrow: lint and typecheck for the packages this task touches, the
+  task's tests, and the test files for the code you changed and its direct callers. Do not
+  run a whole package or repository suite; Roast runs it once after you. Run a check again
+  only after a change that could affect it, never to confirm a green result.
+  ${noBrowserSuites}
+${longCommands}`;
+
+// Roast is the one per-task step that runs the package suite, and it runs it once.
+const fastTestsOnly = `- Run only fast checks for the packages this task touches: lint, typecheck, and unit and
+  integration tests. Run each package's suite once, with the repository's parallel or
+  sharded test command when it has one.
+  ${noBrowserSuites}
+${longCommands}`;
 
 const taskSplitting = `Task splitting rules:
 - Put the tracer first.
@@ -107,6 +128,10 @@ Rules for this step:
   a human decision in \`ask\` (question, recommended answer, options) with status BLOCKED.`}
 - Never add AI attribution to commits, PRs, or comments. No conventional-commit prefixes.
 - Never put PHI, customer data, or secrets in your result.
+- Finish in the foreground. Wait for every command and subagent you started before you
+  write your result, and never end your turn with work still running or a wakeup scheduled:
+  brewery stops the process once the result is written. Use status PENDING only where this
+  step's instructions name it.
 ${opts.readOnly ? readOnlyResult : `${fileResult(resultFile)}${opts.handoff ? handoffResult : ""}${answers}${notes}${learned}`}`;
 };
 
@@ -261,8 +286,8 @@ const pickTests = (tests?: TaskTests): string => {
   changed file in \`testChanges\` ([{"file": "", "why": ""}]); Roast reviews every change.
   brewery runs the command after you and rejects a red result or an unexplained change.
 - Add a test only for behavior inside this task's criteria that the brief missed.
-- Run suites through the \`brewery:test-runner\` subagent when you have it, so test output
-  stays out of your context.
+- Run test commands through the \`brewery:test-runner\` subagent when you have it, so test
+  output stays out of your context. It keeps the whole output in a log file it names.
 ${tests.red ? `
 The tests' output when brewery confirmed them red:
 
@@ -277,7 +302,7 @@ IP at ${ctx.state.ip}, and no other task. Overrides:
 - Skip step 12 (Roast), 13 (commit), and 14 (continue). brewery commits your working tree
   when you finish, runs Roast in separate agents, and picks the next task.
 - Do not commit, push, or edit the task's checkbox. brewery marks it.
-${pickTests(tests)}${fastTestsOnly}
+${pickTests(tests)}${pickChecks}
 - Status PASS when the task is built and your own checks are green. FAIL with evidence
   when you cannot get it green. BLOCKED only for a genuine human or access gate.
 ${evidence ? `\nThis is a retry. Roast or the previous attempt reported the following. Form a new
@@ -380,7 +405,7 @@ export const reviewFixBody = (ctx: Ctx, findings: Finding[]): string => `## Step
 Read ${skill(ctx, "barrel/stages/pick.md")} for method (specify, failing test, fix, clean up).
 Fix these branch-review findings on the IP at ${ctx.state.ip}. Do not commit or push.
 Status PASS when each blocking finding is fixed with a test that would have caught it.
-${fastTestsOnly}
+${pickChecks}
 
 \`\`\`json
 ${JSON.stringify(findings, null, 2)}
