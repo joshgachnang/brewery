@@ -251,7 +251,7 @@ Per task, in `.terreno/brewery/<slug>/worktrees/<id>`:
 
 1. **test**: Sonnet writes the task's tests from its brief, never from code. brewery runs
    them and rejects tests that already pass.
-2. **pick**: implements against those tests. brewery reruns them and rejects a red result
+2. **pick**: Sonnet implements against those tests. brewery reruns them and rejects a red result
    or an unexplained change to the tests.
 3. **roast**: a fresh agent proves the task's acceptance criteria on the committed tree.
    FAIL sends evidence back to pick (amending the same commit).
@@ -276,7 +276,9 @@ learned, traps, files) that later steps read: a task's retry pick reads its earl
 roasts, integrate and review read each task's last passing pick, and roast gets only the files and traps, as claims to verify. See
 [handoffs between steps](cli/README.md#handoffs-between-steps).
 
-Steps that keep failing escalate to Opus (`limits.escalateAfter`). A task stuck after
+Steps that keep failing escalate to Opus (`limits.escalateAfter`). Every built-in claude agent
+names its model (the plain `claude` profile is Opus), so no step runs on the account's default
+model; Fable runs only when your config names it. A task stuck after
 `limits.pickAttempts` becomes a gate: `retry: <hint>`, `skip`, or `stop`. Ready tasks run up to
 `limits.parallelTasks` at once, except two tasks that declare the same `Files:` entry.
 `brewery barrel <slug>`, or `--ip <path>` for a plan approved elsewhere.

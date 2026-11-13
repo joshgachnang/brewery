@@ -118,7 +118,9 @@ export interface Config {
 
 export const DEFAULT_CONFIG: Config = {
   agents: {
-    claude: { type: "claude" },
+    // Every claude profile names its model, so no step inherits the account's default (Fable
+    // runs only when a repo's config asks for it).
+    claude: { type: "claude", model: "opus" },
     // Roast checks criteria with named commands; Sonnet is fast enough and cheaper.
     "claude-sonnet": { type: "claude", model: "sonnet" },
     "claude-opus": { type: "claude", model: "opus" },
@@ -139,7 +141,8 @@ export const DEFAULT_CONFIG: Config = {
     cut: ["claude", "codex"],
     // Tests come from the task's brief, not the implementation, so a cheaper model writes them.
     test: ["claude-sonnet"],
-    pick: ["claude"],
+    // Implementation runs on Sonnet; a Pick that keeps failing escalates to Opus.
+    pick: ["claude-sonnet"],
     roast: ["claude-sonnet"],
     review: ["claude", "codex"],
     brew: ["claude"],
