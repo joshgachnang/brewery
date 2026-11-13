@@ -67,7 +67,8 @@ describe("planning prompts", () => {
 
 describe("provenance", () => {
   const step = (stage: string, agent: string, task?: string): HistoryEntry => ({ seq: 1, stage, agent, status: "PASS", action: "x", seconds: 1, log: "/l", task });
-  const config = { ...DEFAULT_CONFIG, stages: { ...DEFAULT_CONFIG.stages, cut: ["claude", "codex"], review: ["claude", "codex"], test: ["claude-sonnet"], pick: ["claude"] }, escalate: { pick: ["claude-opus"] } };
+  // A claude profile with no model, so "model unknown" is exercised; the built-in one names opus.
+  const config = { ...DEFAULT_CONFIG, agents: { ...DEFAULT_CONFIG.agents, claude: { type: "claude" as const } }, stages: { ...DEFAULT_CONFIG.stages, cut: ["claude", "codex"], review: ["claude", "codex"], test: ["claude-sonnet"], pick: ["claude"] }, escalate: { pick: ["claude-opus"] } };
   const state = (history: HistoryEntry[]) => ({ ...newState({ slug: "s", repo: "/repo", ip: "/repo/plan.md", base: "master", phase: "brew" }), history });
 
   test("lists who ran each stage, with models only where the profile names one", () => {
@@ -345,8 +346,9 @@ describe("human", () => {
 });
 
 describe("config and agents", () => {
-  test("defaults build with claude only, roast with sonnet, review with both, and ping on gates", () => {
-    expect(DEFAULT_CONFIG.stages.pick).toEqual(["claude"]);
+  test("defaults pick and roast with sonnet, review with both, pin claude to opus, and ping on gates", () => {
+    expect(DEFAULT_CONFIG.stages.pick).toEqual(["claude-sonnet"]);
+    expect(agentArgv(DEFAULT_CONFIG.agents.claude, "/repo")).toEqual(expect.arrayContaining(["--model", "opus"]));
     expect(DEFAULT_CONFIG.stages.review).toEqual(["claude", "codex"]);
     expect(DEFAULT_CONFIG.stages.roast).toEqual(["claude-sonnet"]);
     expect(agentArgv(DEFAULT_CONFIG.agents["claude-sonnet"], "/repo")).toEqual(expect.arrayContaining(["--model", "sonnet"]));
