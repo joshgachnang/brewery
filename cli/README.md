@@ -88,6 +88,8 @@ strict, so a failure stops the run with the landed commit recorded.
 | --- | --- | --- |
 | `worktreeSetup` | `[]` | Shell commands run in order in each fresh task worktree, before Pick. Shade uses `["bun bootstrap"]`. A nonzero exit records stdout/stderr as failure evidence, removes the tree, and consumes a Pick attempt. |
 | `limits.parallelTasks` | `3` | Maximum concurrent task builds. `--parallel N` overrides it for one run; `--parallel 1` runs sequentially. |
+| `agents` | `claude` → `opus`, `claude-sonnet` → `sonnet`, `claude-opus` → `opus` | Every built-in claude profile names its model, so no step takes the account's default model (Fable runs only when a config names it). |
+| `stages.pick` | `["claude-sonnet"]` | Implementation runs on Sonnet; a Pick that keeps failing escalates to `claude-opus`. |
 | `limits.testFirst` | `true` | Run the `test` step (default agent `claude-sonnet`) before each task's Pick. `false` returns to Pick writing its own tests. |
 | `limits.pourMaxTasks` | `6` | The most tasks `brewery pour` approves without asking you. |
 | `limits.escalateAfter` | `2` | Runs of a task's `test` or `pick` step before the next one uses `escalate[stage]`. |
