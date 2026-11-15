@@ -1193,7 +1193,7 @@ describe("barrel", () => {
       ctx.state.tasks.T1 = { status: "todo", attempts: 5, rejections: 2 };
       expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
       expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable"]);
-      expect(ctx.state.tasks.T1.fableFailures).toBe(3);
+      expect(ctx.state.tasks.T1.failures).toBe(6);
       expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
     });
 
@@ -1204,12 +1204,38 @@ describe("barrel", () => {
         { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
       ]);
       expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
-      expect(ctx.state.tasks.T1.askAtFableFailures).toBeUndefined();
+      expect(ctx.state.tasks.T1.askAtFailures).toBeUndefined();
       expect(await answer(ctx, "retry: try again")).toBe("continue");
-      expect(ctx.state.tasks.T1.askAtFableFailures).toBeUndefined();
+      expect(ctx.state.tasks.T1.askAtFailures).toBeUndefined();
       expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
       expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "alpha", "fable", "fable", "fable"]);
-      expect(ctx.state.tasks.T1.fableFailures).toBe(3);
+      expect(ctx.state.tasks.T1.failures).toBe(6);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+    });
+
+    test("a custom fableAfter hands off at that count and asks three failures later", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 2), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      ctx.config.limits.fableAfter = 2;
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(5);
+      expect(ctx.state.waiting?.message).toContain("failed 5 attempts");
+    });
+
+    test("a Fable pick route with a default roast still asks at fableAfter + 3 failures", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "a1"), roast("beta", "FAIL"), pick("alpha", "a2"), roast("beta", "FAIL"), pick("alpha", "a3"), roast("beta", "FAIL"),
+        pick("fable", "f1"), roast("beta", "FAIL"), pick("fable", "f2"), roast("beta", "FAIL"), pick("fable", "f3"), roast("beta", "FAIL"),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      ctx.config.escalate = { pick: ["fable"] };
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable"]);
+      expect(agentsFor(ctx, "roast")).toEqual(["beta", "beta", "beta", "beta", "beta", "beta"]);
+      expect(ctx.state.tasks.T1.failures).toBe(6);
       expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
     });
 

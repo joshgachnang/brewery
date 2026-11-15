@@ -15,10 +15,8 @@ export interface TaskState {
   attempts: number;
   // Pick and roast FAILs of this task. Unlike `attempts` a human `retry:` answer does not reset it.
   failures?: number;
-  // Failures recorded while the task ran on Fable; the human ask waits for fableAfter of them.
-  fableFailures?: number;
-  // The fableFailures count at which the next human ask fires (default fableAfter), advanced by three each time a stuck-task ask is answered with a retry.
-  askAtFableFailures?: number;
+  // The failures count at which the next human ask fires (default fableAfter + 3), advanced by three each time a stuck-task ask is answered with a retry.
+  askAtFailures?: number;
   // Attempts rejected before a verdict (setup, tests, unproven or empty picks); they spend their own budget.
   rejections?: number;
   // The last gate was this task's stuck ask, so a retry answer extends its budgets.

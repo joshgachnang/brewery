@@ -65,7 +65,7 @@ export const answer = async (ctx: Ctx, reply: string): Promise<AnswerOutcome> =>
     else {
       task.attempts = 0;
       if (stuckAsked) {
-        task.askAtFableFailures = (task.fableFailures ?? 0) + 3;
+        task.askAtFailures = (task.failures ?? 0) + 3;
         task.rejections = 0;
       }
     }

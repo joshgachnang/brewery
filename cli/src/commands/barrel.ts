@@ -195,10 +195,9 @@ const hasFableRoute = (ctx: Ctx, stage: "pick" | "roast"): boolean =>
 const onFable = (ctx: Ctx, ts: TaskState, stage: "pick" | "roast"): boolean =>
   hasFableRoute(ctx, stage) && (ts.failures ?? 0) >= ctx.config.limits.fableAfter;
 
-// A FAIL from pick or roast. Fable FAILs also spend the Fable budget.
-const countFailure = (ts: TaskState, onFableRun: boolean): void => {
+// A FAIL from pick or roast, whichever agent ran it.
+const countFailure = (ts: TaskState): void => {
   ts.failures = (ts.failures ?? 0) + 1;
-  if (onFableRun) ts.fableFailures = (ts.fableFailures ?? 0) + 1;
 };
 
 // Attempts that never reached a verdict: setup, test-step, unproven-test and no-change rejections.
@@ -206,14 +205,15 @@ const countRejection = (ts: TaskState): void => {
   ts.rejections = (ts.rejections ?? 0) + 1;
 };
 
-// With a Fable route the ask waits for three failed Fable attempts (and three more after each
-// answered stuck-task ask). Rejections spend a separate budget of `pickAttempts`, so they
-// neither shorten nor extend the Fable one.
+// With a Fable route the ask waits for three failures beyond the handoff, `fableAfter + 3` in
+// all (and three more after each answered stuck-task ask). Every pick and roast FAIL counts, so
+// a roast with no Fable route still reaches the ask. Rejections spend a separate budget of
+// `pickAttempts`, so they neither shorten nor extend it.
 const stuckReason = (ctx: Ctx, ts: TaskState): "failures" | "rejections" | undefined => {
   const { pickAttempts, fableAfter } = ctx.config.limits;
   if (!hasFableRoute(ctx, "pick")) return ts.attempts >= pickAttempts ? "failures" : undefined;
   if ((ts.rejections ?? 0) >= pickAttempts) return "rejections";
-  return (ts.fableFailures ?? 0) >= (ts.askAtFableFailures ?? fableAfter) ? "failures" : undefined;
+  return (ts.failures ?? 0) >= (ts.askAtFailures ?? fableAfter + 3) ? "failures" : undefined;
 };
 
 // The test step writes the task's tests from its brief before any implementation exists.
@@ -352,7 +352,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       return { gate: { asks: asksFrom(picked, picked.action), need: `a decision on ${id}`, detail: picked.summary ?? picked.action } };
     }
     if (picked.status !== "PASS") {
-      countFailure(ts, fable);
+      countFailure(ts);
       ts.evidence = evidenceText(picked);
       continue;
     }
@@ -385,7 +385,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     if (verdict.status === "BLOCKED") {
       return { gate: { asks: asksFrom(verdict, verdict.action), need: `a decision on ${id}`, detail: verdict.action } };
     }
-    countFailure(ts, roastOnFable);
+    countFailure(ts);
     ts.evidence = evidenceText(verdict);
     if (verdict.retest && config.limits.testFirst) ts.retest = ts.evidence;
   }
