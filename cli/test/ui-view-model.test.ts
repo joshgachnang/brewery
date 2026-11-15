@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import type { Stage } from "../src/config.ts";
 import type { BreweryEvent } from "../src/events.ts";
 import { newState, type Phase, type RunState } from "../src/state.ts";
-import { buildRunView } from "../src/ui/view.ts";
+import { buildMessage } from "../src/human.ts";
+import { buildRunView, splitMessage } from "../src/ui/view.ts";
 
 const NOW = new Date("2026-11-05T12:00:00.000Z");
 const ROUTES = { distill: ["claude"], cut: ["claude"], test: ["claude"], pick: ["codex"], roast: ["claude"], review: ["claude"], brew: ["claude"], taste: ["claude"], compound: ["claude"], cellar: ["claude"], approve: ["claude"], calibrate: ["claude"] } as Record<Stage, string[]>;
@@ -79,6 +80,15 @@ describe("buildRunView", () => {
     expect(v.waiting?.message).toBe("Need a decision");
     expect(v.waiting?.asks).toEqual(asks);
     expect(v.waiting?.kind).toBe("gate");
+  });
+
+  test("the banner's intro drops the asks block and the reply line comes last", () => {
+    const message = buildMessage({ repoName: "r", title: "t", need: "plan ready for sign-off", orientation: "Adds a greeting.", link: "docs/plans/p.md", asks: [{ q: "Which store?", rec: "Mongo" }], replyHint: 'Reply "ok" to accept every recommendation.' });
+    expect(splitMessage(message, true)).toEqual({ intro: "[r] t: plan ready for sign-off\n\nAdds a greeting.\n\nPlan: docs/plans/p.md", reply: 'Reply "ok" to accept every recommendation.' });
+    expect(splitMessage(message, false).intro).toContain("Needs an answer:");
+    expect(splitMessage("Need a decision", true)).toEqual({ intro: "Need a decision", reply: "" });
+    const s = state("signoff", { waiting: { kind: "signoff", asks: [{ q: "Which store?", rec: "Mongo" }], message, since: "2026-11-05T11:00:00.000Z" } });
+    expect(view(s, []).waiting?.reply).toBe('Reply "ok" to accept every recommendation.');
   });
 
   test("a waiter is live only while its heartbeat is under 15 seconds old", () => {

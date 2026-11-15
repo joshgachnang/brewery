@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildMessage, formatAsks, parseReply, smsVersion } from "../src/human.ts";
+import { buildMessage, formatAsks, isApprovalAsk, orderAsks, parseReply, smsVersion } from "../src/human.ts";
 import { appendEvent } from "../src/events.ts";
 import { elephant, isApproved, markTask, orientation, parseTasks, readStatus, readyTasks, setStatus, sharesFiles, taskGraphProblems, title } from "../src/ip.ts";
 import { newState, runDir, slugify } from "../src/state.ts";
@@ -325,6 +325,35 @@ describe("human", () => {
     expect(formatAsks([{ q: "Store?", rec: "Mongo", opts: ["Mongo", "Postgres"] }])).toBe(
       "1. Store? a) Mongo (recommended) b) Postgres",
     );
+  });
+
+  test("a design question prints each option's design beside its letter", () => {
+    const ask = { q: "Filters?", rec: "Top bar", opts: ["Sidebar", "Top bar"], designs: ["Q3 a — Sidebar", "docs/specs/s/design/q3-b.html"] };
+    expect(formatAsks([ask])).toBe("1. Filters? a) Sidebar [Q3 a — Sidebar] b) Top bar [docs/specs/s/design/q3-b.html] (recommended)");
+  });
+
+  test("approval asks are recognised and nothing else is", () => {
+    for (const q of ["Approve the plan?", "Sign off on this IP?", "Do you approve?", "OK to build on these recommendations?", "Can you approve this plan as written?"]) {
+      expect(isApprovalAsk({ q, rec: "yes" })).toBe(true);
+    }
+    for (const q of ["Build the export as a cron or a queue?", "Ship the sidebar or the top bar?", "Which store?", "Proceed with soft delete or hard delete?"]) {
+      expect(isApprovalAsk({ q, rec: "x" })).toBe(false);
+    }
+  });
+
+  test("approval is always the last question, after fundamental and design questions", () => {
+    const approve = { q: "Approve the plan?", rec: "yes", opts: ["yes", "no"] };
+    const design = { q: "Filters?", rec: "Top bar", opts: ["Sidebar", "Top bar"], designs: ["a.png", "b.png"] };
+    const fundamental = { q: "Who is it for?", rec: "staff", fundamental: true };
+    expect(orderAsks([approve, design, fundamental]).map((a) => a.q)).toEqual(["Who is it for?", "Filters?", "Approve the plan?"]);
+    const many = Array.from({ length: 7 }, (_, i) => ({ q: `Q${i + 1}?`, rec: "r" }));
+    const message = buildMessage({ repoName: "r", title: "t", need: "n", link: "l", asks: [approve, ...many], replyHint: "Reply ok" });
+    expect(message).toContain("1. Q1?");
+    expect(message).toContain("5. Q5?");
+    expect(message).not.toContain("Q6?");
+    expect(message).toContain("6. Approve the plan?");
+    expect(message.indexOf("Approve the plan?")).toBeGreaterThan(message.indexOf("Q5?"));
+    expect(message.trimEnd().endsWith("Reply ok")).toBe(true);
   });
 
   test("the SMS version stays within 480 characters", () => {

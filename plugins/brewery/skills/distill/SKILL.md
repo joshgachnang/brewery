@@ -1,6 +1,6 @@
 ---
 name: distill
-description: Shape a request into an implementation-ready IP and task list with minimal back-and-forth, like terreno Grow but with triage instead of grilling. Asks only questions fundamental to the feature, records every other question with its recommendation at the bottom of the IP, parks expansions for later, attacks the draft with `cut`, fixes it, then sends the IP for async sign-off over Slack, text, or email. Use when asked to distill, plan, or spec a feature for later execution by `barrel`; not for implementation.
+description: Shape a request into an implementation-ready IP and task list with minimal back-and-forth, like terreno Grow but with triage instead of grilling. Asks only questions fundamental to the feature, records every other question with its recommendation at the bottom of the IP, parks expansions for later, attacks the draft with `cut`, fixes it, then sends the IP for async sign-off over Slack, text, or email, with approval always the last question. When the request is design work, the design is part of the deliverable: starts a Claude Design canvas when there is none, launches the app and screenshots the screens it touches, draws the proposed versions, and asks the human to pick between designs. Use when asked to distill, plan, or spec a feature for later execution by `barrel`; not for implementation.
 ---
 
 # Distill — shape with little grilling
@@ -15,7 +15,7 @@ Read before acting:
 - [`distilling`](references/distilling.md): triage, IP bottom sections, sign-off brief
 - [`testing plan`](../terreno-shared/testing-plan.md): the e2e guide's spot and the two required testing sections
 - [`user guide`](../terreno-shared/user-guide.md): the end-user guide's spot, its opt-out, and the required `## User guide` section
-- [`designing`](references/designing.md): the Claude Design canvas, what a run may add to it, the checkpoints, the `## Design` section, and the snapshot
+- [`designing`](references/designing.md): the Claude Design canvas, design work (starting a canvas, screenshotting the app, drawing proposals), design questions, what a run may add, the checkpoints, the `## Design` section, and the snapshot
 - [`lifecycle contract`](../terreno-shared/lifecycle-contract.md) (stage results and execution state)
 - [`documentation contract`](../terreno-shared/documentation-contract.md)
 - [`reaching the human`](../terreno-shared/reaching-the-human.md)
@@ -57,15 +57,21 @@ interactive, single-session run.
 4. **Research.** Answer every discoverable fact yourself, with explore subagents in
    parallel. Never ask the human something the repo, docs, or git history can answer.
 5. **Triage** every open question per [`distilling`](references/distilling.md):
-   fundamental, deferrable, expansion, or implementation detail. With a design, this is
-   the first [checkpoint](references/designing.md#checkpoints): add `Draft —` artboards
-   for missing screens and a sticky per open question about a screen.
+   fundamental, deferrable, expansion, or implementation detail. Decide whether the
+   request is [design work](references/designing.md#design-work): it asks how something
+   should look or flow, or changes the design. Design work is part of this run, like the
+   IP and its questions: start a canvas when there is none, launch the app and screenshot
+   the screens it touches, and draw the proposed versions, with options where the shape
+   is open. With a design, this is the first [checkpoint](references/designing.md#checkpoints):
+   add `Draft —` artboards for missing screens and a sticky per open question about a screen.
 6. **Ask only fundamental questions.** One round, at most four, each with a recommended
    option. When the human is in the chat, use the structured question tool and wait.
    When the human is not in the chat, do not block: write the IP on your
    recommendation, mark the question fundamental, and it goes first in the sign-off.
-   With no fundamental questions, skip straight to writing. A question about a screen
-   goes on the canvas too, as two option artboards the question names.
+   With no fundamental questions, skip straight to writing. A question about a screen is
+   a [design question](references/designing.md#design-questions): its options are designs
+   (two to four artboards or files), and the human picks one, mixes them, or edits the
+   canvas. This round never asks for approval; see step 11.
 7. **Shape.** Contracts, models, and APIs before implementation detail. Scope, non-scope,
    architecture decisions, risks, rollout, dependencies. Put the tracer first, then split
    work into the smallest independently testable behaviours, each roast-able on its own.
@@ -115,19 +121,25 @@ interactive, single-session run.
     Blocking findings must all be edited, moved, or rebutted. When any blocking finding
     changed the plan, run `cut` once more on the new draft. Stop after two cut rounds and
     carry anything left into Open questions. Record the tally in the Sign-off section.
-11. **Sign off.** With a design, write the
+11. **Sign off.** Approval is only ever the last question, never the first: ask for it
+    only after every fundamental and design question is answered and the IP reflects the
+    answers. In the chat, it is its own final structured question (`Approve (Recommended)`
+    against `Change something`), or the last question of the call when it shares one. In
+    `ask`, never: the sign-off message ends with the reply line, which is the approval. With a design, write the
     [snapshot](references/designing.md#the-snapshot) to `docs/specs/<slug>/design/` and
     record the canvas version in `## Design` first. Set `Status: awaiting sign-off` and
     send the sign-off message per
     [`reaching the human`](../terreno-shared/reaching-the-human.md): fundamental questions
-    first, then the open questions whose answers would change the most, with a link to
-    the IP for the rest, and the canvas link when there is one. Add one `Elephant:` line
+    first, then design questions, then the open questions whose answers would change the
+    most, with a link to the IP for the rest, the canvas link or design files when there
+    are any, and the approval line last. Add one `Elephant:` line
     after the summary, copied from the brief: the likeliest risk nobody has raised, or `none`. Never invent one. Emit `BLOCKED` (`stage: grow`, `next: null`,
     `block: [{kind: human}]`, one `ask` per question in the message) and stop.
 12. **Apply the reply.** When answers arrive, move each answered question from Open
     questions to Decisions. Where an answer differs from the recommendation, rewrite the
     affected tasks and criteria, and run `cut` once more if the change is structural.
-    A canvas that changed since the snapshot is a reply too: apply each change per
+    A design question's answer keeps the picked design and deletes the other options'
+    files from the snapshot. A canvas that changed since the snapshot is a reply too: apply each change per
     [`designing`](references/designing.md#applying-canvas-changes), rewrite the snapshot,
     and list what each change became. A reply that rejects the plan returns to step 5
     with the reason. When the human has approved, commit the snapshot with the IP, set

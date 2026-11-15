@@ -122,15 +122,15 @@ const CONTRACT: Record<string, Contract> = {
     phrases: ["docs/user-guide/", "## User guide conventions", "### Opting out", GUIDE_OFF, GUIDE_TABLE, "## Guide-entry bar", "None — <reason>", "predates contract"],
   },
   "distill/SKILL.md": {
-    phrases: ["../terreno-shared/testing-plan.md", "../terreno-shared/user-guide.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF, LEGACY, "references/designing.md", "then `## Design` per", SNAPSHOT, "A canvas that changed since the snapshot is a reply too"],
+    phrases: ["../terreno-shared/testing-plan.md", "../terreno-shared/user-guide.md", "docs/testing/e2e.md", "Pair each UI or cross-process criterion with a planned spec", "## E2E tests", "## Regression cases", "## User guide", GUIDE_OFF, LEGACY, "references/designing.md", "then `## Design` per", SNAPSHOT, "A canvas that changed since the snapshot is a reply too", "Approval is only ever the last question, never the first", "design work"],
   },
   "distill/references/distilling.md": {
-    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY, "then `## Design` in the format of"],
-    lines: ["## E2E tests", "## Regression cases", "## User guide", "E2E: ", "Regression: ", "User guide: ", "Design: ", "Elephant: "],
+    phrases: [E2E_TABLE, REGRESSION_TABLE, GUIDE_TABLE, "None — <reason>", GUIDE_OFF, LEGACY, "then `## Design` in the format of", "Approval is never in this round"],
+    lines: ["## E2E tests", "## Regression cases", "## User guide", "## Approval comes last", "E2E: ", "Regression: ", "User guide: ", "Design: ", "Elephant: "],
   },
   "distill/references/designing.md": {
-    phrases: [DESIGN_TABLE, SNAPSHOT, "None — <reason>", LEGACY, "A planning run only adds to a canvas", "Never edit, move, resize, or delete an existing artboard", "never read the live canvas", "never silently overrules", "Never render, screenshot, or open a canvas"],
-    lines: ["## Reaching the canvas", "## What a planning run may add", "## Checkpoints", "## Applying canvas changes", "## The `## Design` section", "## The snapshot", "## Design"],
+    phrases: [DESIGN_TABLE, SNAPSHOT, "None — <reason>", LEGACY, "A planning run only adds to a canvas", "Never edit, move, resize, or delete an existing artboard", "never read the live canvas", "never silently overrules", "Never render, screenshot, or open a canvas", "Screenshots of the running app are a different thing", "A spike is never committed or pushed", "App screenshots come only from a local stack on seeded data"],
+    lines: ["## Reaching the canvas", "## Design work", "## Design questions", "### Without the Artifact tool", "## What a planning run may add", "## Checkpoints", "## Applying canvas changes", "## The `## Design` section", "## The snapshot", "## Design"],
   },
   "pour/SKILL.md": {
     phrases: ["## E2E tests", "## Regression cases", "## User guide", "## Design", GUIDE_OFF],
