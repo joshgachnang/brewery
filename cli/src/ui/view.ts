@@ -50,12 +50,25 @@ export interface RunView {
   steps: StepCard[];
   routes: Record<Stage, { agents: string[]; from: "run" | "config" }>;
   // In a PHI run the message is withheld and the asks are reduced to their count.
-  waiting?: { kind: "signoff" | "gate"; message: string; asks: Ask[] | number; live: boolean };
+  // `intro` and `reply` split the message so the page shows the questions between them:
+  // the reply line (the approval) is always last, never above the questions.
+  waiting?: { kind: "signoff" | "gate"; message: string; intro: string; reply: string; asks: Ask[] | number; live: boolean };
   pr?: { number: number; url: string; ci?: "pass" | "fail" | "pending" };
   // `seconds` sums finished steps' agent time, not the run's wall-clock time.
   totals: { seconds: number; costUsd?: number; inputTokens?: number; outputTokens?: number };
   handoffs: { from: number; to: number }[];
 }
+
+// buildMessage ends with the reply line and lists the asks under "Needs an answer:". The
+// page lists the asks itself, so the intro drops that block, and the reply line goes last.
+export const splitMessage = (message: string, listsAsks: boolean): { intro: string; reply: string } => {
+  const lines = message.trimEnd().split("\n");
+  const reply = lines.length > 1 ? (lines.pop() ?? "") : "";
+  let intro = lines.join("\n");
+  const block = intro.indexOf("Needs an answer:");
+  if (listsAsks && block >= 0) intro = intro.slice(0, block);
+  return { intro: intro.trimEnd(), reply };
+};
 
 export interface RunViewInput {
   state: RunState;
@@ -187,12 +200,20 @@ export const buildRunView = ({ state, events, configuredRoutes, phi, now, titles
   if (state.waiting) {
     const heartbeat = (state.waiting as { heartbeat?: string }).heartbeat;
     const beat = heartbeat ? Date.parse(heartbeat) : Number.NaN;
+    const message = phi ? WITHHELD : scrub(state.waiting.message);
     waiting = {
       kind: state.waiting.kind,
-      message: phi ? WITHHELD : scrub(state.waiting.message),
+      message,
+      ...splitMessage(message, !phi && state.waiting.asks.length > 0),
       asks: phi
         ? state.waiting.asks.length
-        : state.waiting.asks.map((a) => ({ ...a, q: scrub(a.q), rec: scrub(a.rec), ...(a.opts ? { opts: a.opts.map(scrub) } : {}) })),
+        : state.waiting.asks.map((a) => ({
+            ...a,
+            q: scrub(a.q),
+            rec: scrub(a.rec),
+            ...(a.opts ? { opts: a.opts.map(scrub) } : {}),
+            ...(a.designs ? { designs: a.designs.map(scrub) } : {}),
+          })),
       live: Number.isFinite(beat) && now.getTime() - beat < LIVE_HEARTBEAT_MS,
     };
   }

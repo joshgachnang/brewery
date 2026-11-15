@@ -74,11 +74,12 @@ const taskSplitting = `Task splitting rules:
 const fileResult = (resultFile: string): string => `- Before exiting, write your result as JSON to:
     ${resultFile}
   Shape: {"status": "PASS" | "FAIL" | "BLOCKED" | "PENDING", "action": "<next concrete action>",
-          "summary": "<what you did>", "ask": [{"q": "", "rec": "", "opts": [""]}],
+          "summary": "<what you did>", "ask": [{"q": "", "rec": "", "opts": [""], "designs": [""]}],
           "fail": [{"need": "", "want": "", "got": "", "ev": ""}],
           "block": [{"kind": "human|environment|access|external", "why": "", "ev": ""}]}
-  plus any step-specific keys named below. Omit keys you do not use. Writing this file is
-  mandatory, including on failure.
+  plus any step-specific keys named below. Omit keys you do not use. \`designs\` is only for a
+  question whose options are designs: the artboard or file each option shows, in \`opts\` order.
+  Writing this file is mandatory, including on failure.
 `;
 
 const readOnlyResult = `- This is a read-only step. You cannot edit files or write a result file. Read what you
@@ -148,8 +149,14 @@ ${existsSync(join(ctx.state.repo, "docs", "learnings")) ? "- Before shaping the 
 - The task list must use exactly this line format so brewery can track it, with details
   indented or in a following block:
     - [ ] **T1** — <task title, written as a commit subject>
-- In \`ask\`, put the sign-off questions: fundamental first, then the open questions whose
-  answers would change the most. At most 5. Set "fundamental": true on each fundamental
+- Design is part of this step when the request is design work (designing.md's "Design
+  work"): launch the app on seeded local data, screenshot the screens it touches, and draw
+  the proposals and options, on a canvas when you have the Artifact tool, otherwise as files
+  in docs/specs/<slug>/design/. Do not commit a prototype spike.
+- In \`ask\`, put the sign-off questions: fundamental first, then design questions (each
+  option a design, with \`designs\`), then the open questions whose answers would change the
+  most. At most 5. Never ask for approval in \`ask\`: brewery ends the sign-off message with
+  the approval line, so approval is always the last question. Set "fundamental": true on each fundamental
   question (distilling.md's test), and only on those: \`brewery pour\` builds without
   asking when none is fundamental. Status PASS when the IP is written.
 
@@ -173,7 +180,8 @@ ${taskSplitting}
 
 Result keys: \`structural\` (true when a blocking finding changed tasks, the tracer, or the
 data model), \`tally\` ({edited, moved, rebutted}), and \`ask\` (the refreshed sign-off
-questions, at most 5, fundamental first, each fundamental one with "fundamental": true).
+questions, at most 5, fundamental first, each fundamental one with "fundamental": true, and
+never an approval question: brewery asks for approval last).
 
 Findings:
 \`\`\`json

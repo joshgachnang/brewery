@@ -195,6 +195,14 @@ change what gets built.**
   question. At sign-off it snapshots the artboards into `docs/specs/<slug>/design/`, and
   the `## Design` section maps them to tasks; barrel builds against that snapshot, never
   the live canvas. Rules: [`designing`](plugins/brewery/skills/distill/references/designing.md).
+- Design is part of the plan when the request is design work (how something looks or
+  flows, or a change to the design): distill starts a Claude Design canvas if there is
+  none, launches the app on seeded local data and screenshots the screens it touches, and
+  draws the proposed versions beside them. A close call becomes a design question you
+  answer by picking between two to four designs (or mixing them, or editing the canvas).
+  Without claude.ai access the screenshots and mockups go to `docs/specs/<slug>/design/`.
+- Approval is only ever the last question. You answer the questions first; the sign-off
+  message, the chat, and `brewery ui` all ask for approval after them.
 - The CLI rejects a draft whose task graph has duplicate IDs, unknown dependencies, or
   cycles before it ever reaches you.
 - `brewery distill "<request>"` (`--file req.md` for a long one).
