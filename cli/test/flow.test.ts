@@ -1184,6 +1184,35 @@ describe("barrel", () => {
       expect(ctx.state.waiting?.message).toContain("failed 9 attempts");
     });
 
+    test("rejected picks before the handoff do not shorten the three fable attempts", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 3), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      // Two earlier setup or empty-pick rejections, as five-attempts-in-total would have stopped it.
+      ctx.state.tasks.T1 = { status: "todo", attempts: 5, rejections: 2 };
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.fableFailures).toBe(3);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+    });
+
+    test("a retry answer to a BLOCKED pick does not push the stuck-task ask out", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL"), pick("alpha", "", "BLOCKED"),
+        pick("alpha", "", "FAIL", 2), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(ctx.state.tasks.T1.askAtFableFailures).toBeUndefined();
+      expect(await answer(ctx, "retry: try again")).toBe("continue");
+      expect(ctx.state.tasks.T1.askAtFableFailures).toBeUndefined();
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "alpha", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.fableFailures).toBe(3);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+    });
+
     test("a repo escalation without a fable agent keeps the ask at pickAttempts", async () => {
       const { ctx } = fableSetup([pick("alpha", "", "FAIL", 3), { match: "pick T2", result: { status: "BLOCKED", action: "pause" } }]);
       ctx.config.escalate = { pick: ["beta"] };

@@ -195,16 +195,25 @@ const hasFableRoute = (ctx: Ctx, stage: "pick" | "roast"): boolean =>
 const onFable = (ctx: Ctx, ts: TaskState, stage: "pick" | "roast"): boolean =>
   hasFableRoute(ctx, stage) && (ts.failures ?? 0) >= ctx.config.limits.fableAfter;
 
-const countFailure = (ts: TaskState): void => {
+// A FAIL from pick or roast. Fable FAILs also spend the Fable budget.
+const countFailure = (ts: TaskState, onFableRun: boolean): void => {
   ts.failures = (ts.failures ?? 0) + 1;
+  if (onFableRun) ts.fableFailures = (ts.fableFailures ?? 0) + 1;
 };
 
-// With a Fable route the ask waits for three failed Fable attempts (and every three after a
-// retry answer); setup failures and rejected picks still stop the loop through `attempts`.
-const isStuck = (ctx: Ctx, ts: TaskState): boolean => {
+// Attempts that never reached a verdict: setup, test-step, unproven-test and no-change rejections.
+const countRejection = (ts: TaskState): void => {
+  ts.rejections = (ts.rejections ?? 0) + 1;
+};
+
+// With a Fable route the ask waits for three failed Fable attempts (and three more after each
+// answered stuck-task ask). Rejections spend a separate budget of `pickAttempts`, so they
+// neither shorten nor extend the Fable one.
+const stuckReason = (ctx: Ctx, ts: TaskState): "failures" | "rejections" | undefined => {
   const { pickAttempts, fableAfter } = ctx.config.limits;
-  if (!hasFableRoute(ctx, "pick")) return ts.attempts >= pickAttempts;
-  return (ts.failures ?? 0) >= (ts.askAtFailures ?? fableAfter + 3) || ts.attempts >= fableAfter + 6;
+  if (!hasFableRoute(ctx, "pick")) return ts.attempts >= pickAttempts ? "failures" : undefined;
+  if ((ts.rejections ?? 0) >= pickAttempts) return "rejections";
+  return (ts.fableFailures ?? 0) >= (ts.askAtFableFailures ?? fableAfter) ? "failures" : undefined;
 };
 
 // The test step writes the task's tests from its brief before any implementation exists.
@@ -275,11 +284,16 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
   const { state, config } = ctx;
   let needsCleanup = ts.evidence?.startsWith("Worktree setup FAIL") || ts.evidence?.startsWith("Interrupted build") || ts.evidence?.startsWith("Land conflict:");
   for (;;) {
-    if (isStuck(ctx, ts)) {
+    const stuck = stuckReason(ctx, ts);
+    if (stuck) {
       const last = ts.evidence?.slice(0, 600) ?? "no evidence recorded";
-      const failed = hasFableRoute(ctx, "pick") ? Math.max(ts.failures ?? 0, ts.attempts) : ts.attempts;
+      const fableMode = hasFableRoute(ctx, "pick");
+      const failed = !fableMode ? ts.attempts : stuck === "failures" ? ts.failures ?? 0 : ts.rejections ?? 0;
+      const kind = stuck === "rejections" ? "rejected or setup-failed attempts" : "attempts";
+      ts.stuckAsked = true;
+      saveState(state);
       return { gate: {
-        asks: [{ q: `${id} (${taskTitle}) failed ${failed} attempts. How should I proceed?`, rec: "retry: <a hint>", opts: ["retry: <a hint>", "skip", "stop"] }],
+        asks: [{ q: `${id} (${taskTitle}) failed ${failed} ${kind}. How should I proceed?`, rec: "retry: <a hint>", opts: ["retry: <a hint>", "skip", "stop"] }],
         need: `${id} is stuck`, detail: `Last failure: ${last}`,
       } };
     }
@@ -313,6 +327,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
         needsCleanup = !(await cleanupTask(ctx, id));
         saveState(state);
         setupFailed = true;
+        countRejection(ts);
         break;
       }
       if (setupFailed) continue;
@@ -323,6 +338,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       if (written.gate) return written;
       if (written.retry) {
         ts.evidence = written.retry;
+        countRejection(ts);
         continue;
       }
     }
@@ -336,18 +352,20 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       return { gate: { asks: asksFrom(picked, picked.action), need: `a decision on ${id}`, detail: picked.summary ?? picked.action } };
     }
     if (picked.status !== "PASS") {
-      countFailure(ts);
+      countFailure(ts, fable);
       ts.evidence = evidenceText(picked);
       continue;
     }
     const unproven = await checkPick(cwd, ts, picked.testChanges ?? []);
     if (unproven) {
       ts.evidence = unproven;
+      countRejection(ts);
       continue;
     }
     if (!(await anyChanges(cwd))) {
       if (!ts.commit) {
         ts.evidence = "Pick reported PASS but changed no files.";
+        countRejection(ts);
         continue;
       }
     } else {
@@ -357,7 +375,8 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     }
     saveState(state);
 
-    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd, escalated: onFable(ctx, ts, "roast") }));
+    const roastOnFable = onFable(ctx, ts, "roast");
+    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd, escalated: roastOnFable }));
     if (await anyChanges(cwd)) ctx.log(`  note: roast left changes in the tree; folding them into ${id}`);
     if (verdict.status === "PASS") {
       if (await anyChanges(cwd)) ts.commit = await commitAll(cwd, taskTitle, true);
@@ -366,7 +385,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     if (verdict.status === "BLOCKED") {
       return { gate: { asks: asksFrom(verdict, verdict.action), need: `a decision on ${id}`, detail: verdict.action } };
     }
-    countFailure(ts);
+    countFailure(ts, roastOnFable);
     ts.evidence = evidenceText(verdict);
     if (verdict.retest && config.limits.testFirst) ts.retest = ts.evidence;
   }
