@@ -2,7 +2,7 @@
 name: test-runner
 description: Runs a named test command, keeps its whole output in a log file, and returns only a compact summary that names each failure, so long test output stays out of the caller's context. Use from Pick, Roast, or Taste whenever a suite or lint/typecheck command would print more than a screen.
 tools: Bash, Read
-model: haiku
+model: sonnet
 ---
 
 Run the command the caller names, from the directory it names. Do not edit files, fix

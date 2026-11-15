@@ -34,7 +34,10 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
 - With a Claude Design, recipe and distill add questions and drafts to the canvas at
   checkpoints and turn the human's canvas edits into plan changes; distill snapshots the
   artboards at sign-off (`docs/specs/<slug>/design/`) and barrel builds against the
-  snapshot. See `distill/references/designing.md`.
+  snapshot. When the request is design work, distill does the design too: it starts a
+  canvas if there is none, screenshots the running app, draws the proposals, and asks you
+  to pick between designs. See `distill/references/designing.md`.
+- Approval is only ever the last question: you answer the questions first, then approve.
 - The human is asked only at sign-off and at gates (a task stuck after its attempts, review
   that will not converge, CI still red after three fix rounds). barrel runs Pick and Roast on
   Sonnet and hands a task to Fable once it has failed three attempts; the stuck-task gate then

@@ -10,6 +10,8 @@ export interface Ask {
   q: string;
   rec: string;
   opts?: string[];
+  // A design question: the artboard or design file each option shows, in `opts` order.
+  designs?: string[];
   // A wrong guess would change the destination or most of the plan (distilling.md).
   fundamental?: boolean;
 }

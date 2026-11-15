@@ -171,6 +171,15 @@ describe("page source: dashboard content", () => {
     expect(html).toContain("Read them at the terminal or in the IP");
   });
 
+  test("lists the questions before the reply line, so approval is always asked last", () => {
+    const html = page();
+    const asks = html.indexOf('"ui-waiting-asks"');
+    const reply = html.indexOf('"ui-waiting-reply"');
+    expect(asks).toBeGreaterThan(-1);
+    expect(reply).toBeGreaterThan(asks);
+    expect(html).toContain("a.designs?.[j]");
+  });
+
   test("has task lanes with test, pick, and roast cards", () => {
     const html = page().toLowerCase();
     for (const kind of ["test", "pick", "roast"]) expect(html).toContain(kind);
