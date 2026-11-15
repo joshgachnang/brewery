@@ -1187,7 +1187,7 @@ describe("barrel", () => {
     test("a repo escalation without a fable agent keeps the ask at pickAttempts", async () => {
       const { ctx } = fableSetup([pick("alpha", "", "FAIL", 3), { match: "pick T2", result: { status: "BLOCKED", action: "pause" } }]);
       ctx.config.escalate = { pick: ["beta"] };
-      ctx.config.limits.escalateAfter = 99;
+      ctx.config.limits.escalateAfter = 1;
       expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
       expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha"]);
       expect(ctx.state.waiting?.message).toContain("failed 3 attempts");
@@ -1405,23 +1405,23 @@ describe("barrel test-first", () => {
     expect(stepPrompts(repo, "greet", /-test-T1-/)[1]).toContain("no-sleep: use waitUntil");
   });
 
-  test("escalates the test step and pick to the escalation agents after escalateAfter runs", async () => {
+  test("escalates the test step to its escalation agent after escalateAfter runs; pick stays on its own agent", async () => {
     const { ctx } = setup([
       { match: "test T1", agent: "alpha", write: { "greeting.test.sh": "true\n" }, result: wroteTests },
       { match: "test T1", agent: "beta", write: { "greeting.test.sh": RED }, result: wroteTests },
-      { match: "pick T1", agent: "alpha", write: { "greeting.txt": "helo\n" }, result: { status: "PASS", action: "built" } },
-      { match: "pick T1", agent: "beta", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "fixed" } },
+      { match: "pick T1", agent: "alpha", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
       { match: "roast T1", result: { status: "PASS", action: "proven" } },
     ], (config) => {
       config.escalate = { test: ["beta"], pick: ["beta"] };
       config.limits.escalateAfter = 1;
+      config.limits.fableAfter = 99;
     });
 
     expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
 
     const agents = (stage: string) => ctx.state.history.filter((h) => h.stage === stage).map((h) => h.agent);
     expect(agents("test")).toEqual(["alpha", "beta"]);
-    expect(agents("pick")).toEqual(["alpha", "beta"]);
+    expect(agents("pick")).toEqual(["alpha"]);
     expect(ctx.lines.some((line) => line.includes("escalating test T1 to beta"))).toBe(true);
   });
 });

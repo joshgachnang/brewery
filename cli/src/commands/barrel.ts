@@ -181,7 +181,7 @@ const checkHygiene = async (cwd: string, files: string[]): Promise<string | unde
     : undefined;
 };
 
-const escalates = (ctx: Ctx, ts: TaskState, stage: "test" | "pick"): boolean => {
+const escalates = (ctx: Ctx, ts: TaskState, stage: "test"): boolean => {
   const runs = ts.runs ??= {};
   const before = runs[stage] ?? 0;
   runs[stage] = before + 1;
@@ -328,7 +328,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     }
 
     const fable = onFable(ctx, ts, "pick");
-    const escalated = hasFableRoute(ctx, "pick") ? fable : escalates(ctx, ts, "pick");
+    const escalated = fable;
     if (fable) ctx.log(`  escalating ${id} to claude-fable`);
     saveState(state);
     const [{ result: picked }] = await runStage(ctx, "pick", pickBody(taskCtx, id, taskTitle, ts.evidence, ts.tests), { task: id, cwd, escalated });

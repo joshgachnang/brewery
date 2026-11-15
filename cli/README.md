@@ -93,7 +93,7 @@ strict, so a failure stops the run with the landed commit recorded.
 | `stages.brew` | `["claude-sonnet"]` | Brew runs final checks and opens the PR on Sonnet. |
 | `limits.testFirst` | `true` | Run the `test` step (default agent `claude-sonnet`) before each task's Pick. `false` returns to Pick writing its own tests. |
 | `limits.pourMaxTasks` | `6` | The most tasks `brewery pour` approves without asking you. |
-| `limits.escalateAfter` | `2` | Runs of a task's `test` or `pick` step before the next one uses `escalate[stage]`. |
+| `limits.escalateAfter` | `2` | Runs of a task's `test` step before the next one uses `escalate.test`. Pick and Roast do not count runs; see `limits.fableAfter`. |
 | `limits.fableAfter` | `3` | Failed Pick and Roast attempts of a task (`ts.failures`, kept across `retry:` answers) before both run on the Fable agent in `escalate`. The human is asked at `fableAfter + 3` failures, then every 3 more. |
 | `escalate` | `{"test": ["claude-opus"], "pick": ["claude-fable"], "roast": ["claude-fable"]}` | Stronger agents per stage for steps that keep failing. A repo's map replaces this one wholesale; `{}` turns escalation off. |
 
