@@ -60,7 +60,10 @@ export const answer = async (ctx: Ctx, reply: string): Promise<AnswerOutcome> =>
   const task = waiting.task ? state.tasks[waiting.task] : undefined;
   if (task) {
     if (text.startsWith("skip")) task.status = "skipped";
-    else task.attempts = 0;
+    else {
+      task.attempts = 0;
+      if (task.failures) task.askAtFailures = task.failures + 3;
+    }
   }
   if (state.phase === "integrate") {
     if (text.startsWith("ship")) {

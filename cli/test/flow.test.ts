@@ -1132,6 +1132,68 @@ describe("barrel", () => {
     expect(existsSync(tree)).toBe(false);
   });
 
+  describe("Fable handoff", () => {
+    const fableSetup = (plan: unknown[]) => {
+      const made = setupApproved(plan);
+      made.ctx.config.agents.fable = { ...made.ctx.config.agents.alpha, model: "fable", env: { ...made.ctx.config.agents.alpha.env, FAKE_AGENT_NAME: "fable" } };
+      made.ctx.config.escalate = { pick: ["fable"], roast: ["fable"] };
+      made.ctx.config.limits.fableAfter = 3;
+      made.ctx.config.limits.pickAttempts = 3;
+      return made;
+    };
+    const pick = (agent: string, content: string, status = "PASS", times = 1) =>
+      ({ match: "pick T1", agent, times, write: status === "PASS" ? { "greeting.txt": content } : undefined, result: { status, action: status === "PASS" ? "built" : "cannot" } });
+    const roast = (agent: string, status: string, times = 1) => ({ match: "roast T1", agent, times, result: { status, action: status === "PASS" ? "proven" : "wrong" } });
+    const agentsFor = (ctx: ReturnType<typeof quietCtx>, stage: string) => ctx.state.history.filter((h) => h.stage === stage && h.task === "T1").map((h) => h.agent);
+
+    test("runs pick and roast on the default agents for two failures and on fable from the third", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "a1"), roast("beta", "FAIL"), pick("alpha", "a2"), roast("beta", "FAIL"), pick("alpha", "a3"), roast("beta", "FAIL"),
+        pick("fable", "hello\n"), roast("fable", "PASS"),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable"]);
+      expect(agentsFor(ctx, "roast")).toEqual(["beta", "beta", "beta", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(3);
+      expect(ctx.lines.some((line) => line.includes("escalating T1 to claude-fable"))).toBe(true);
+    });
+
+    test("a pick FAIL counts toward the three; a BLOCKED result does not", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 2), pick("alpha", "a3"), roast("beta", "FAIL"),
+        pick("fable", "hello\n"), roast("fable", "PASS"),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable"]);
+    });
+
+    test("asks the human after three failed fable attempts, keeps fable on a retry, and asks again after three more", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 3), pick("fable", "", "FAIL", 3), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(ctx.state.tasks.T1.failures).toBe(6);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+      expect(await answer(ctx, "retry: try again")).toBe("continue");
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(9);
+      expect(ctx.state.waiting?.message).toContain("failed 9 attempts");
+    });
+
+    test("a repo escalation without a fable agent keeps the ask at pickAttempts", async () => {
+      const { ctx } = fableSetup([pick("alpha", "", "FAIL", 3), { match: "pick T2", result: { status: "BLOCKED", action: "pause" } }]);
+      ctx.config.escalate = { pick: ["beta"] };
+      ctx.config.limits.escalateAfter = 99;
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha"]);
+      expect(ctx.state.waiting?.message).toContain("failed 3 attempts");
+    });
+  });
+
   test("refuses an IP that is not approved", async () => {
     const { repo, ctx } = setupApproved([]);
     writeFileSync(ctx.state.ip, IP("awaiting sign-off"));

@@ -356,9 +356,12 @@ describe("config and agents", () => {
     expect(DEFAULT_CONFIG.notify.ntfyUrl).toBe("https://shade-api.nang.io/webhooks/notifications");
   });
 
-  test("tests are written first with sonnet, and a stuck test or pick step escalates to opus", () => {
+  test("tests are written first with sonnet, a stuck test step escalates to opus, and pick and roast hand to fable", () => {
     expect(DEFAULT_CONFIG.stages.test).toEqual(["claude-sonnet"]);
-    expect(DEFAULT_CONFIG.escalate).toEqual({ test: ["claude-opus"], pick: ["claude-opus"] });
+    expect(DEFAULT_CONFIG.stages.brew).toEqual(["claude-sonnet"]);
+    expect(DEFAULT_CONFIG.escalate).toEqual({ test: ["claude-opus"], pick: ["claude-fable"], roast: ["claude-fable"] });
+    expect(DEFAULT_CONFIG.limits.fableAfter).toBe(3);
+    expect(agentArgv(DEFAULT_CONFIG.agents["claude-fable"], "/repo")).toEqual(expect.arrayContaining(["--model", "fable"]));
     expect(agentArgv(DEFAULT_CONFIG.agents["claude-opus"], "/repo")).toEqual(expect.arrayContaining(["--model", "opus"]));
     expect(DEFAULT_CONFIG.limits.testFirst).toBe(true);
     expect(DEFAULT_CONFIG.limits.escalateAfter).toBe(2);

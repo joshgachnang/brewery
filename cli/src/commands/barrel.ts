@@ -188,6 +188,25 @@ const escalates = (ctx: Ctx, ts: TaskState, stage: "test" | "pick"): boolean => 
   return before >= ctx.config.limits.escalateAfter;
 };
 
+// A stage whose escalation route names a fable agent hands a task to it after `fableAfter` failed attempts.
+const hasFableRoute = (ctx: Ctx, stage: "pick" | "roast"): boolean =>
+  (ctx.config.escalate[stage] ?? []).some((name) => ctx.config.agents[name]?.model === "fable");
+
+const onFable = (ctx: Ctx, ts: TaskState, stage: "pick" | "roast"): boolean =>
+  hasFableRoute(ctx, stage) && (ts.failures ?? 0) >= ctx.config.limits.fableAfter;
+
+const countFailure = (ts: TaskState): void => {
+  ts.failures = (ts.failures ?? 0) + 1;
+};
+
+// With a Fable route the ask waits for three failed Fable attempts (and every three after a
+// retry answer); setup failures and rejected picks still stop the loop through `attempts`.
+const isStuck = (ctx: Ctx, ts: TaskState): boolean => {
+  const { pickAttempts, fableAfter } = ctx.config.limits;
+  if (!hasFableRoute(ctx, "pick")) return ts.attempts >= pickAttempts;
+  return (ts.failures ?? 0) >= (ts.askAtFailures ?? fableAfter + 3) || ts.attempts >= fableAfter + 6;
+};
+
 // The test step writes the task's tests from its brief before any implementation exists.
 // brewery, not the agent, checks that it wrote only what it declared and that the tests
 // fail, then commits them as the start of the task's commit. On a retest (Roast found the
@@ -256,10 +275,11 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
   const { state, config } = ctx;
   let needsCleanup = ts.evidence?.startsWith("Worktree setup FAIL") || ts.evidence?.startsWith("Interrupted build") || ts.evidence?.startsWith("Land conflict:");
   for (;;) {
-    if (ts.attempts >= config.limits.pickAttempts) {
+    if (isStuck(ctx, ts)) {
       const last = ts.evidence?.slice(0, 600) ?? "no evidence recorded";
+      const failed = hasFableRoute(ctx, "pick") ? Math.max(ts.failures ?? 0, ts.attempts) : ts.attempts;
       return { gate: {
-        asks: [{ q: `${id} (${taskTitle}) failed ${ts.attempts} attempts. How should I proceed?`, rec: "retry: <a hint>", opts: ["retry: <a hint>", "skip", "stop"] }],
+        asks: [{ q: `${id} (${taskTitle}) failed ${failed} attempts. How should I proceed?`, rec: "retry: <a hint>", opts: ["retry: <a hint>", "skip", "stop"] }],
         need: `${id} is stuck`, detail: `Last failure: ${last}`,
       } };
     }
@@ -307,13 +327,16 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       }
     }
 
-    const escalated = escalates(ctx, ts, "pick");
+    const fable = onFable(ctx, ts, "pick");
+    const escalated = hasFableRoute(ctx, "pick") ? fable : escalates(ctx, ts, "pick");
+    if (fable) ctx.log(`  escalating ${id} to claude-fable`);
     saveState(state);
     const [{ result: picked }] = await runStage(ctx, "pick", pickBody(taskCtx, id, taskTitle, ts.evidence, ts.tests), { task: id, cwd, escalated });
     if (picked.status === "BLOCKED") {
       return { gate: { asks: asksFrom(picked, picked.action), need: `a decision on ${id}`, detail: picked.summary ?? picked.action } };
     }
     if (picked.status !== "PASS") {
+      countFailure(ts);
       ts.evidence = evidenceText(picked);
       continue;
     }
@@ -334,7 +357,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     }
     saveState(state);
 
-    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd }));
+    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd, escalated: onFable(ctx, ts, "roast") }));
     if (await anyChanges(cwd)) ctx.log(`  note: roast left changes in the tree; folding them into ${id}`);
     if (verdict.status === "PASS") {
       if (await anyChanges(cwd)) ts.commit = await commitAll(cwd, taskTitle, true);
@@ -343,6 +366,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     if (verdict.status === "BLOCKED") {
       return { gate: { asks: asksFrom(verdict, verdict.action), need: `a decision on ${id}`, detail: verdict.action } };
     }
+    countFailure(ts);
     ts.evidence = evidenceText(verdict);
     if (verdict.retest && config.limits.testFirst) ts.retest = ts.evidence;
   }

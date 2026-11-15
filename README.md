@@ -276,10 +276,12 @@ learned, traps, files) that later steps read: a task's retry pick reads its earl
 roasts, integrate and review read each task's last passing pick, and roast gets only the files and traps, as claims to verify. See
 [handoffs between steps](cli/README.md#handoffs-between-steps).
 
-Steps that keep failing escalate to Opus (`limits.escalateAfter`). Every built-in claude agent
-names its model (the plain `claude` profile is Opus), so no step runs on the account's default
-model; Fable runs only when your config names it. A task stuck after
-`limits.pickAttempts` becomes a gate: `retry: <hint>`, `skip`, or `stop`. Ready tasks run up to
+A test step that keeps failing escalates to Opus (`limits.escalateAfter`). Pick and Roast run on
+Sonnet, and a task whose picks and roasts have failed `limits.fableAfter` (3) times runs both on
+Fable; Brew runs on Sonnet. Every built-in claude agent names its model (the plain `claude`
+profile is Opus), so no step runs on the account's default model. A task stuck after three
+failed Fable attempts (6 failures, then every 3 more) becomes a gate: `retry: <hint>`, `skip`, or
+`stop`. With no Fable agent in `escalate.pick`, the gate stays at `limits.pickAttempts`. Ready tasks run up to
 `limits.parallelTasks` at once, except two tasks that declare the same `Files:` entry.
 `brewery barrel <slug>`, or `--ip <path>` for a plan approved elsewhere.
 

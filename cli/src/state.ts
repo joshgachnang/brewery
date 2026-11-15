@@ -13,6 +13,10 @@ export interface TaskState {
   worktree?: string;
   branch?: string;
   attempts: number;
+  // Pick and roast FAILs of this task. Unlike `attempts` a human `retry:` answer does not reset it.
+  failures?: number;
+  // The failure count at which the next human ask fires once the task is on Fable (default fableAfter + 3).
+  askAtFailures?: number;
   commit?: string;
   evidence?: string;
   // How many times each step has run for this task, for escalation.

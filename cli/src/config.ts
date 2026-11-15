@@ -84,8 +84,11 @@ export interface Limits {
   pickAttempts: number;
   // Write each task's tests in their own step, confirmed red, before Pick implements it.
   testFirst: boolean;
-  // A test or pick step that has already run this many times for a task moves to `escalate`.
+  // A test step (or a pick when no Fable escalation is configured) that has already run this many times for a task moves to `escalate`.
   escalateAfter: number;
+  // A task whose pick and roast steps have failed this many times runs them on the
+  // `escalate` agent whose model is fable; the human is asked after three more failures.
+  fableAfter: number;
   // `brewery pour` approves its own plan only when it has at most this many tasks.
   pourMaxTasks: number;
   parallelTasks: number;
@@ -124,6 +127,8 @@ export const DEFAULT_CONFIG: Config = {
     // Roast checks criteria with named commands; Sonnet is fast enough and cheaper.
     "claude-sonnet": { type: "claude", model: "sonnet" },
     "claude-opus": { type: "claude", model: "opus" },
+    // A task that fails three attempts is handed to Fable (limits.fableAfter).
+    "claude-fable": { type: "claude", model: "fable" },
     codex: { type: "codex" },
     local: {
       type: "codex",
@@ -145,14 +150,15 @@ export const DEFAULT_CONFIG: Config = {
     pick: ["claude-sonnet"],
     roast: ["claude-sonnet"],
     review: ["claude", "codex"],
-    brew: ["claude"],
+    // Brew runs final checks and opens the PR; Sonnet is enough.
+    brew: ["claude-sonnet"],
     taste: ["claude"],
     compound: ["claude"],
     cellar: ["claude"],
     approve: ["claude"],
     calibrate: ["claude"],
   },
-  escalate: { test: ["claude-opus"], pick: ["claude-opus"] },
+  escalate: { test: ["claude-opus"], pick: ["claude-fable"], roast: ["claude-fable"] },
   skillsDir: join(homedir(), ".claude", "skills"),
   worktreeSetup: [],
   // Shade's ntfy-compatible webhook relays to Slack. Pings carry no content.
@@ -163,6 +169,7 @@ export const DEFAULT_CONFIG: Config = {
     pickAttempts: 3,
     testFirst: true,
     escalateAfter: 2,
+    fableAfter: 3,
     pourMaxTasks: 6,
     parallelTasks: 3,
     cutRounds: 2,
