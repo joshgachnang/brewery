@@ -26,7 +26,8 @@ tool is available. Use this skill directly for an interactive, single-session ru
    `## Regression cases`, `## User guide`, and `## Design` sections (each rows or `None — <reason>`;
    `None — user guide off` when the repository opts out), cut it, fix it. Ask
    fundamental questions in chat when the human is here, in one round, at most four, with
-   the structured question tool. The answers go into Decisions. With a design, write its
+   the structured question tool, design questions among them for design work, and approval
+   never in that round. The answers go into Decisions. With a design, write its
    snapshot per [`designing`](../distill/references/designing.md#the-snapshot) before
    approving.
 2. **Decide whether to stop.** Count the tasks and the fundamental questions still open.

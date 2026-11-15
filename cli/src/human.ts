@@ -16,16 +16,37 @@ export const parseReply = (reply: string): Verdict => {
   return "answer";
 };
 
+// An agent sometimes asks "approve the plan?" as a question. Approval is only ever the
+// last question: the human approves a plan with every other answer in it.
+const APPROVAL = /^\s*(?:(?:do you|can you|shall we|should we|will you)\s+)?(?:approve|sign[- ]?off)\b|\b(?:ok|okay|ready|good|clear) to (?:build|ship|proceed|go)\b|\b(?:approve|sign off on|accept) (?:the|this) (?:plan|ip)\b/i;
+
+export const isApprovalAsk = (ask: Ask): boolean => APPROVAL.test(ask.q);
+
+// Fundamental questions first, then the rest in the order given, then any approval ask.
+export const orderAsks = (asks: Ask[]): Ask[] => [
+  ...asks.filter((a) => a.fundamental && !isApprovalAsk(a)),
+  ...asks.filter((a) => !a.fundamental && !isApprovalAsk(a)),
+  ...asks.filter(isApprovalAsk),
+];
+
 export const formatAsks = (asks: Ask[]): string =>
   asks
     .map((a, i) => {
       const letters = "abcdefgh";
+      const design = (j: number): string => (a.designs?.[j] ? ` [${a.designs[j]}]` : "");
       const opts = a.opts?.length
-        ? ` ${a.opts.map((o, j) => `${letters[j]}) ${o}${o === a.rec ? " (recommended)" : ""}`).join(" ")}`
+        ? ` ${a.opts.map((o, j) => `${letters[j]}) ${o}${design(j)}${o === a.rec ? " (recommended)" : ""}`).join(" ")}`
         : ` Recommended: ${a.rec}`;
       return `${i + 1}. ${a.q}${opts}`;
     })
     .join("\n");
+
+// At most five questions, then any approval ask, which the cap never drops.
+const shownAsks = (asks: Ask[]): Ask[] => {
+  const ordered = orderAsks(asks);
+  const approval = ordered.filter(isApprovalAsk);
+  return [...ordered.filter((a) => !isApprovalAsk(a)).slice(0, 5), ...approval];
+};
 
 export interface MessageParts {
   repoName: string;
@@ -44,7 +65,7 @@ export const buildMessage = (m: MessageParts): string => {
   if (m.orientation) lines.push(m.orientation, "");
   if (m.elephant) lines.push(`Elephant: ${m.elephant}`, "");
   lines.push(`Plan: ${m.link}`, "");
-  if (m.asks.length) lines.push("Needs an answer:", formatAsks(m.asks.slice(0, 5)), "");
+  if (m.asks.length) lines.push("Needs an answer:", formatAsks(shownAsks(m.asks)), "");
   lines.push(m.replyHint);
   return lines.join("\n");
 };
@@ -72,7 +93,7 @@ export const waitForHuman = async (
   ntfyUrl: string | undefined,
   log: (line: string) => void,
 ): Promise<void> => {
-  state.waiting = { kind, asks, message, since: new Date().toISOString() };
+  state.waiting = { kind, asks: orderAsks(asks), message, since: new Date().toISOString() };
   saveState(state);
   appendEvent(state, { kind: "waiting", waitingKind: kind, message, ...(state.ip ? { ip: state.ip } : {}) });
   await ping(ntfyUrl, `brewery: ${state.slug} needs you (${kind === "signoff" ? "sign-off" : "decision"})`);

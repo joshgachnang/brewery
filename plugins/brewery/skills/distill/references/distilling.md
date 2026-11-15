@@ -33,10 +33,24 @@ The plan is fundamental.
 
 - One round. At most four with the structured question tool, recommended option first
   and labelled `(Recommended)`, 2–4 concrete options per question.
+- A choice between screens or flows is a design question: its options are designs, each
+  an artboard or file with an ASCII `preview`, per
+  [`designing`](designing.md#design-questions). When the look is the point of the
+  request, it is fundamental.
+- Approval is never in this round. It is only ever the last question, asked after every
+  other answer is in the IP: its own final question, or the last one of the call.
 - Put the context in the question: one or two sentences, citing what research found.
 - Get to the bottom of vague answers ("sure", "your call") only for these questions.
   A vague answer to a fundamental question stays open.
 - Never ask a second round of deferrable questions because the human seems available.
+
+## Approval comes last
+
+The human approves a plan they have seen with their answers in it, so approval is only
+ever the last question, never the first. In the chat, ask it after the fundamental and
+design questions are answered and applied. Asynchronously, the sign-off message lists the
+questions and ends with the reply line ("ok" accepts every recommendation), and the
+result's `ask` never holds an approval question: brewery adds the reply line itself.
 
 ## IP bottom sections
 
@@ -265,4 +279,9 @@ contain multiple behaviours, and chains that could fan out.
 - A UI task with no `Design:` line when the IP has a design, or a canvas change applied
   without saying what it became
 - A sign-off message that needs the IP open to make sense
+- Asking for approval first, or before the questions it depends on are answered
+- A design question with one option, or with options that differ in more than the
+  question asks
+- A design change planned from the request's words alone when the app could be
+  screenshotted and the change drawn
 - Treating silence as sign-off

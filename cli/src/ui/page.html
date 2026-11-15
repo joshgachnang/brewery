@@ -290,13 +290,17 @@
       const count = w.asks === 1 ? "1 question waiting" : `${w.asks} questions waiting`;
       body.push(h("p", { text: `${count}. Read them at the terminal or in the IP.` }));
     } else {
-      body.push(h("p", { text: w.message }));
+      // Questions first, then the reply line: approval is always the last thing asked.
+      body.push(h("p", { text: w.intro ?? w.message }));
       if (w.asks.length) {
-        body.push(h("ol", {}, w.asks.map((a) =>
+        body.push(h("ol", { "data-testid": "ui-waiting-asks" }, w.asks.map((a) =>
           h("li", {}, h("div", { text: a.q }),
             a.rec ? h("div", { class: "muted", text: `Recommended: ${a.rec}` }) : null,
-            a.opts?.length ? h("div", { class: "muted", text: `Options: ${a.opts.join(" · ")}` }) : null))));
+            a.opts?.length
+              ? h("div", { class: "muted", text: `Options: ${a.opts.map((o, j) => (a.designs?.[j] ? `${o} [${a.designs[j]}]` : o)).join(" · ")}` })
+              : null))));
       }
+      if (w.reply) body.push(h("p", { "data-testid": "ui-waiting-reply", text: w.reply }));
     }
     const input = h("textarea", { "data-testid": "ui-answer-input", placeholder: w.kind === "signoff" ? "approve, or what to change" : "your reply" });
     const status = h("span", { class: "muted", "data-testid": "ui-answer-status" });
