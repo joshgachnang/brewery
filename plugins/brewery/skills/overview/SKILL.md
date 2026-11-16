@@ -39,7 +39,9 @@ request ─▶ distill ─▶ cut ─▶ sign-off ─▶ barrel ─────�
   to pick between designs. See `distill/references/designing.md`.
 - Approval is only ever the last question: you answer the questions first, then approve.
 - The human is asked only at sign-off and at gates (a task stuck after its attempts, review
-  that will not converge, CI still red after three fix rounds).
+  that will not converge, CI still red after three fix rounds). barrel runs Pick and Roast on
+  Sonnet and hands a task to Fable once it has failed three attempts; the stuck-task gate then
+  waits for three failed Fable attempts (6 failures, then every 3 more). Brew runs on Sonnet.
 
 ## Pick one
 

@@ -88,12 +88,14 @@ strict, so a failure stops the run with the landed commit recorded.
 | --- | --- | --- |
 | `worktreeSetup` | `[]` | Shell commands run in order in each fresh task worktree, before Pick. Shade uses `["bun bootstrap"]`. A nonzero exit records stdout/stderr as failure evidence, removes the tree, and consumes a Pick attempt. |
 | `limits.parallelTasks` | `3` | Maximum concurrent task builds. `--parallel N` overrides it for one run; `--parallel 1` runs sequentially. |
-| `agents` | `claude` → `opus`, `claude-sonnet` → `sonnet`, `claude-opus` → `opus` | Every built-in claude profile names its model, so no step takes the account's default model (Fable runs only when a config names it). |
-| `stages.pick` | `["claude-sonnet"]` | Implementation runs on Sonnet; a Pick that keeps failing escalates to `claude-opus`. |
+| `agents` | `claude` → `opus`, `claude-sonnet` → `sonnet`, `claude-opus` → `opus`, `claude-fable` → `fable` | Every built-in claude profile names its model, so no step takes the account's default model. |
+| `stages.pick` | `["claude-sonnet"]` | Implementation runs on Sonnet; once the task has failed `limits.fableAfter` attempts it runs on `claude-fable`. |
+| `stages.brew` | `["claude-sonnet"]` | Brew runs final checks and opens the PR on Sonnet. |
 | `limits.testFirst` | `true` | Run the `test` step (default agent `claude-sonnet`) before each task's Pick. `false` returns to Pick writing its own tests. |
 | `limits.pourMaxTasks` | `6` | The most tasks `brewery pour` approves without asking you. |
-| `limits.escalateAfter` | `2` | Runs of a task's `test` or `pick` step before the next one uses `escalate[stage]`. |
-| `escalate` | `{"test": ["claude-opus"], "pick": ["claude-opus"]}` | Stronger agents per stage for steps that keep failing. A repo's map replaces this one wholesale; `{}` turns escalation off. |
+| `limits.escalateAfter` | `2` | Runs of a task's `test` step before the next one uses `escalate.test`. Pick and Roast do not count runs; see `limits.fableAfter`. |
+| `limits.fableAfter` | `3` | Failed Pick and Roast attempts of a task (`ts.failures`, kept across `retry:` answers) before both run on the Fable agent in `escalate`. The human is asked at `fableAfter + 3` failures, then every 3 more. |
+| `escalate` | `{"test": ["claude-opus"], "pick": ["claude-fable"], "roast": ["claude-fable"]}` | Stronger agents per stage for steps that keep failing. A repo's map replaces this one wholesale; `{}` turns escalation off. |
 
 ## Parallel builds
 
@@ -153,7 +155,7 @@ them fails the step. Other stages use the first available agent. An unavailable 
 | Cut sees only the human's words | Its prompt holds only `.terreno/brewery/<slug>/context.md` (your request and replies, verbatim), and it runs in a `git worktree` of HEAD where `.terreno/` does not exist. |
 | Roast judges a fixed tree | brewery commits after Pick, before Roast. Retries amend the task's commit. |
 | Tests come before code | With `limits.testFirst` (default), a `test` step writes each task's tests from its brief before Pick. brewery reverts any file it did not declare, runs its `command` and rejects tests that already pass, then commits them. After Pick, brewery reruns the command and rejects a red result or a change to those tests with no stated reason. |
-| Stuck steps escalate | A task's test step or Pick that has run `limits.escalateAfter` times (default 2) runs next on `escalate[stage]` (default `claude-opus`). |
+| Stuck steps escalate | A task's test step that has run `limits.escalateAfter` times (default 2) runs next on `escalate.test` (`claude-opus`). Pick and Roast run on `escalate[stage]` (`claude-fable`) once the task has `limits.fableAfter` (3) failed attempts. |
 | No self-approval | brewery owns the IP's `Status:` line and resets one an agent approved. Only `brewery answer` approves, or `brewery pour` when brewery itself counts at most `pourMaxTasks` tasks and no `fundamental` question; it records that in the Status line. |
 | Valid task graph before sign-off | Distill rejects drafts with duplicate task IDs, unknown dependencies, self-dependencies, or cycles. Cut/fix rechecks the graph after every edit and passes remaining problems as blocking decomposition findings, even when Cut found nothing. An invalid graph after `limits.cutRounds` throws before sign-off. |
 | Valid task graph before approval | Answer validates the edited IP regardless of the agent's `structural` flag. Invalid graphs go through cut/fix as blocking decomposition findings. Unrepaired problems return to sign-off, with the problems listed; only a valid graph can be approved. |

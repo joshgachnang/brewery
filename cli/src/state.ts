@@ -13,6 +13,14 @@ export interface TaskState {
   worktree?: string;
   branch?: string;
   attempts: number;
+  // Pick and roast FAILs of this task. Unlike `attempts` a human `retry:` answer does not reset it.
+  failures?: number;
+  // The failures count at which the next human ask fires (default fableAfter + 3), advanced by three each time a stuck-task ask is answered with a retry.
+  askAtFailures?: number;
+  // Attempts rejected before a verdict (setup, tests, unproven or empty picks); they spend their own budget.
+  rejections?: number;
+  // The last gate was this task's stuck ask, so a retry answer extends its budgets.
+  stuckAsked?: boolean;
   commit?: string;
   evidence?: string;
   // How many times each step has run for this task, for escalation.

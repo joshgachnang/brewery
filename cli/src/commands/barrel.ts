@@ -181,11 +181,39 @@ const checkHygiene = async (cwd: string, files: string[]): Promise<string | unde
     : undefined;
 };
 
-const escalates = (ctx: Ctx, ts: TaskState, stage: "test" | "pick"): boolean => {
+const escalates = (ctx: Ctx, ts: TaskState, stage: "test"): boolean => {
   const runs = ts.runs ??= {};
   const before = runs[stage] ?? 0;
   runs[stage] = before + 1;
   return before >= ctx.config.limits.escalateAfter;
+};
+
+// A stage whose escalation route names a fable agent hands a task to it after `fableAfter` failed attempts.
+const hasFableRoute = (ctx: Ctx, stage: "pick" | "roast"): boolean =>
+  (ctx.config.escalate[stage] ?? []).some((name) => ctx.config.agents[name]?.model === "fable");
+
+const onFable = (ctx: Ctx, ts: TaskState, stage: "pick" | "roast"): boolean =>
+  hasFableRoute(ctx, stage) && (ts.failures ?? 0) >= ctx.config.limits.fableAfter;
+
+// A FAIL from pick or roast, whichever agent ran it.
+const countFailure = (ts: TaskState): void => {
+  ts.failures = (ts.failures ?? 0) + 1;
+};
+
+// Attempts that never reached a verdict: setup, test-step, unproven-test and no-change rejections.
+const countRejection = (ts: TaskState): void => {
+  ts.rejections = (ts.rejections ?? 0) + 1;
+};
+
+// With a Fable route the ask waits for three failures beyond the handoff, `fableAfter + 3` in
+// all (and three more after each answered stuck-task ask). Every pick and roast FAIL counts, so
+// a roast with no Fable route still reaches the ask. Rejections spend a separate budget of
+// `pickAttempts`, so they neither shorten nor extend it.
+const stuckReason = (ctx: Ctx, ts: TaskState): "failures" | "rejections" | undefined => {
+  const { pickAttempts, fableAfter } = ctx.config.limits;
+  if (!hasFableRoute(ctx, "pick")) return ts.attempts >= pickAttempts ? "failures" : undefined;
+  if ((ts.rejections ?? 0) >= pickAttempts) return "rejections";
+  return (ts.failures ?? 0) >= (ts.askAtFailures ?? fableAfter + 3) ? "failures" : undefined;
 };
 
 // The test step writes the task's tests from its brief before any implementation exists.
@@ -256,10 +284,16 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
   const { state, config } = ctx;
   let needsCleanup = ts.evidence?.startsWith("Worktree setup FAIL") || ts.evidence?.startsWith("Interrupted build") || ts.evidence?.startsWith("Land conflict:");
   for (;;) {
-    if (ts.attempts >= config.limits.pickAttempts) {
+    const stuck = stuckReason(ctx, ts);
+    if (stuck) {
       const last = ts.evidence?.slice(0, 600) ?? "no evidence recorded";
+      const fableMode = hasFableRoute(ctx, "pick");
+      const failed = !fableMode ? ts.attempts : stuck === "failures" ? ts.failures ?? 0 : ts.rejections ?? 0;
+      const kind = stuck === "rejections" ? "rejected or setup-failed attempts" : "attempts";
+      ts.stuckAsked = true;
+      saveState(state);
       return { gate: {
-        asks: [{ q: `${id} (${taskTitle}) failed ${ts.attempts} attempts. How should I proceed?`, rec: "retry: <a hint>", opts: ["retry: <a hint>", "skip", "stop"] }],
+        asks: [{ q: `${id} (${taskTitle}) failed ${failed} ${kind}. How should I proceed?`, rec: "retry: <a hint>", opts: ["retry: <a hint>", "skip", "stop"] }],
         need: `${id} is stuck`, detail: `Last failure: ${last}`,
       } };
     }
@@ -293,6 +327,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
         needsCleanup = !(await cleanupTask(ctx, id));
         saveState(state);
         setupFailed = true;
+        countRejection(ts);
         break;
       }
       if (setupFailed) continue;
@@ -303,28 +338,34 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
       if (written.gate) return written;
       if (written.retry) {
         ts.evidence = written.retry;
+        countRejection(ts);
         continue;
       }
     }
 
-    const escalated = escalates(ctx, ts, "pick");
+    const fable = onFable(ctx, ts, "pick");
+    const escalated = fable;
+    if (fable) ctx.log(`  escalating ${id} to claude-fable`);
     saveState(state);
     const [{ result: picked }] = await runStage(ctx, "pick", pickBody(taskCtx, id, taskTitle, ts.evidence, ts.tests), { task: id, cwd, escalated });
     if (picked.status === "BLOCKED") {
       return { gate: { asks: asksFrom(picked, picked.action), need: `a decision on ${id}`, detail: picked.summary ?? picked.action } };
     }
     if (picked.status !== "PASS") {
+      countFailure(ts);
       ts.evidence = evidenceText(picked);
       continue;
     }
     const unproven = await checkPick(cwd, ts, picked.testChanges ?? []);
     if (unproven) {
       ts.evidence = unproven;
+      countRejection(ts);
       continue;
     }
     if (!(await anyChanges(cwd))) {
       if (!ts.commit) {
         ts.evidence = "Pick reported PASS but changed no files.";
+        countRejection(ts);
         continue;
       }
     } else {
@@ -334,7 +375,8 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     }
     saveState(state);
 
-    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd }));
+    const roastOnFable = onFable(ctx, ts, "roast");
+    const verdict = mergeVerdicts(await runStage(ctx, "roast", roastBody(taskCtx, id, taskTitle, state.base, ts.tests, ts.testChanges), { task: id, cwd, escalated: roastOnFable }));
     if (await anyChanges(cwd)) ctx.log(`  note: roast left changes in the tree; folding them into ${id}`);
     if (verdict.status === "PASS") {
       if (await anyChanges(cwd)) ts.commit = await commitAll(cwd, taskTitle, true);
@@ -343,6 +385,7 @@ const buildTask = async (ctx: Ctx, cwd: string, id: string, taskTitle: string, t
     if (verdict.status === "BLOCKED") {
       return { gate: { asks: asksFrom(verdict, verdict.action), need: `a decision on ${id}`, detail: verdict.action } };
     }
+    countFailure(ts);
     ts.evidence = evidenceText(verdict);
     if (verdict.retest && config.limits.testFirst) ts.retest = ts.evidence;
   }

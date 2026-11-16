@@ -1132,6 +1132,123 @@ describe("barrel", () => {
     expect(existsSync(tree)).toBe(false);
   });
 
+  describe("Fable handoff", () => {
+    const fableSetup = (plan: unknown[]) => {
+      const made = setupApproved(plan);
+      made.ctx.config.agents.fable = { ...made.ctx.config.agents.alpha, model: "fable", env: { ...made.ctx.config.agents.alpha.env, FAKE_AGENT_NAME: "fable" } };
+      made.ctx.config.escalate = { pick: ["fable"], roast: ["fable"] };
+      made.ctx.config.limits.fableAfter = 3;
+      made.ctx.config.limits.pickAttempts = 3;
+      return made;
+    };
+    const pick = (agent: string, content: string, status = "PASS", times = 1) =>
+      ({ match: "pick T1", agent, times, write: status === "PASS" ? { "greeting.txt": content } : undefined, result: { status, action: status === "PASS" ? "built" : "cannot" } });
+    const roast = (agent: string, status: string, times = 1) => ({ match: "roast T1", agent, times, result: { status, action: status === "PASS" ? "proven" : "wrong" } });
+    const agentsFor = (ctx: ReturnType<typeof quietCtx>, stage: string) => ctx.state.history.filter((h) => h.stage === stage && h.task === "T1").map((h) => h.agent);
+
+    test("runs pick and roast on the default agents for two failures and on fable from the third", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "a1"), roast("beta", "FAIL"), pick("alpha", "a2"), roast("beta", "FAIL"), pick("alpha", "a3"), roast("beta", "FAIL"),
+        pick("fable", "hello\n"), roast("fable", "PASS"),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable"]);
+      expect(agentsFor(ctx, "roast")).toEqual(["beta", "beta", "beta", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(3);
+      expect(ctx.lines.some((line) => line.includes("escalating T1 to claude-fable"))).toBe(true);
+    });
+
+    test("a pick FAIL counts toward the three; a BLOCKED result does not", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 2), pick("alpha", "a3"), roast("beta", "FAIL"),
+        pick("fable", "hello\n"), roast("fable", "PASS"),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable"]);
+    });
+
+    test("asks the human after three failed fable attempts, keeps fable on a retry, and asks again after three more", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 3), pick("fable", "", "FAIL", 3), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(ctx.state.tasks.T1.failures).toBe(6);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+      expect(await answer(ctx, "retry: try again")).toBe("continue");
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(9);
+      expect(ctx.state.waiting?.message).toContain("failed 9 attempts");
+    });
+
+    test("rejected picks before the handoff do not shorten the three fable attempts", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 3), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      // Two earlier setup or empty-pick rejections, as five-attempts-in-total would have stopped it.
+      ctx.state.tasks.T1 = { status: "todo", attempts: 5, rejections: 2 };
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(6);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+    });
+
+    test("a retry answer to a BLOCKED pick does not push the stuck-task ask out", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL"), pick("alpha", "", "BLOCKED"),
+        pick("alpha", "", "FAIL", 2), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(ctx.state.tasks.T1.askAtFailures).toBeUndefined();
+      expect(await answer(ctx, "retry: try again")).toBe("continue");
+      expect(ctx.state.tasks.T1.askAtFailures).toBeUndefined();
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "alpha", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(6);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+    });
+
+    test("a custom fableAfter hands off at that count and asks three failures later", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "", "FAIL", 2), pick("fable", "", "FAIL", 3),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      ctx.config.limits.fableAfter = 2;
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "fable", "fable", "fable"]);
+      expect(ctx.state.tasks.T1.failures).toBe(5);
+      expect(ctx.state.waiting?.message).toContain("failed 5 attempts");
+    });
+
+    test("a Fable pick route with a default roast still asks at fableAfter + 3 failures", async () => {
+      const { ctx } = fableSetup([
+        pick("alpha", "a1"), roast("beta", "FAIL"), pick("alpha", "a2"), roast("beta", "FAIL"), pick("alpha", "a3"), roast("beta", "FAIL"),
+        pick("fable", "f1"), roast("beta", "FAIL"), pick("fable", "f2"), roast("beta", "FAIL"), pick("fable", "f3"), roast("beta", "FAIL"),
+        { match: "pick T2", result: { status: "BLOCKED", action: "pause" } },
+      ]);
+      ctx.config.escalate = { pick: ["fable"] };
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha", "fable", "fable", "fable"]);
+      expect(agentsFor(ctx, "roast")).toEqual(["beta", "beta", "beta", "beta", "beta", "beta"]);
+      expect(ctx.state.tasks.T1.failures).toBe(6);
+      expect(ctx.state.waiting?.message).toContain("failed 6 attempts");
+    });
+
+    test("a repo escalation without a fable agent keeps the ask at pickAttempts", async () => {
+      const { ctx } = fableSetup([pick("alpha", "", "FAIL", 3), { match: "pick T2", result: { status: "BLOCKED", action: "pause" } }]);
+      ctx.config.escalate = { pick: ["beta"] };
+      ctx.config.limits.escalateAfter = 1;
+      expect(await barrel(ctx, fakeCi([green("a")]))).toBe("waiting");
+      expect(agentsFor(ctx, "pick")).toEqual(["alpha", "alpha", "alpha"]);
+      expect(ctx.state.waiting?.message).toContain("failed 3 attempts");
+    });
+  });
+
   test("refuses an IP that is not approved", async () => {
     const { repo, ctx } = setupApproved([]);
     writeFileSync(ctx.state.ip, IP("awaiting sign-off"));
@@ -1343,23 +1460,23 @@ describe("barrel test-first", () => {
     expect(stepPrompts(repo, "greet", /-test-T1-/)[1]).toContain("no-sleep: use waitUntil");
   });
 
-  test("escalates the test step and pick to the escalation agents after escalateAfter runs", async () => {
+  test("escalates the test step to its escalation agent after escalateAfter runs; pick stays on its own agent", async () => {
     const { ctx } = setup([
       { match: "test T1", agent: "alpha", write: { "greeting.test.sh": "true\n" }, result: wroteTests },
       { match: "test T1", agent: "beta", write: { "greeting.test.sh": RED }, result: wroteTests },
-      { match: "pick T1", agent: "alpha", write: { "greeting.txt": "helo\n" }, result: { status: "PASS", action: "built" } },
-      { match: "pick T1", agent: "beta", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "fixed" } },
+      { match: "pick T1", agent: "alpha", write: { "greeting.txt": "hello\n" }, result: { status: "PASS", action: "built" } },
       { match: "roast T1", result: { status: "PASS", action: "proven" } },
     ], (config) => {
       config.escalate = { test: ["beta"], pick: ["beta"] };
       config.limits.escalateAfter = 1;
+      config.limits.fableAfter = 99;
     });
 
     expect(await barrel(ctx, fakeCi([green("abc")]))).toBe("done");
 
     const agents = (stage: string) => ctx.state.history.filter((h) => h.stage === stage).map((h) => h.agent);
     expect(agents("test")).toEqual(["alpha", "beta"]);
-    expect(agents("pick")).toEqual(["alpha", "beta"]);
+    expect(agents("pick")).toEqual(["alpha"]);
     expect(ctx.lines.some((line) => line.includes("escalating test T1 to beta"))).toBe(true);
   });
 });
