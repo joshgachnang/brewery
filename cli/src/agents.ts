@@ -1,7 +1,10 @@
 // Launch one agent as its own process. Nothing is shared between calls except the
 // repository and the files brewery hands over, so every step is a fresh context.
 import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname } from "node:path";
 import type { AgentProfile } from "./config.ts";
+import { lowDiskNote } from "./scratch.ts";
 import { scrub, scrubSecrets } from "./scrub.ts";
 
 export type Status = "PASS" | "FAIL" | "BLOCKED" | "PENDING";
@@ -506,7 +509,10 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
   await Promise.all([pump(proc.stdout, true), pump(proc.stderr, false), proc.exited]);
   clearTimeout(settle);
   const seconds = Math.round((Date.now() - started) / 1000);
-  const parsed = readResult(req.resultFile);
+  const read = readResult(req.resultFile);
+  // A full disk kills the agent's runtime before it can write anything: name the cause.
+  const disk = typeof read === "string" && !req.readOnly ? lowDiskNote([dirname(req.resultFile), req.cwd, tmpdir()]) : null;
+  const parsed = typeof read === "string" && disk ? `${read}; ${disk}` : read;
   const result: StepResult =
     typeof parsed === "string" && req.readOnly
       ? resultFromStdout(stdoutText)
