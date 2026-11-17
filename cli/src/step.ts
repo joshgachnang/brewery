@@ -6,6 +6,7 @@ import { FAN_OUT, type Config, type Stage } from "./config.ts";
 import { appendEvent } from "./events.ts";
 import { handoffSection, handoffsFor, isClaimsOnly, SOURCE_STAGES } from "./handoff.ts";
 import { header } from "./prompts.ts";
+import { sweepLeftovers, sweepLine } from "./scratch.ts";
 import { runDir, saveState, type RunState } from "./state.ts";
 
 export interface Ctx {
@@ -81,6 +82,10 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
     const base = join(runDir(state.repo, state.slug), "steps", `${String(seq).padStart(3, "0")}-${stage}${opts.task ? `-${opts.task}` : ""}-${agent}`);
     const resultFile = `${base}.result.json`;
     const label = `${stage}${opts.task ? ` ${opts.task}` : ""} (${agent})`;
+    // A step that was killed or crashed leaves its test databases behind; reclaim them
+    // before this one needs the space.
+    const swept = sweepLine(await sweepLeftovers());
+    if (swept) ctx.log(swept);
     ctx.log(`▸ ${label}`);
     appendEvent(state, { kind: "step.start", seq, stage, ...(opts.task ? { task: opts.task } : {}), agent });
     const routed = handoffsFor(state, { stage, task: opts.task });

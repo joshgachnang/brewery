@@ -270,6 +270,20 @@ wakeup), brewery stops it and uses the result as written; the step log records t
 that ends before the result file exists is left alone, so an agent waiting on its own
 subagents is not cut short.
 
+### Leftover test databases and a full disk
+
+A step that is killed or crashes leaves its test databases in the temp directory: an
+in-memory MongoDB writes about 300 MB per `mongo-mem-*` directory and removes it only on a
+clean exit. Before each step brewery removes the ones that are at least five minutes old,
+belong to the current user, and are not named on any live process's command line, in
+`$TMPDIR` and `/tmp`, and logs how many it removed and their size. A database a running
+server still uses is never touched, and nothing is removed when the process list cannot be
+read.
+
+When an agent exits without a result and the volume holding the run, the working copy, or
+the temp directory has under 512 MB free, the failure says the disk is nearly full, because
+that is what a runtime aborting mid-step looks like.
+
 ## Handoffs between steps
 
 Steps of the writing stages (`test`, `pick`, `roast`, `brew`, `taste`) are asked to put a
