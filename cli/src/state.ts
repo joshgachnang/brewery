@@ -79,7 +79,7 @@ export interface RunState {
   landing?: { task: string; head: string; ip: string; index?: { mode: string; sha: string; path: string } };
   reviewPending?: boolean;
   reviewFindings?: Finding[];
-  finish?: { startedAt: string; pushes: number; reactions: number; stuck: number; lastKey?: string; recorded?: boolean };
+  finish?: { startedAt: string; pushes: number; reactions: number; stuck: number; lastKey?: string; recorded?: boolean; emptyChecks?: number; noChecksOk?: boolean };
   history: HistoryEntry[];
   // Agents skipped or fallen back from when a stage resolved its route, once each.
   reroutes?: string[];

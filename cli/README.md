@@ -87,7 +87,9 @@ strict, so a failure stops the run with the landed commit recorded.
 | Config | Default | Behavior |
 | --- | --- | --- |
 | `worktreeSetup` | `[]` | Shell commands run in order in each fresh task worktree, before Pick. Shade uses `["bun bootstrap"]`. A nonzero exit records stdout/stderr as failure evidence, removes the tree, and consumes a Pick attempt. |
-| `limits.parallelTasks` | `3` | Maximum concurrent task builds. `--parallel N` overrides it for one run; `--parallel 1` runs sequentially. |
+| `limits.parallelTasks` | `3` | Maximum concurrent task builds. `--parallel N` overrides it for one run; `--parallel 1` runs sequentially. Brewery lowers it when the sandbox is short on memory or threads. |
+| `limits.taskMemoryMb`, `limits.taskPids` | `3072`, `300` | What one parallel task is assumed to need; the parallel limit is cut to what the container's memory and free process slots carry. |
+| `limits.crashRestarts` | `12` | How often `barrel`, `resume` and `finish` restart themselves after a crash (a Bun panic, an OOM kill). |
 | `agents` | `claude` → `opus`, `claude-sonnet` → `sonnet`, `claude-opus` → `opus`, `claude-fable` → `fable` | Every built-in claude profile names its model, so no step takes the account's default model. |
 | `stages.pick` | `["claude-sonnet"]` | Implementation runs on Sonnet; once the task has failed `limits.fableAfter` attempts it runs on `claude-fable`. |
 | `stages.brew` | `["claude-sonnet"]` | Brew runs final checks and opens the PR on Sonnet. |
@@ -283,6 +285,41 @@ read.
 When an agent exits without a result and the volume holding the run, the working copy, or
 the temp directory has under 512 MB free, the failure says the disk is nearly full, because
 that is what a runtime aborting mid-step looks like.
+
+The sweep also runs when a run starts or resumes and after each task lands, not only before a step.
+
+### Crashes, orphaned agents and a short sandbox
+
+A long run can die without finishing: Bun panics (exit 134), the kernel kills it for memory
+(137), or the container restarts. Three things keep that from costing the run.
+
+- **Supervision.** `barrel`, `resume` and `finish` run as a child of a small supervisor that
+  starts the same command again after a crash signal or exit status (SIGABRT, SIGKILL, SIGSEGV,
+  134, 137, 139), up to `limits.crashRestarts` (`12`) times, sweeping leftover databases and
+  waiting a few seconds between tries. A normal exit, an error brewery reports, and a gate for
+  the human (exit 3) end supervision. `--no-supervise` or `BREWERY_SUPERVISE=0` runs once.
+- **Orphans.** Every agent brewery starts carries `BREWERY_RUN_DIR`, which its own children
+  (test servers included) inherit. When a run starts or resumes, brewery stops any such process
+  that is not its own descendant (SIGTERM, then SIGKILL after five seconds) *before* the disk
+  sweep, which would otherwise skip a database an orphan still names. On SIGTERM, SIGINT or
+  SIGHUP it stops its own agents and their children the same way. Linux only, found through
+  `/proc`; pids are never remembered, because gVisor reuses low pids across containers.
+- **Resources.** A child that fails with `EAGAIN`, `ENOMEM` or "Resource temporarily
+  unavailable" is retried after 1, 3 and 9 seconds, and each failure lowers the parallel limit
+  by one for the rest of the run. A task whose build died that way goes back to todo (up to six
+  times) instead of ending the run. The limit is also cut at the start of every scheduling pass
+  to what the container's memory (`limits.taskMemoryMb`, `3072` per task) and free process slots
+  (`limits.taskPids`, `300` per task; read from the cgroup, or from `HIVE_PIDS_LIMIT` in a zerg session, whose sandbox cgroup only says `max`) can carry, never below one.
+
+### A PR with no checks is not a green PR
+
+`finish` used to read a PR that reported no checks as green ("0 checks green"), which is what
+GitHub shows when jobs are refused before they start (an Actions spending budget, no runner) or
+when `gh` fails. In a repo that defines CI (`.github/workflows`, `.circleci` or `.buildkite`
+with files in it), no checks is now pending: after three empty snapshots (each after the
+registration wait) brewery asks, and a reply starting with `accept` records that no checks are
+expected for this run. `gh pr checks` failing for any reason other than "no checks reported"
+is an error, not an empty list.
 
 ## Handoffs between steps
 

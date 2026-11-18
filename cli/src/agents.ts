@@ -4,6 +4,7 @@ import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { dirname } from "node:path";
 import type { AgentProfile } from "./config.ts";
+import { RUN_ENV, reapDescendants } from "./reap.ts";
 import { lowDiskNote } from "./scratch.ts";
 import { scrub, scrubSecrets } from "./scrub.ts";
 
@@ -113,6 +114,8 @@ export interface RunRequest {
   // A verifier step: no edits, no hooks, an allowlisted environment, and a JSON-schema
   // answer on stdout instead of a result file. Used by `brewery approve`.
   readOnly?: ReadOnly;
+  // The run's directory, exported to the agent and everything it starts (see reap.ts).
+  runDir?: string;
 }
 
 export interface ReadOnly {
@@ -236,7 +239,7 @@ export const BASH_MAX_TIMEOUT_MS = 45 * 60_000;
 // on a background command or a scheduled wakeup until the step timeout.
 export const SETTLE_MS = 60_000;
 
-export const childEnv = (profile: AgentProfile, req: Pick<RunRequest, "readOnly" | "promptFile" | "resultFile">): Record<string, string> => {
+export const childEnv = (profile: AgentProfile, req: Pick<RunRequest, "readOnly" | "promptFile" | "resultFile"> & { runDir?: string }): Record<string, string> => {
   const env: Record<string, string> = {};
   if (req.readOnly) Object.assign(env, readOnlyEnv(profile, process.env));
   else {
@@ -251,6 +254,8 @@ export const childEnv = (profile: AgentProfile, req: Pick<RunRequest, "readOnly"
     ...profile.env,
     BREWERY_PROMPT_FILE: req.promptFile,
     BREWERY_RESULT_FILE: req.resultFile,
+    // Inherited by everything the agent starts, so a later brewery can find what a dead one left.
+    ...(req.runDir ? { [RUN_ENV]: req.runDir } : {}),
   };
 };
 
@@ -448,6 +453,29 @@ export const availability = async (profile: AgentProfile): Promise<string | null
   return null;
 };
 
+const liveAgents = new Set<{ kill: () => void }>();
+let shutdownRunDir: string | undefined;
+let shutdownInstalled = false;
+
+// A brewery that is told to stop (a deploy, a container restart, ctrl-c) takes its agents and their
+// test servers with it instead of leaving them running with nothing to collect their results.
+export const installShutdownCleanup = (runDir: string): void => {
+  shutdownRunDir = runDir;
+  if (shutdownInstalled) return;
+  shutdownInstalled = true;
+  for (const [signal, code] of [["SIGTERM", 143], ["SIGINT", 130], ["SIGHUP", 129]] as const) {
+    process.on(signal, () => {
+      // List the descendants before killing the agents: once an agent dies its children are
+      // reparented and no longer descend from this process.
+      const done = shutdownRunDir ? reapDescendants(shutdownRunDir) : Promise.resolve([]);
+      void done.finally(() => {
+        for (const agent of liveAgents) agent.kill();
+        process.exit(code);
+      });
+    });
+  }
+};
+
 export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
   rmSync(req.resultFile, { force: true });
   writeFileSync(req.promptFile, req.prompt);
@@ -461,6 +489,7 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
     stderr: "pipe",
     timeout: req.timeoutMin * 60_000,
   });
+  liveAgents.add(proc);
   let stdoutText = "";
   let usage: Usage | undefined;
   let settle: ReturnType<typeof setTimeout> | undefined;
@@ -507,6 +536,7 @@ export const runAgent = async (req: RunRequest): Promise<RunOutcome> => {
     if (isStdout && pending) stdoutLine(pending);
   };
   await Promise.all([pump(proc.stdout, true), pump(proc.stderr, false), proc.exited]);
+  liveAgents.delete(proc);
   clearTimeout(settle);
   const seconds = Math.round((Date.now() - started) / 1000);
   const read = readResult(req.resultFile);

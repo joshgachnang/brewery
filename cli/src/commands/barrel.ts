@@ -10,6 +10,8 @@ import { addWorktree, removeWorktreeStrict, anyChanges, commitAll, currentBranch
 import { finish, type Outcome } from "./finish.ts";
 import { asksFrom, gate } from "./gate.ts";
 import { dirname, join, relative, sep } from "node:path";
+import { effectiveParallel, isResourceError, reportPressure } from "../pressure.ts";
+import { recoverEnvironment, sweepBetweenTasks } from "../recover.ts";
 import { existsSync, mkdirSync, rmSync, unlinkSync } from "node:fs";
 
 const ensureBranch = async (ctx: Ctx): Promise<void> => {
@@ -529,17 +531,25 @@ const buildReadyTasks = async (ctx: Ctx): Promise<StepOutcome> => {
     } else if (ts.status !== "todo") await cleanupTask(ctx, task.id, ts.status === "passed");
   }
   saveState(state);
-  type Completion = { id: string; result?: BuildResult; error?: unknown };
+  type Completion = { id: string; result?: BuildResult; error?: unknown; retry?: boolean };
   const running = new Map<string, Promise<Completion>>();
   let firstGate: { id: string; gate: TaskGate } | undefined;
   let firstError: unknown;
+  let lastCap = limit;
+  // A task that died because the sandbox ran out of threads or memory is not a failed task: it
+  // goes back to todo and runs again with fewer neighbours, a few times before the run gives up.
+  let resourceRetries = 0;
   const landed = () => new Set(tasks.filter((t) => state.tasks[t.id].status === "passed" || state.tasks[t.id].status === "skipped").map((t) => t.id));
   for (;;) {
     if (!firstGate && !firstError) {
       const ready = readyTasks(tasks, landed()).filter((t) => state.tasks[t.id].status === "todo");
       const started = tasks.filter((t) => running.has(t.id));
+      // Re-read each pass: resource failures lower it, and a freed sandbox can carry more.
+      const cap = effectiveParallel(limit, { taskMemoryMb: config.limits.taskMemoryMb, taskPids: config.limits.taskPids });
+      if (cap < limit && cap !== lastCap) ctx.log(`  running ${cap} task${cap === 1 ? "" : "s"} at a time (limit ${limit}): the sandbox is short on memory or threads`);
+      lastCap = cap;
       for (const task of ready) {
-        if (running.size >= limit) break;
+        if (running.size >= cap) break;
         // A ready task that writes a file a running task also writes would only hit a land conflict.
         if (started.some((other) => sharesFiles(task, other))) continue;
         started.push(task);
@@ -559,6 +569,12 @@ const buildReadyTasks = async (ctx: Ctx): Promise<StepOutcome> => {
             return { id: task.id, result };
           },
           (error: unknown) => {
+            if (isResourceError(error) && resourceRetries < 6) {
+              resourceRetries += 1;
+              reportPressure();
+              ctx.log(`  ${task.id} stopped for lack of threads or memory; it will run again with fewer tasks beside it`);
+              return { id: task.id, error, retry: true };
+            }
             firstError ??= error;
             return { id: task.id, error };
           },
@@ -569,6 +585,14 @@ const buildReadyTasks = async (ctx: Ctx): Promise<StepOutcome> => {
     const completed = await Promise.race(running.values());
     running.delete(completed.id);
     const ts = state.tasks[completed.id];
+    if (completed.retry) {
+      await cleanupTask(ctx, completed.id);
+      ts.status = "todo";
+      ts.commit = undefined;
+      saveState(state);
+      await sweepBetweenTasks(ctx.log);
+      continue;
+    }
     if (completed.error) continue; // Leave running persisted for clean crash recovery.
     if (completed.result?.gate) {
       ts.status = "todo";
@@ -589,6 +613,7 @@ const buildReadyTasks = async (ctx: Ctx): Promise<StepOutcome> => {
         ts.commit = undefined;
       }
       saveState(state);
+      await sweepBetweenTasks(ctx.log);
     } catch (error) {
       firstError ??= error;
       await recoverLanding(ctx);
@@ -614,6 +639,7 @@ export const barrel = async (ctx: Ctx, ci: Ci): Promise<Outcome> => {
     ctx.log(`${state.slug} is already done (PR #${state.pr}).`);
     return "done";
   }
+  await recoverEnvironment(state, ctx.log);
   if (state.landing) {
     await ensureBranch(ctx);
     await recoverLanding(ctx);

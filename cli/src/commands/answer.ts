@@ -81,6 +81,8 @@ export const answer = async (ctx: Ctx, reply: string): Promise<AnswerOutcome> =>
     if (text.startsWith("ship")) state.phase = "brew";
     else state.reviewRounds = 0;
   }
+  // "accept" at the no-checks gate: this PR is not expected to report any (a path-filtered workflow, say).
+  if (state.phase === "finish" && state.finish && text.startsWith("accept")) state.finish.noChecksOk = true;
   saveState(state);
   return "continue";
 };
