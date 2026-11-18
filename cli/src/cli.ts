@@ -12,7 +12,8 @@ import { installationToken } from "./approve/token.ts";
 import { calibrate } from "./commands/calibrate.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
-import { supervise, spawnSelf, superviseEnvOff } from "./supervise.ts";
+import { supervise, spawnSelf, superviseEnvOff, TEMPFAIL } from "./supervise.ts";
+import { isResourceError } from "./pressure.ts";
 import { cutReport, cutSummary, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
@@ -499,5 +500,6 @@ main()
   .catch((error: Error) => {
     if (activeState) appendEvent(activeState, { kind: "error", message: error.message });
     console.error(error.message);
-    process.exit(1);
+    // A sandbox out of threads or memory is worth another try; any other error is not.
+    process.exit(isResourceError(error) ? TEMPFAIL : 1);
   });

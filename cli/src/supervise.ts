@@ -8,7 +8,9 @@ import { sweepLeftovers, sweepLine } from "./scratch.ts";
 
 // Wait statuses of a process that crashed rather than exited: 128 + SIGILL, SIGABRT, SIGBUS,
 // SIGFPE, SIGKILL, SIGSEGV.
-const CRASH_EXIT = new Set([132, 134, 135, 136, 137, 139]);
+// 75 (EX_TEMPFAIL) is brewery's own: it ended because the sandbox ran out of threads or memory.
+export const TEMPFAIL = 75;
+const CRASH_EXIT = new Set([132, 134, 135, 136, 137, 139, TEMPFAIL]);
 const CRASH_SIGNALS = new Set(["SIGILL", "SIGABRT", "SIGBUS", "SIGFPE", "SIGKILL", "SIGSEGV"]);
 
 export interface Exit {

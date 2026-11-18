@@ -36,14 +36,16 @@ const readNumber = (file: string): number | null => {
   }
 };
 
-// The container's own limits: cgroup files when they exist, else what the kernel reports as
-// memory (a gVisor sandbox reports its limit there). Pids are unknown, not unlimited, when no
-// cgroup file names them.
-export const readCapacity = (): Capacity => {
+// The container's own limits. Memory: cgroup files when they exist, else what the kernel reports
+// (a gVisor sandbox reports its limit as MemTotal). Pids: a gVisor sandbox's cgroup says "max",
+// because Docker enforces the limit outside it, so hive tells the session its limit in
+// HIVE_PIDS_LIMIT; a plain host reads the cgroup. Unknown is not unlimited: no cap is applied.
+export const readCapacity = (env: NodeJS.ProcessEnv = process.env): Capacity => {
   const limit = readNumber("/sys/fs/cgroup/memory.max") ?? readNumber("/sys/fs/cgroup/memory/memory.limit_in_bytes");
   const memoryBytes = limit && limit < totalmem() ? limit : totalmem();
-  const max = readNumber("/sys/fs/cgroup/pids.max");
-  const current = readNumber("/sys/fs/cgroup/pids.current");
+  const declared = /^\d+$/.test(env.HIVE_PIDS_LIMIT ?? "") ? Number(env.HIVE_PIDS_LIMIT) : null;
+  const max = readNumber("/sys/fs/cgroup/pids.max") ?? readNumber("/sys/fs/cgroup/pids/pids.max") ?? declared;
+  const current = readNumber("/sys/fs/cgroup/pids.current") ?? readNumber("/sys/fs/cgroup/pids/pids.current");
   return { memoryBytes, pidsFree: max !== null && current !== null ? Math.max(max - current, 0) : null };
 };
 

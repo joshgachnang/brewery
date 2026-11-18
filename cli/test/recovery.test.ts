@@ -90,6 +90,7 @@ describe("resource pressure", () => {
 
   test("capacity reads without throwing", () => {
     expect(readCapacity().memoryBytes).toBeGreaterThan(0);
+    expect(readCapacity({ HIVE_PIDS_LIMIT: "not a number" }).memoryBytes).toBeGreaterThan(0);
   });
 });
 
@@ -108,6 +109,7 @@ describe("supervisor", () => {
   test("classifies panics and OOM kills as crashes, and ordinary exits as not", () => {
     expect(isCrash({ code: 134, signal: null })).toBe(true);
     expect(isCrash({ code: null, signal: "SIGKILL" })).toBe(true);
+    expect(isCrash({ code: 75, signal: null })).toBe(true); // out of threads or memory
     expect(isCrash({ code: 0, signal: null })).toBe(false);
     expect(isCrash({ code: 3, signal: null })).toBe(false); // waiting on the human
     expect(isCrash({ code: 1, signal: null })).toBe(false); // an error brewery reported

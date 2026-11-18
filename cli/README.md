@@ -309,7 +309,7 @@ A long run can die without finishing: Bun panics (exit 134), the kernel kills it
   by one for the rest of the run. A task whose build died that way goes back to todo (up to six
   times) instead of ending the run. The limit is also cut at the start of every scheduling pass
   to what the container's memory (`limits.taskMemoryMb`, `3072` per task) and free process slots
-  (`limits.taskPids`, `300` per task, when a cgroup reports them) can carry, never below one.
+  (`limits.taskPids`, `300` per task; read from the cgroup, or from `HIVE_PIDS_LIMIT` in a zerg session, whose sandbox cgroup only says `max`) can carry, never below one.
 
 ### A PR with no checks is not a green PR
 
