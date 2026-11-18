@@ -12,11 +12,12 @@ import { installationToken } from "./approve/token.ts";
 import { calibrate } from "./commands/calibrate.ts";
 import { cellar } from "./commands/cellar.ts";
 import { barrel } from "./commands/barrel.ts";
+import { supervise, spawnSelf, superviseEnvOff } from "./supervise.ts";
 import { cutReport, cutSummary, runCut } from "./commands/cut.ts";
 import { defaultIpPath, distill, pour } from "./commands/distill.ts";
 import { finish } from "./commands/finish.ts";
 import { ui } from "./commands/ui.ts";
-import { FAN_OUT, loadConfig, replyWaitMin, STAGES, userConfigPath } from "./config.ts";
+import { DEFAULT_CONFIG, FAN_OUT, loadConfig, replyWaitMin, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
 import { githubForge } from "./forge.ts";
 import { waitForReply } from "./human.ts";
@@ -84,6 +85,8 @@ Common flags:
   --no-wait                Never wait for a reply (terminal or reply.json)
   --go                     After approval, keep going into barrel
   --parallel N             Max concurrent task builds for this run (1 = sequential)
+  --no-supervise           barrel, resume and finish restart themselves after a crash (a Bun panic, an OOM kill);
+                           this, or BREWERY_SUPERVISE=0, runs them once
 
 Config: ${userConfigPath()} and <repo>/.brewery.json.
 A run with no terminal watches .terreno/brewery/<slug>/reply.json for BREWERY_REPLY_WAIT_MIN
@@ -118,7 +121,7 @@ const parseArgs = (argv: string[]): { positional: string[]; flags: Record<string
     const [name, inline] = arg.slice(2).split("=", 2);
     const next = argv[i + 1];
     if (inline !== undefined) flags[name] = inline;
-    else if (["go", "no-wait", "here", "dry-run", "json"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
+    else if (["go", "no-wait", "here", "dry-run", "json", "no-supervise"].includes(name) || next === undefined || next.startsWith("--") || (name === "wait-checks" && !/^\d+$/.test(next))) flags[name] = true;
     else flags[name] = argv[++i];
   }
   return { positional, flags };
@@ -428,8 +431,20 @@ const cmdAgents = async (flags: Record<string, string | true>): Promise<number> 
   return 0;
 };
 
+const SUPERVISED_COMMANDS = new Set(["barrel", "resume", "finish"]);
+
 const main = async (): Promise<number> => {
   const [command, ...rest] = process.argv.slice(2);
+  if (command && SUPERVISED_COMMANDS.has(command) && !superviseEnvOff() && !rest.includes("--no-supervise")) {
+    const flags = parseArgs(rest).flags;
+    let maxRestarts = DEFAULT_CONFIG.limits.crashRestarts;
+    try {
+      maxRestarts = loadConfig(await repoRoot(str(flags.repo) ?? process.cwd())).limits.crashRestarts;
+    } catch {
+      // No repo or a bad config: the command itself reports that; the default still supervises it.
+    }
+    return supervise({ maxRestarts, log, run: () => spawnSelf(process.argv.slice(1)) });
+  }
   if (command === "note" || command === "answer") {
     const parsed = parseArgs(rest.slice(2));
     if (parsed.positional.length) throw new Error(`usage: brewery ${command} <slug> "<text>"`);

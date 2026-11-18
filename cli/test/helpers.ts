@@ -63,6 +63,8 @@ export const fakeSetup = (dir: string, plan: unknown[], stages: Record<string, s
     }),
   );
   process.env.BREWERY_CONFIG = configPath;
+  // Tests that spawn the CLI kill and resume it themselves; the supervisor has its own tests.
+  process.env.BREWERY_SUPERVISE = "0";
   process.env.BREWERY_INDEX = join(dir, "..", `${dir.split("/").pop()}-index.json`);
   return { planPath, config: loadConfig(dir) };
 };

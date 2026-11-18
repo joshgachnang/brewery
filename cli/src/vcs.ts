@@ -1,6 +1,7 @@
 // git and GitHub. CI is an interface so the finish loop can be tested without GitHub.
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { isResourceError, reportPressure, retryDelaysMs } from "./pressure.ts";
 
 export interface ShResult {
   code: number;
@@ -8,10 +9,34 @@ export interface ShResult {
   err: string;
 }
 
-export const sh = async (cwd: string, argv: string[], timeoutMs?: number): Promise<ShResult> => {
+const shOnce = async (cwd: string, argv: string[], timeoutMs?: number): Promise<ShResult> => {
   const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe", timeout: timeoutMs });
   const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
   return { code: await proc.exited, out: out.trim(), err: err.trim() };
+};
+
+// A sandbox briefly out of threads fails a spawn, or the child itself ("Resource temporarily
+// unavailable"). Waiting a moment fixes it; each failure also lowers the run's parallel limit.
+export const sh = async (cwd: string, argv: string[], timeoutMs?: number): Promise<ShResult> => {
+  for (let attempt = 0; ; attempt++) {
+    let res: ShResult | undefined;
+    let failure: unknown;
+    try {
+      res = await shOnce(cwd, argv, timeoutMs);
+      if (res.code === 0 || !isResourceError(res.err)) return res;
+      failure = new Error(res.err);
+    } catch (error) {
+      if (!isResourceError(error)) throw error;
+      failure = error;
+    }
+    reportPressure();
+    const delay = retryDelaysMs[attempt];
+    if (delay === undefined) {
+      if (res) return res;
+      throw failure;
+    }
+    await sleep(delay);
+  }
 };
 
 export const git = async (cwd: string, ...args: string[]): Promise<string> => {
@@ -190,7 +215,10 @@ const botThreadsFor = async (cwd: string, pr: number): Promise<BotThread[]> => {
 const checksFor = async (cwd: string, pr: number): Promise<Check[]> => {
   const checks = await sh(cwd, ["gh", "pr", "checks", String(pr), "--json", "name,bucket,link"]);
   // exit 8 = checks pending, 1 with "no checks reported" = none yet; both still print JSON or nothing
-  return checks.out.startsWith("[") ? (JSON.parse(checks.out) as Check[]) : [];
+  if (checks.out.startsWith("[")) return JSON.parse(checks.out) as Check[];
+  // Any other failure is gh not answering, which must not read as a PR with nothing to check.
+  if (checks.code !== 0 && checks.err && !/no checks reported/i.test(checks.err)) throw new Error(`gh pr checks ${pr}: ${checks.err}`);
+  return [];
 };
 
 export const githubCi: Ci = {

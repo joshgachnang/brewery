@@ -102,6 +102,7 @@ export const runStage = async (ctx: Ctx, stage: Stage, body: string, opts: Stage
       logFile: `${base}.log`,
       timeoutMin: config.agents[agent].timeoutMin ?? config.limits.stepTimeoutMin,
       readOnly: opts.readOnly,
+      runDir: runDir(state.repo, state.slug),
       onNarration: (text) => appendEvent(state, { kind: "narration", seq, text }),
     });
     ctx.log(`  ${label}: ${outcome.result.status} in ${outcome.seconds}s — ${outcome.result.action}`);

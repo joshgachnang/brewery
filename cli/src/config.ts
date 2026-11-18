@@ -98,6 +98,12 @@ export interface Limits {
   finishHours: number;
   ciWaitMin: number;
   stepTimeoutMin: number;
+  // What one parallel task is assumed to need, so the parallel limit shrinks to what the
+  // sandbox's memory and free process slots can carry (see pressure.ts).
+  taskMemoryMb: number;
+  taskPids: number;
+  // How many times a run that dies abnormally (Bun panic, OOM kill, a signal) is resumed.
+  crashRestarts: number;
 }
 
 // off: no learning step. local: learnings stay in this repo. shared: cellar may also
@@ -178,6 +184,9 @@ export const DEFAULT_CONFIG: Config = {
     finishHours: 4,
     ciWaitMin: 45,
     stepTimeoutMin: 90,
+    taskMemoryMb: 3072,
+    taskPids: 300,
+    crashRestarts: 12,
   },
   approve: {
     approveLevels: ["low"],

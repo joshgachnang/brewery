@@ -1,10 +1,13 @@
 // Taste until the PR has no conflicts and every check passes. brewery does the waiting
 // (gh watches cost no tokens) and only starts an agent when there is something to react to.
+import { readdirSync } from "node:fs";
+import { join } from "node:path";
 import { recordFailures, resolveFailures } from "../ci.ts";
 import { ping } from "../human.ts";
 import { recordRun } from "../learn.ts";
 import { appendEvent } from "../events.ts";
 import { tasteBody } from "../prompts.ts";
+import { recoverEnvironment } from "../recover.ts";
 import { saveState } from "../state.ts";
 import { runStage, type Ctx } from "../step.ts";
 import type { Ci, PrSnapshot } from "../vcs.ts";
@@ -12,11 +15,28 @@ import { asksFrom, gate } from "./gate.ts";
 
 export type Outcome = "done" | "waiting";
 
-const checksGreen = (snap: PrSnapshot): boolean =>
-  snap.mergeable !== "CONFLICTING" && snap.checks.every((c) => c.bucket === "pass" || c.bucket === "skipping");
+// A repo with CI workflows whose PR reports no check at all has not passed CI: its jobs were
+// never started (an Actions budget, a missing runner) or gh could not list them. `[].every()`
+// is true, so without this an empty list read as "0 checks green".
+const checksGreen = (snap: PrSnapshot, ciExpected: boolean): boolean =>
+  snap.mergeable !== "CONFLICTING" &&
+  !(ciExpected && snap.checks.length === 0) &&
+  snap.checks.every((c) => c.bucket === "pass" || c.bucket === "skipping");
 
 // Done means green checks and no bot comment left unanswered, not just green checks.
-export const isGreen = (snap: PrSnapshot): boolean => checksGreen(snap) && !snap.botThreads?.length;
+export const isGreen = (snap: PrSnapshot, ciExpected = true): boolean => checksGreen(snap, ciExpected) && !snap.botThreads?.length;
+
+const CI_CONFIG_DIRS = [".github/workflows", ".circleci", ".buildkite"];
+
+// Whether the repo defines CI at all; one that does not can only ever report zero checks.
+export const ciConfigured = (repo: string): boolean =>
+  CI_CONFIG_DIRS.some((dir) => {
+    try {
+      return readdirSync(join(repo, dir)).length > 0;
+    } catch {
+      return false;
+    }
+  });
 
 const failureKey = (snap: PrSnapshot): string =>
   `${snap.sha}|${snap.mergeable}|${snap.checks
@@ -29,6 +49,7 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
   const { state, config } = ctx;
   const pr = prArg ?? state.pr ?? (await ci.prForBranch(state.repo));
   if (!pr) throw new Error("brewery: no PR for this branch. Run brew (brewery barrel) first.");
+  await recoverEnvironment(state, ctx.log);
   if (!state.pr) appendEvent(state, { kind: "pr", number: pr, url: await ci.prUrl(state.repo, pr) });
   state.pr = pr;
   state.phase = "finish";
@@ -47,10 +68,29 @@ export const finish = async (ctx: Ctx, ci: Ci, prArg?: number): Promise<Outcome>
     ctx.log(`… waiting on CI for PR #${pr}`);
     await ci.waitForChecks(state.repo, pr, config.limits.ciWaitMin);
     const snap = await ci.snapshot(state.repo, pr);
-    const ciState = checksGreen(snap) && !snap.checks.some((c) => c.bucket === "pending") ? "pass" :
+    const ciExpected = !run.noChecksOk && ciConfigured(state.repo);
+    // No check on a repo that has CI: wait for registration a few times, then ask, never pass.
+    if (ciExpected && snap.checks.length === 0 && snap.mergeable !== "CONFLICTING") {
+      run.emptyChecks = (run.emptyChecks ?? 0) + 1;
+      saveState(state);
+      if (run.emptyChecks >= 3) {
+        run.emptyChecks = 0;
+        await gate(
+          ctx,
+          [{ q: `PR #${pr} reports no CI checks although the repo defines CI. Fix whatever stops the jobs from starting, or tell me none are expected?`, rec: "retry", opts: ["retry", "accept: no checks are expected", "stop"] }],
+          "no CI checks reported",
+          `GitHub lists no checks for ${snap.sha.slice(0, 8)}. Jobs refused before they start (an Actions spending budget, no runner) look exactly like this.`,
+        );
+        saveState(state);
+        return "waiting";
+      }
+      continue;
+    }
+    run.emptyChecks = 0;
+    const ciState = checksGreen(snap, ciExpected) && !snap.checks.some((c) => c.bucket === "pending") ? "pass" :
       snap.mergeable === "CONFLICTING" || snap.checks.some((c) => c.bucket === "fail" || c.bucket === "cancel") ? "fail" : "pending";
     appendEvent(state, { kind: "ci", state: ciState });
-    if (isGreen(snap) && !snap.checks.some((c) => c.bucket === "pending")) {
+    if (isGreen(snap, ciExpected) && !snap.checks.some((c) => c.bucket === "pending")) {
       resolveFailures(state, snap.sha);
       if (!run.recorded) {
         run.recorded = true;
