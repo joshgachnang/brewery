@@ -3,7 +3,8 @@
 `brewery approve <pr>` reviews one pull request head against a rubric the repository
 owns and posts one review as the **terreno-approval-agent** GitHub App: `APPROVE` when the risk
 level is one the repository allows, `COMMENT` otherwise, plus a `terreno/approve` check
-run either way. The review's first line always says the level and why.
+run either way. The review's first line always says the level and the decision, and the
+line under it (`📌 Why <level>:`) says why the PR sits at that level.
 
 ```bash
 brewery approve 123 --dry-run      # print the verdict JSON and the review body, post nothing
@@ -20,6 +21,13 @@ Design: [`docs/specs/2026-10-19-brewery-approval-agent-design.md`](specs/2026-10
 | `Risk: low — approved.` | The level is in `approveLevels`, no blocking finding, every gate clean. The App's review counts toward "Require approvals". |
 | `Risk: <level> — not approved.` | The reasons follow, first one on that line, the rest after "Also:". A human reviews. |
 | `Skipped.` | No model ran: draft, skip label, skipped author, the App's own PR, a human change request, or already approved at this head. Only the check run is written. |
+
+Under the first line, `📌 Why <level>:` explains the level itself. It starts with any move
+code made (`Raised from low to high by path rule \`auth\` (\`src/auth/session.ts\`).`,
+`Capped at low: every changed file is under a ceiling rule (docs).`, or a plan edited in
+the PR), then gives the agent's `levelReason`: the rubric row or example that puts the PR
+at that level. With fan-out, only the agents whose level won are quoted. The check run's
+summary starts with the same line.
 
 The body then has a heading per dimension with its score 0–3 (plan match,
 architecture, tests, evidence), each followed by a paragraph of reasons, and a collapsed block with findings, the plan judge's
@@ -43,7 +51,8 @@ otherwise; `skipped` on a skip. A repository may make it a required check.
    drift, missing and unrequested work, and evidence gaps.
 3. **Rubric (agent).** The agent gets the rubric, the band, the PR body marked as claims,
    checks, unresolved bot threads, the evidence inventory, the judge's report, and the
-   diff, and returns a level, the four scores, findings, and a rationale. The body's
+   diff, and returns a level, a `levelReason` (the rubric row that sets the level), the four
+   scores, findings, and a rationale. The body's
    `## Verification` table is read row by row: `| Status | Scope | Evidence |` with ✅,
    ⚠️ (not tested), or 🧭 (instructions) in the first cell, or a `| Check | Result |`
    table with the mark in the result cell. A row without a mark is not a claim; when no

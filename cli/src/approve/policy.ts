@@ -46,6 +46,18 @@ export const classify = (files: string[], rules: PathRule[]): Classification => 
   return { categories, floor, ceiling: everyFileCapped ? ceiling : null, never };
 };
 
+// The rules that set a floor of exactly this level, each with the first changed file it
+// matched, so a raised level can name what raised it.
+export const floorSources = (files: string[], rules: PathRule[], floor: RiskLevel): { category: string; file: string }[] => {
+  const sources: { category: string; file: string }[] = [];
+  for (const rule of rules) {
+    if (rule.floor !== floor || sources.some((s) => s.category === rule.category)) continue;
+    const file = files.find((f) => matches(f, rule));
+    if (file) sources.push({ category: rule.category, file });
+  }
+  return sources;
+};
+
 // The model's level, raised to the floor, then capped by the ceiling. A floor above the
 // ceiling wins: a ceiling never lowers a level below a floor.
 export const mergeLevel = (model: RiskLevel, floor: RiskLevel | null, ceiling: RiskLevel | null): RiskLevel => {

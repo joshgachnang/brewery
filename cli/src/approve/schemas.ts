@@ -70,6 +70,8 @@ export interface VerdictFinding {
 // What the rubric agent returns. Code fills classification, gates, and approve afterwards.
 export interface ModelVerdict {
   level: RiskLevel;
+  // One or two sentences: the rubric row or example that puts the PR at this level.
+  levelReason: string;
   dimensions: Record<Dimension, DimensionScore>;
   findings: VerdictFinding[];
   rationale: string;
@@ -85,9 +87,10 @@ const dimensionSchema = {
 export const VERDICT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["level", "dimensions", "findings", "rationale"],
+  required: ["level", "levelReason", "dimensions", "findings", "rationale"],
   properties: {
     level: { type: "string", enum: ["low", "medium", "high"] },
+    levelReason: { type: "string" },
     dimensions: {
       type: "object",
       additionalProperties: false,
@@ -112,6 +115,8 @@ export const VERDICT_SCHEMA = {
   },
 } as const;
 
+const firstSentence = (text: string): string => text.trim().split(/(?<=[.!?])\s/)[0] ?? "";
+
 export const validateVerdict = (value: unknown): ModelVerdict | string => {
   if (!value || typeof value !== "object" || Array.isArray(value)) return "verdict is not an object";
   const v = value as Record<string, unknown>;
@@ -135,5 +140,8 @@ export const validateVerdict = (value: unknown): ModelVerdict | string => {
     findings.push({ severity: f.severity as VerdictFinding["severity"], where: f.where as string, attack: f.attack as string, evidence: f.evidence as string });
   }
   if (typeof v.rationale !== "string") return "verdict rationale is not a string";
-  return { level: v.level as RiskLevel, dimensions, findings, rationale: v.rationale };
+  if (v.levelReason !== undefined && typeof v.levelReason !== "string") return "verdict levelReason is not a string";
+  // A verdict without a level reason still counts; its rationale's first sentence stands in.
+  const levelReason = (typeof v.levelReason === "string" && v.levelReason.trim()) || firstSentence(v.rationale);
+  return { level: v.level as RiskLevel, levelReason, dimensions, findings, rationale: v.rationale };
 };

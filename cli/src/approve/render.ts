@@ -43,6 +43,7 @@ export const firstLine = (verdict: Verdict): string => {
 // Short at a glance: decision, one row of scores, finding counts. Everything else folds away.
 export const renderBody = (verdict: Verdict, context: ApproveContext): string => {
   const lines: string[] = [marker(context.pr.headSha), firstLine(verdict), ""];
+  if (verdict.levelReason) lines.push(`📌 **Why ${verdict.level}:** ${verdict.levelReason.replace(/\s+/g, " ").trim()}`, "");
   if (!verdict.approve && verdict.reasons.length > 1) {
     lines.push(`➕ Also: ${verdict.reasons.slice(1).join("; ")}.`, "");
   }
@@ -113,6 +114,13 @@ export const checkRun = (verdict: Verdict): { conclusion: CheckConclusion; title
   return {
     conclusion,
     title: `Risk: ${verdict.level} — ${verdict.approve ? "approved" : "not approved"}`,
-    summary: verdict.approve ? verdict.rationale || "Approved." : [...verdict.reasons, "", verdict.rationale].join("\n").trim(),
+    summary: [
+      verdict.levelReason ? `Why ${verdict.level}: ${verdict.levelReason}` : "",
+      ...(verdict.approve ? [] : verdict.reasons),
+      verdict.approve ? verdict.rationale || "Approved." : verdict.rationale,
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+      .trim(),
   };
 };

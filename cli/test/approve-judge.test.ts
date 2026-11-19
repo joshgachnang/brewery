@@ -131,11 +131,18 @@ describe("schema validators", () => {
 
   test("verdicts need a level, four scored dimensions, typed findings, and a rationale", () => {
     const dim = { score: 2, reasons: ["ok"] };
-    const good = { level: "low", dimensions: { ipMatch: dim, architecture: dim, tests: dim, evidence: dim }, findings: [{ severity: "nit", where: "a.ts:1", attack: "x", evidence: "y" }], rationale: "fine" };
+    const good = { level: "low", levelReason: "Docs only.", dimensions: { ipMatch: dim, architecture: dim, tests: dim, evidence: dim }, findings: [{ severity: "nit", where: "a.ts:1", attack: "x", evidence: "y" }], rationale: "fine" };
     expect(validateVerdict(good)).toEqual(good as never);
     expect(validateVerdict({ ...good, level: "critical" })).toContain("level");
     expect(validateVerdict({ ...good, dimensions: { ...good.dimensions, tests: { score: 4, reasons: [] } } })).toContain("tests score");
     expect(validateVerdict({ ...good, findings: [{ severity: "fatal", where: "", attack: "", evidence: "" }] })).toContain("severity");
     expect(validateVerdict({ ...good, dimensions: { ipMatch: dim } })).toContain("architecture missing");
+    expect(validateVerdict({ ...good, levelReason: 3 })).toContain("levelReason");
+  });
+
+  test("a verdict without a level reason falls back to its rationale's first sentence", () => {
+    const dim = { score: 2, reasons: [] };
+    const v = validateVerdict({ level: "low", dimensions: { ipMatch: dim, architecture: dim, tests: dim, evidence: dim }, findings: [], rationale: "Docs only. Nothing else." });
+    expect(typeof v === "string" ? v : v.levelReason).toBe("Docs only.");
   });
 });

@@ -48,6 +48,7 @@ const verdict = (level: ModelVerdict["level"], over: Partial<ModelVerdict> = {})
   level,
   dimensions: { ipMatch: dim(3, "no plan; body matches"), architecture: dim(3), tests: dim(2, "docs only"), evidence: dim(3, "CI green") },
   findings: [],
+  levelReason: `Rubric says ${level}.`,
   rationale: `Looks ${level}.`,
   ...over,
 });
@@ -105,6 +106,7 @@ describe("mergeVerdict", () => {
     expect(v.classification.ceiling).toBe("low");
     expect(v.agents).toEqual(["claude"]);
     expect(v.rationale).toBe("Looks low.");
+    expect(v.levelReason).toBe("Rubric says low.");
   });
 
   test("the model cannot go below a floor: low on an auth file becomes high", () => {
@@ -113,12 +115,14 @@ describe("mergeVerdict", () => {
     expect(v.level).toBe("high");
     expect(v.approve).toBe(false);
     expect(v.reasons).toEqual(["risk high is above the configured approval levels (low)"]);
+    expect(v.levelReason).toBe("Raised from low to high by path rule `auth` (`src/auth/session.ts`). Review said low: Rubric says low.");
   });
 
   test("the ceiling caps the model: medium on docs only becomes low", () => {
     const v = mergeVerdict({ context: context(docsOnly), outcomes: [outcome("claude", verdict("medium"))], judge: NO_PLAN });
     expect(v.level).toBe("low");
     expect(v.approve).toBe(true);
+    expect(v.levelReason).toBe("Capped at low: every changed file is under a ceiling rule (docs). Review said medium: Rubric says medium.");
   });
 
   test("fan-out takes the strictest level, the lowest scores, and unions findings", () => {
@@ -140,6 +144,8 @@ describe("mergeVerdict", () => {
       ["nit", "docs/approve.md:3", ["claude", "codex"]],
     ]);
     expect(v.rationale).toBe("claude: Looks low.\n\ncodex: Looks medium.");
+    // Only the agent whose level won explains it.
+    expect(v.levelReason).toBe("codex: Rubric says medium.");
   });
 
   test("a blocking finding blocks approval at low", () => {
@@ -158,6 +164,7 @@ describe("mergeVerdict", () => {
     expect(v.level).toBe("medium");
     expect(v.classification.floor).toBe("medium");
     expect(v.approve).toBe(false);
+    expect(v.levelReason).toBe("Raised from low to medium because the PR edits the plan it implements. Review said low: Rubric says low.");
   });
 
   test("failed gates and never-files are all named", () => {
@@ -176,6 +183,7 @@ describe("mergeVerdict", () => {
     expect(v.approve).toBe(false);
     expect(v.reasons[0]).toBe('no agent produced a verdict (claude: verdict level "critical" is not low/medium/high)');
     expect(v.modelLevel).toBeNull();
+    expect(v.levelReason).toBe("No review agent produced a verdict, so the level defaults to high.");
     expect(v.dimensions.tests).toEqual({ score: 0, reasons: [] });
   });
 

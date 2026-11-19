@@ -6,7 +6,7 @@ import type { ApproveConfig, RiskLevel } from "../config.ts";
 import { rubricBody } from "../prompts.ts";
 import { runStage, type Ctx } from "../step.ts";
 import type { ApproveContext } from "./context.ts";
-import { classify, decide, mergeLevel, type Classification, type Gates } from "./policy.ts";
+import { classify, decide, floorSources, mergeLevel, type Classification, type Gates } from "./policy.ts";
 import { DIMENSIONS, VERDICT_SCHEMA, validateVerdict, type Dimension, type DimensionScore, type JudgeReport, type ModelVerdict, type VerdictFinding } from "./schemas.ts";
 
 export { DEFAULT_RUBRIC };
@@ -73,6 +73,8 @@ export const runRubric = async (
 
 export interface Verdict {
   level: RiskLevel;
+  // Why the PR sits at this level: any floor or ceiling that moved it, then the model's reason.
+  levelReason: string;
   approve: boolean;
   // Why not approved, in order; empty when approved.
   reasons: string[];
@@ -95,6 +97,43 @@ const EMPTY_DIMENSIONS = (): Record<Dimension, DimensionScore> => ({
   tests: { score: 0, reasons: [] },
   evidence: { score: 0, reasons: [] },
 });
+
+const sentence = (text: string): string => {
+  const t = text.replace(/\s+/g, " ").trim();
+  return !t || /[.!?]$/.test(t) ? t : `${t}.`;
+};
+
+// The level line a reviewer reads first. Code-made moves (a path floor, a ceiling, an edited
+// plan) come before the model's reason, because they are what set the level shown.
+const explainLevel = (input: {
+  level: RiskLevel;
+  modelLevel: RiskLevel | null;
+  verdicts: { agent: string; verdict: ModelVerdict }[];
+  classification: Classification;
+  planFloor: boolean;
+  files: string[];
+  rules: ApproveConfig["pathRules"];
+}): string => {
+  const { level, modelLevel, verdicts, classification } = input;
+  if (!modelLevel) return "No review agent produced a verdict, so the level defaults to high.";
+  const parts: string[] = [];
+  if (RANK[level] > RANK[modelLevel]) {
+    const sources = input.planFloor ? [] : floorSources(input.files, input.rules, level);
+    const by = input.planFloor
+      ? "because the PR edits the plan it implements"
+      : sources.length
+        ? `by path rule ${sources.map((s) => `\`${s.category}\` (\`${s.file}\`)`).join(", ")}`
+        : "by a path-rule floor";
+    parts.push(`Raised from ${modelLevel} to ${level} ${by}.`);
+  } else if (RANK[level] < RANK[modelLevel]) {
+    const capped = classification.categories.filter((c) => c !== "source");
+    parts.push(`Capped at ${level}: every changed file is under a ceiling rule${capped.length ? ` (${capped.join(", ")})` : ""}.`);
+  }
+  const agreeing = verdicts.filter((v) => v.verdict.level === modelLevel && v.verdict.levelReason.trim());
+  const reasons = agreeing.map((v) => (verdicts.length > 1 ? `${v.agent}: ${sentence(v.verdict.levelReason)}` : sentence(v.verdict.levelReason)));
+  if (reasons.length) parts.push(parts.length ? `Review said ${modelLevel}: ${reasons.join(" ")}` : reasons.join(" "));
+  return parts.join(" ");
+};
 
 // Fan-out: the strictest level, the lowest score per dimension with every reason, findings
 // unioned by location and attack, and every agent's rationale.
@@ -143,10 +182,20 @@ export const mergeVerdict = (input: {
   } else {
     level = mergeLevel(modelLevel, floor, classification.ceiling);
   }
+  const levelReason = explainLevel({
+    level,
+    modelLevel: verdicts.length ? modelLevel : null,
+    verdicts,
+    classification,
+    planFloor: floor !== classification.floor,
+    files: input.context.files.map((f) => f.path),
+    rules: approveConfig.pathRules,
+  });
   const blocking = findings.filter((f) => f.severity === "blocking").length;
   const decision = decide({ level, approveLevels: approveConfig.approveLevels, gates, blocking, never: classification.never });
   return {
     level,
+    levelReason,
     approve: decision.approve && verdicts.length > 0,
     reasons: [...reasons, ...decision.reasons],
     dimensions,
