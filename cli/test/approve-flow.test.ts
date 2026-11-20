@@ -29,6 +29,7 @@ const dim = (score: number, ...reasons: string[]): { score: number; reasons: str
 const verdict = (level: string, findings: unknown[] = []): Record<string, unknown> => ({
   level,
   dimensions: { ipMatch: dim(3, "T1 delivered; nothing beyond the plan"), architecture: dim(3, "docs only"), tests: dim(2, "no test needed"), evidence: dim(3, "CI green") },
+  levelReason: `A ${level} docs change per the rubric.`,
   findings,
   rationale: `A ${level}-risk docs change.`,
 });
@@ -81,7 +82,7 @@ describe("brewery approve", () => {
     expect(out.verdict?.approve).toBe(true);
     expect(out.posted).toBe(true);
     expect(poster.calls).toEqual([{ kind: "post", event: "APPROVE", body: out.body }]);
-    expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n✅ 🟢 **Risk: low — approved.** T1 delivered; nothing beyond the plan\n")).toBe(true);
+    expect(out.body.startsWith("<!-- terreno-approve:abcdef1234567 -->\n✅ 🟢 **Risk: low — approved.** T1 delivered; nothing beyond the plan\n\n📌 **Why low:** A low docs change per the rubric.\n")).toBe(true);
     expect(out.body).toContain("**🎯 Plan match 3/3** — T1 delivered; nothing beyond the plan.\n");
     expect(out.body).not.toContain("| Dimension |");
     expect(out.body).toContain("| 🟢 3/3 | 🟢 3/3 | 🟡 2/3 | 🟢 3/3 |");
@@ -91,7 +92,7 @@ describe("brewery approve", () => {
     expect(out.body).toContain("Floor: none · Ceiling: low · Categories: docs");
     expect(out.body).toContain("Policy: `.brewery.json` at `master@base123`, rubric brewery default, agents alpha");
     expect(markerSha(out.body)).toBe("abcdef1234567");
-    expect(checkRun(out.verdict!)).toEqual({ conclusion: "success", title: "Risk: low — approved", summary: "A low-risk docs change." });
+    expect(checkRun(out.verdict!)).toEqual({ conclusion: "success", title: "Risk: low — approved", summary: "Why low: A low docs change per the rubric.\n\nA low-risk docs change." });
     expect(ctx.lines.some((l) => l.includes("verdict: low, approve"))).toBe(true);
   });
 
@@ -194,6 +195,7 @@ describe("renderBody", () => {
     const body = renderBody(
       {
         level: "medium",
+        levelReason: "A new endpoint with permission tests.",
         approve: false,
         reasons: ["risk medium is above the configured approval levels (low)", "2 unresolved bot review threads"],
         dimensions: { ipMatch: dim(2, "a"), architecture: dim(2), tests: dim(1, "b"), evidence: dim(2) } as never,
@@ -208,7 +210,7 @@ describe("renderBody", () => {
       },
       ctx,
     );
-    expect(body).toContain("✋ 🟡 **Risk: medium — not approved.** risk medium is above the configured approval levels (low)\n\n➕ Also: 2 unresolved bot review threads.\n");
+    expect(body).toContain("✋ 🟡 **Risk: medium — not approved.** risk medium is above the configured approval levels (low)\n\n📌 **Why medium:** A new endpoint with permission tests.\n\n➕ Also: 2 unresolved bot review threads.\n");
     expect(body).toContain("| 🟡 2/3 | 🟡 2/3 | 🔴 1/3 | 🟡 2/3 |");
     expect(body).toContain("<details><summary>📝 Why these scores</summary>\n\n**🎯 Plan match 2/3** — a.");
     expect(body).toContain("**🏗️ Architecture 2/3** — —\n");

@@ -89,6 +89,7 @@ const context = (headSha = "abc123"): ApproveContext =>
 
 const verdict = (approve: boolean, over: Partial<Verdict> = {}): Verdict => ({
   level: approve ? "low" : "medium",
+  levelReason: approve ? "Docs only." : "A new feature.",
   approve,
   reasons: approve ? [] : ["risk medium is above the configured approval levels (low)"],
   dimensions: { ipMatch: { score: 3, reasons: ["fine"] }, architecture: { score: 3, reasons: [] }, tests: { score: 3, reasons: [] }, evidence: { score: 3, reasons: [] } },
@@ -114,7 +115,7 @@ describe("GitHub poster", () => {
     expect(review?.body).toEqual({ commit_id: "abc123", event: "APPROVE", body: body("abc123") });
     expect(review?.auth).toBe("Bearer t");
     const check = gh.calls.find((c) => c.url.endsWith("/check-runs"));
-    expect(check?.body).toEqual({ name: "terreno/approve", head_sha: "abc123", status: "completed", conclusion: "success", output: { title: "Risk: low — approved", summary: "Looks fine." } });
+    expect(check?.body).toEqual({ name: "terreno/approve", head_sha: "abc123", status: "completed", conclusion: "success", output: { title: "Risk: low — approved", summary: "Why low: Docs only.\n\nLooks fine." } });
     expect(poster.last).toEqual({ reviewed: "posted", event: "APPROVE", dismissed: [], dismissFailed: [], check: { conclusion: "success", title: "Risk: low — approved" } });
   });
 

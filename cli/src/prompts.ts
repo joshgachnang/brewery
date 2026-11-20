@@ -592,8 +592,11 @@ Summary: ${judge.summary}`
   return `## Step: approve (rubric)
 
 Score this pull request with the rubric below and return the verdict JSON this step was
-launched with: a level (low, medium, high), four scored dimensions with reasons, findings,
-and a rationale of one paragraph in a reviewer's voice. Read repository files to confirm
+launched with: a level (low, medium, high), a levelReason, four scored dimensions with
+reasons, findings, and a rationale of one paragraph in a reviewer's voice. The levelReason
+is one or two sentences a reviewer reads first: name the rubric row or example that puts the
+PR at this level (for example "a small bug fix with a regression test" or "changes who may
+read todos"), and for medium or high say what kept it from the level below. Read repository files to confirm
 what the diff shows; do not run tests or change anything.
 
 Code has already set the band: floor ${classification.floor ?? "none"}, ceiling ${classification.ceiling ?? "none"},
