@@ -20,7 +20,7 @@ import { finish } from "./commands/finish.ts";
 import { ui } from "./commands/ui.ts";
 import { DEFAULT_CONFIG, FAN_OUT, loadConfig, replyWaitMin, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
-import { githubForge } from "./forge.ts";
+import { githubForge } from "./forge/history.ts";
 import { waitForReply } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";

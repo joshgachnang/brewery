@@ -96,7 +96,9 @@ A local Cursor link follows the checkout. If a subcommand is missing, run the to
    `git clone https://github.com/joshgachnang/brewery ~/src/brewery`. On `upgrade`,
    `git -C <checkout> pull --ff-only` (stop and report on a dirty tree or a diverged branch).
 2. Run `<checkout>/bin/install`. It runs `bun install --frozen-lockfile` in `cli/` and links
-   `~/bin/brewery` to `cli/src/cli.ts`. It is idempotent.
+   `~/bin/brewery` to `cli/src/cli.ts` and `~/bin/forge` to `cli/src/forge/main.ts`. It is
+   idempotent. `forge` needs nothing more for GitHub repos; a Forgejo host needs an entry in
+   `~/.config/forge/hosts.json` (`cli/README.md`, "forge"), which this skill does not write.
 3. Check `~/bin` is on PATH (`command -v brewery`). If not, give the line for the human's
    shell rc file; do not edit it unasked.
 4. Run `brewery agents`. A ✓ per installed agent and the stage routing is success. A ✗ on

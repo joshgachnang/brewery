@@ -1,0 +1,29 @@
+[
+  {
+    "id": 32,
+    "name": "bug",
+    "exclusive": false,
+    "is_archived": false,
+    "color": "ee0701",
+    "description": "",
+    "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/labels/32"
+  },
+  {
+    "id": 34,
+    "name": "forge-probe-label",
+    "exclusive": false,
+    "is_archived": false,
+    "color": "654321",
+    "description": "probe",
+    "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/labels/34"
+  },
+  {
+    "id": 33,
+    "name": "triaged",
+    "exclusive": false,
+    "is_archived": false,
+    "color": "00aa00",
+    "description": "",
+    "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/labels/33"
+  }
+]

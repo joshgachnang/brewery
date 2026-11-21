@@ -1,0 +1,64 @@
+{
+  "state": "success",
+  "sha": "c597ac94de09e0396fe9e0507062aaf346ca32bf",
+  "total_count": 5,
+  "statuses": [
+    {
+      "id": 9,
+      "status": "success",
+      "target_url": "/joshgachnang/forgejo-scratch/actions/runs/8/jobs/0",
+      "description": "Successful in 2s",
+      "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/statuses/c597ac94de09e0396fe9e0507062aaf346ca32bf",
+      "context": "secrets-test / check (push)",
+      "creator": null,
+      "created_at": "2026-11-21T00:35:29Z",
+      "updated_at": "2026-11-21T00:35:29Z"
+    },
+    {
+      "id": 10,
+      "status": "success",
+      "target_url": "/joshgachnang/forgejo-scratch/actions/runs/7/jobs/2",
+      "description": "Successful in 9s",
+      "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/statuses/c597ac94de09e0396fe9e0507062aaf346ca32bf",
+      "context": "runner-test / macos (push)",
+      "creator": null,
+      "created_at": "2026-11-21T00:35:36Z",
+      "updated_at": "2026-11-21T00:35:36Z"
+    },
+    {
+      "id": 13,
+      "status": "success",
+      "target_url": "/joshgachnang/forgejo-scratch/actions/runs/7/jobs/3",
+      "description": "Successful in 1s",
+      "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/statuses/c597ac94de09e0396fe9e0507062aaf346ca32bf",
+      "context": "runner-test / macos-download (push)",
+      "creator": null,
+      "created_at": "2026-11-21T00:35:40Z",
+      "updated_at": "2026-11-21T00:35:40Z"
+    },
+    {
+      "id": 14,
+      "status": "success",
+      "target_url": "/joshgachnang/forgejo-scratch/actions/runs/7/jobs/0",
+      "description": "Successful in 43s",
+      "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/statuses/c597ac94de09e0396fe9e0507062aaf346ca32bf",
+      "context": "runner-test / linux (push)",
+      "creator": null,
+      "created_at": "2026-11-21T00:36:10Z",
+      "updated_at": "2026-11-21T00:36:10Z"
+    },
+    {
+      "id": 17,
+      "status": "success",
+      "target_url": "/joshgachnang/forgejo-scratch/actions/runs/7/jobs/1",
+      "description": "Successful in 5s",
+      "url": "https://forgejo.nang.io/api/v1/repos/joshgachnang/forgejo-scratch/statuses/c597ac94de09e0396fe9e0507062aaf346ca32bf",
+      "context": "runner-test / download (push)",
+      "creator": null,
+      "created_at": "2026-11-21T00:36:18Z",
+      "updated_at": "2026-11-21T00:36:18Z"
+    }
+  ],
+  "commit_url": "",
+  "url": ""
+}

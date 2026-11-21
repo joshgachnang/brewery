@@ -1,0 +1,2 @@
+# Recorded CI logs are test fixtures; a global *.log ignore must not drop them.
+!cli/test/fixtures/**/*.log
