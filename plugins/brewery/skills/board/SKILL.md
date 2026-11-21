@@ -35,8 +35,8 @@ Build the same board by hand:
   task whose `Depends on:` names a task that has not landed. A task with no `Depends on:`
   depends on the one before it.
 - **In progress:** runs past `approved` (phase, landed/total, running task ids, PR), and open
-  PRs (`gh pr list --state open`) whose branch no run owns.
+  PRs (`forge pr list --state open`) whose branch no run owns.
 - **Next up:** open tasks in approved plans whose dependencies have all landed and that are
   not running, oldest plan first.
-- **Recent merges:** `gh pr list --state merged --limit 10`, or offline
+- **Recent merges:** `forge pr list --state merged --limit 10`, or offline
   `git log --first-parent -10 origin/<base>`.

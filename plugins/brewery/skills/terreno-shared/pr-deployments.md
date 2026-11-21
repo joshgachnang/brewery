@@ -30,12 +30,15 @@ last thing on screen.
 
 ## Discover
 
-1. Resolve the current PR number and head SHA (`gh pr view --json number,url,headRefOid`
+1. Resolve the current PR number and head SHA (`forge pr view --json number,url,headRefOid`
    on this branch, or the PR already in execution state).
-2. List GitHub Deployments for that PR/head. Prefer GraphQL on the pull request:
+2. List GitHub Deployments for that PR/head. GitHub only: Forgejo has no deployments
+   API, so on Forgejo (`forge repo view --json forge -q .forge`) skip to step 5 with no
+   rows and print no Demo. Prefer GraphQL on the pull request (`forge api` passes it through
+   to GitHub):
 
    ```bash
-   gh api graphql -F owner=<owner> -F name=<repo> -F number=<pr> -f query='
+   forge api graphql -F owner=<owner> -F name=<repo> -F number=<pr> -f query='
    query($owner:String!,$name:String!,$number:Int!){
      repository(owner:$owner,name:$name){
        pullRequest(number:$number){
@@ -50,7 +53,7 @@ last thing on screen.
    }'
    ```
 
-   REST fallback: `gh api "repos/<owner>/<repo>/deployments?sha=<headSha>&per_page=20"`,
+   REST fallback: `forge api "repos/<owner>/<repo>/deployments?sha=<headSha>&per_page=20"`,
    then each deployment's statuses for `environment_url`.
 3. Keep rows whose latest status has a non-empty `environmentUrl` (success, in-progress,
    or queued with a preview URL already assigned). Skip statuses that only have a log URL.

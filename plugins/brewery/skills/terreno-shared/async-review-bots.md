@@ -2,12 +2,22 @@
 
 Brew and Taste **wait in-process** until async review bots on the current head have
 reported, then continue the stage so they can react. Product test CI is a separate
-Taste wait: follow [`product-ci.md`](product-ci.md) after this procedure, using GitHub
-CLI or CircleCI CLI in a watch loop until jobs are terminal or that wait times out.
+Taste wait: follow [`product-ci.md`](product-ci.md) after this procedure, using `forge`
+or CircleCI CLI in a watch loop until jobs are terminal or that wait times out.
+
+## On Forgejo: no review bots yet
+
+Find the forge first: `forge repo view --json forge -q .forge`. On `forgejo` no review
+bot is configured yet (no Bugbot, no CodeQL, and brewery's approval agent posts to GitHub
+only), so nothing will ever post. Treat this whole procedure as done for that head, with
+the outcome `no review bots configured (Forgejo)`, and go straight to product CI. Skip the
+startup grace, never wait on a bot check or an approval, and never emit `PENDING` for one.
+Bot threads that exist anyway are still answered per [`push ownership`](push-ownership.md#bot-comments).
+On `github` the rest of this page applies unchanged.
 
 ## What counts
 
-A review bot is an automated GitHub actor that posts a check run, code-scanning alert,
+A review bot is an automated forge actor that posts a check run, code-scanning alert,
 or PR review/comment after a push. Match by check name, app slug, or review author.
 Examples:
 
@@ -31,16 +41,16 @@ matched bot queued, in progress, or still inside the startup grace.
 
 1. Record the current head SHA.
 2. **Startup grace (90 seconds).** Use a provider-native hook only when it can await the
-   **matched bot**, not arbitrary checks for this SHA. GitHub CLI has no targeted
+   **matched bot**, not arbitrary checks for this SHA. `forge` has no targeted
    check-creation watch, so prefer the harness PR-event subscription. If no targeted
    hook can detect new checks, reviews, and comments, sleep 30 seconds and re-fetch.
    Stop the grace when a matched bot appears or 90 seconds elapse. If none appeared,
    continue.
 3. **Completion wait.** Use a provider-native hook only when it targets the matched bot,
    not all PR checks. For a bot backed by a resolved GitHub Actions run, prefer
-   `gh run watch <run-id> --interval 30`. Its exit code is a wait result, not a Brew
+   `forge run watch <run-id> --interval 30`. Its exit code is a wait result, not a Brew
    verdict; always re-fetch and classify the bot outcome. Do **not** use unfiltered
-   `gh pr checks --watch`: it also waits for ordinary product CI. For check-run-only or
+   `forge pr checks --watch`: it also waits for ordinary product CI. For check-run-only or
    review/comment bots, prefer a harness PR-event subscription. If no targeted hook is
    available, sleep 30 seconds and re-fetch the matched bot state. Continue until every
    matched bot is terminal, or 20 minutes have elapsed.
@@ -72,5 +82,5 @@ decision. An unanswered bot thread blocks Taste `PASS`.
   product-CI wait loop, then act on those results **once** in this invocation. A further
   push after that second act emits `PENDING` (`next: taste`); the outer loop owns later
   cycles.
-- Product CI uses Taste's bounded watch loop (`gh` / `circleci`), not this review-bot
-  procedure. Unfiltered `gh pr checks --watch` belongs there, not here.
+- Product CI uses Taste's bounded watch loop (`forge` / `circleci`), not this review-bot
+  procedure. Unfiltered `forge pr checks --watch` belongs there, not here.

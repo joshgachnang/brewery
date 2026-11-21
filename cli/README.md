@@ -19,7 +19,7 @@ brewery barrel <slug>            ready tasks (up to parallelTasks), each: create
                                   if tasks overlapped: integrated roast → repair and commit → roast again
                                   branch review: claude + codex in parallel → fix blocking findings
                                   brew: claude opens the PR
-                                  finish: gh waits (no tokens) → claude tastes each red snapshot or unanswered bot thread
+                                  finish: forge waits (no tokens) → claude tastes each red snapshot or unanswered bot thread
                                   → PR conflict-free, green, bot comments answered, exit 0
                                   (still red after 3 fix rounds → BLOCKED gate to the human)
 ```
@@ -163,7 +163,7 @@ them fails the step. Other stages use the first available agent. An unavailable 
 | Valid task graph before approval | Answer validates the edited IP regardless of the agent's `structural` flag. Invalid graphs go through cut/fix as blocking decomposition findings. Unrepaired problems return to sign-off, with the problems listed; only a valid graph can be approved. |
 | Progress can't be faked | brewery checks each task box only after a Roast PASS and cherry-pick onto the feature branch. |
 | Bounded loops | Pick attempts per task, cut and review rounds, finish pushes and hours, and a "same failure twice" stop. |
-| No tokens while waiting | brewery runs `gh pr checks --watch` itself and starts a Taste agent only on a red snapshot. |
+| No tokens while waiting | brewery polls the PR's checks itself through `forge`'s backends (GitHub via `gh`, Forgejo via its API) and starts a Taste agent only on a red snapshot. |
 | Privacy | ntfy pings carry no content. The full message prints to the terminal and is saved in state. |
 
 For example, `T1` depending on `T2` while `T2` depends on `T1` produces the finding
@@ -315,11 +315,20 @@ A long run can die without finishing: Bun panics (exit 134), the kernel kills it
 
 `finish` used to read a PR that reported no checks as green ("0 checks green"), which is what
 GitHub shows when jobs are refused before they start (an Actions spending budget, no runner) or
-when `gh` fails. In a repo that defines CI (`.github/workflows`, `.circleci` or `.buildkite`
-with files in it), no checks is now pending: after three empty snapshots (each after the
+when the forge does not answer. In a repo that defines CI (`.github/workflows`,
+`.forgejo/workflows`, `.circleci` or `.buildkite` with files in it), no checks is now pending: after three empty snapshots (each after the
 registration wait) brewery asks, and a reply starting with `accept` records that no checks are
-expected for this run. `gh pr checks` failing for any reason other than "no checks reported"
+expected for this run. Reading checks failing for any reason other than "no checks reported"
 is an error, not an empty list.
+
+### finish, barrel, board, and approve on either forge
+
+The CLI reads PRs through `forge`'s backends in-process (`src/forge/ci.ts`), picked from the
+checkout's `origin`, so it needs no `~/bin/forge` on a CI runner. Changed files come from the
+PR's diff. On Forgejo, bot threads are answered by a reply (the API cannot resolve one), a
+flaky run is re-triggered with an empty commit (`forge run rerun` exits 2 there), and
+`brewery approve` refuses to post: the approval agent is a GitHub App, so on Forgejo only
+`--dry-run` runs.
 
 ## Handoffs between steps
 
@@ -502,6 +511,11 @@ including the GitHub App's permissions and the rollout, is in
 
 ## Learning the rubric from humans: `brewery calibrate <owner/name>`
 
+`owner/name` is a GitHub repo; a Forgejo repo is `host/owner/name`, with the host in
+`~/.config/forge/hosts.json`. GitHub selects PRs with an `updated:>=` search. Forgejo has no
+search, so brewery lists PRs newest-updated first and filters the date itself (and logs when
+the 60-PR cap cut the window short); its inline comments carry path and line but no hunk.
+
 One repo per call. It reads what humans said on PRs since the last pass (first pass: 30 days):
 review verdicts, inline comments with their hunks, conversation comments, and what the
 approval agent said about the same head. `--notes <file>` adds pasted comments or opinions;
@@ -551,9 +565,13 @@ same end-of-run commit, and the marker becomes a link.
 
 ## Nightly learning: `brewery cellar <owner/name>`
 
+`owner/name` is GitHub, `host/owner/name` a Forgejo host. On Forgejo, merged PRs are read in
+full and filtered by merge date (no `merged:>=` search), and failed runs by `--created` over
+the newest 1000 runs; brewery logs when a pass hit its 100-item cap.
+
 One repo per call. It gathers everything since that repo's last pass (first pass: 7 days):
 - brewery journals that reached the default branch
-- failed GitHub Actions runs, with the newest scrubbed failed-step log per workflow and branch
+- failed GitHub or Forgejo Actions runs, with the newest scrubbed failed-step log per workflow and branch
 - merged PRs from any session: local, remote, web, or Cursor cloud
 
 It skips the agent entirely when nothing happened. Otherwise the `cellar` skill runs in a fresh worktree

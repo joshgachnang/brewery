@@ -16,18 +16,22 @@ Read [`taste.md`](taste.md), [`product CI`](../terreno-shared/product-ci.md),
 ## Run it with brewery
 
 `brewery finish [pr]` runs this as separate agent processes (Claude, Codex, or local models via
-litellm). brewery does the CI waiting itself with `gh`, so no model runs while
-CI is pending, and it starts one Taste agent per red snapshot. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
+litellm). brewery does the CI waiting itself through `forge`'s backends (GitHub via `gh`,
+Forgejo via its API), so no model runs while CI is pending, and it starts one Taste agent per red snapshot. Source: `cli/` in [brewery](https://github.com/joshgachnang/brewery). Use this skill directly for an
 interactive, single-session run.
 
 ## Setup
 
-- PR: the argument, or `gh pr view --json number` for the current branch. No PR → stop
+- PR: the argument, or `forge pr view --json number -q .number` for the current branch. No PR → stop
   and point to `barrel` or Brew.
 - State: `.terreno/pipeline/<slug>.json` when present. Otherwise create one keyed by
   the branch name.
 - Check out the PR branch at its remote head. Refuse to run on a dirty tree that is not
   yours.
+- Forge: `forge repo view --json forge -q .forge`. On `forgejo` no review bot is
+  configured yet: the review-bot wait is done at once (`no review bots configured
+  (Forgejo)`, per [async review bots](../terreno-shared/async-review-bots.md#on-forgejo-no-review-bots-yet)),
+  and nothing waits on Bugbot, CodeQL, or an approval check.
 
 ## Loop
 
@@ -38,20 +42,25 @@ Repeat until a stop condition:
    push, and watch.
 2. **Handle flakes.** When a failure is not branch-caused (it fails on the base too, is a
    known flake, or is an infrastructure error in the log), rerun only the failed jobs:
-   `gh run rerun <run-id> --failed`, or CircleCI's rerun-from-failed. A rerun counts as a
-   fix round. Never push code for a failure the branch did not cause.
+   `forge run rerun <run-id> --failed`, or CircleCI's rerun-from-failed. A rerun counts as a
+   fix round. On Forgejo `forge run rerun` exits 2 with the run's link, because Forgejo
+   has no rerun API: re-trigger the run with an empty commit
+   (`git commit --allow-empty -m "Re-run CI"`, then push) or the link's Re-run button.
+   Never push code for a failure the branch did not cause; an empty commit is not code.
 3. **Check done.** On the current head:
-   - `gh pr view <pr> --json mergeable,mergeStateStatus` is not `CONFLICTING` or `DIRTY`
+   - `forge pr view <pr> --json mergeable,mergeStateStatus` is not `CONFLICTING` or `DIRTY`
    - every job on every discovered CI host is terminal and passing, or has a documented
      not-applicable skip. Pending is never passing.
    - every review-bot thread is fixed and resolved, declined with a one-sentence reply
-     and resolved, or open only as a human decision
-     ([`push ownership`](../terreno-shared/push-ownership.md#bot-comments)).
+     and resolved (on Forgejo, which cannot resolve through its API, the reply is the
+     answer), or open only as a human decision
+     ([`push ownership`](../terreno-shared/push-ownership.md#bot-comments)). No review
+     bot configured (Forgejo) and no bot thread on the PR meets this.
    If all three hold → **done**, even when human review threads are still open (see
    Report).
-4. **Wait, then repeat.** On `PENDING`, wait on a native watch (`gh pr checks <pr>
-   --watch`, `gh run watch`, `circleci run watch --sha <sha>`) run in the background, or
-   a scheduled wakeup. Then start a fresh reaction from step 1. Never reuse conclusions
+4. **Wait, then repeat.** On `PENDING`, wait on a native watch (`forge pr checks <pr>
+   --watch --grace 300`, `forge run watch`, `circleci run watch --sha <sha>`) run in the
+   background, or a scheduled wakeup. Then start a fresh reaction from step 1. Never reuse conclusions
    from an older head.
 
 Merging the base follows taste.md: only on conflict, base drift, or the final pre-merge

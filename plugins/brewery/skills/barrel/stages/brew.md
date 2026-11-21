@@ -130,7 +130,10 @@ must follow the [`GitHub attention contract`](../../terreno-shared/github-attent
     branch (GitHub Actions, CircleCI, Buildkite, and similar) and confirm each triggered
     or documented a skip for this SHA on every discovered CI host. Then follow the
     async-review-bots procedure: prefer provider CLI watch hooks or harness event
-    subscriptions; use bounded sleep/re-fetch only as a fallback. Wait until Bugbot,
+    subscriptions; use bounded sleep/re-fetch only as a fallback. On Forgejo no review
+    bot is configured yet, so that wait is done at once with `no review bots configured
+    (Forgejo)` ([async review bots](../../terreno-shared/async-review-bots.md#on-forgejo-no-review-bots-yet)).
+    Elsewhere, wait until Bugbot,
     CodeQL, and similar review bots on this head are terminal, never appeared after the
     startup grace, or hit the 20-minute timeout. Do not exit while those bots are queued
     or in progress. Do not wait for ordinary product CI to finish. The one exception

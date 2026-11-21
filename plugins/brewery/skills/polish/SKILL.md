@@ -33,7 +33,7 @@ as `harvest`.
 
 ## Drive
 
-1. **Discover.** `gh pr list --author @me --state open --json
+1. **Discover.** `forge pr list --author @me --state open --json
    number,title,isDraft,headRefName,baseRefName,headRefOid,url`. Skip drafts. Skip PRs
    from forks you cannot push to. No open non-draft PRs → report that and stop.
 2. **Skip owned PRs.** A PR whose branch a live brewery run owns
@@ -41,11 +41,11 @@ as `harvest`.
    state whose stage is running) is left to that run. Two pushers on one branch is a
    defect.
 3. **Qualify.** For each remaining PR, on its current head:
-   - **conflict:** `gh pr view <n> --json mergeable,mergeStateStatus` is `CONFLICTING` or
-     `DIRTY`. `UNKNOWN` → ask again once after GitHub computes it.
+   - **conflict:** `forge pr view <n> --json mergeable,mergeStateStatus` is `CONFLICTING` or
+     `DIRTY`. `UNKNOWN` → ask again once after the forge computes it.
    - **failing-ci:** any job on any discovered host per
      [`product CI`](../terreno-shared/product-ci.md) is failed, cancelled, timed out, or
-     failed to start for this head SHA. GitHub's rollup alone is not enough when another
+     failed to start for this head SHA. The forge's rollup alone is not enough when another
      host posts jobs elsewhere.
    - **bot-threads:** an unresolved review thread opened by a bot with no reply after it
      ([query](../terreno-shared/push-ownership.md#bot-comments)).

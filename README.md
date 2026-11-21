@@ -14,7 +14,7 @@ flowchart LR
 ```bash
 git clone https://github.com/joshgachnang/brewery ~/src/brewery && ~/src/brewery/bin/install
 mkdir -p ~/.config/brewery && echo '{"notify":{"ntfyUrl":"https://ntfy.sh/<your-topic>"}}' > ~/.config/brewery/config.json
-cd ~/src/your-repo && brewery pour "add a --json flag to the status command"   # a repo with a GitHub remote
+cd ~/src/your-repo && brewery pour "add a --json flag to the status command"   # a repo with a GitHub or Forgejo remote
 ```
 
 Set your own ntfy topic first: the default sends "brewery needs you" pings to the author.
@@ -40,7 +40,8 @@ reports what it skipped.
 | Tool | Why |
 | --- | --- |
 | git | everything |
-| `gh`, authenticated | PRs, CI waits, issues, approvals |
+| `gh`, authenticated | GitHub repos: `forge` runs it for PRs, CI waits, issues, approvals |
+| `forge` (linked by `bin/install`) | every PR, run, and issue call, on GitHub or Forgejo; a Forgejo host needs a `~/.config/forge/hosts.json` entry |
 | Bun | the CLI (`bin/install` looks in `~/.bun/bin`, then PATH) |
 | Claude Code (`claude`) | default agent for every stage |
 | Codex (`codex`) | optional second opinion on cut and branch review |
@@ -307,8 +308,12 @@ conflict, or an unanswered review-bot comment.**
 <details>
 <summary>More</summary>
 
-- `gh pr checks --watch` does the waiting. A **taste** agent runs per red snapshot or bot
-  thread, fixes what the branch caused, merges the base on a conflict, and reruns flaky jobs.
+- `forge` does the waiting, on GitHub or Forgejo. A **taste** agent runs per red snapshot
+  or bot thread, fixes what the branch caused, merges the base on a conflict, and reruns
+  flaky jobs.
+- On Forgejo there are no review bots or approval agent yet, so the bot wait counts as done
+  (`no review bots configured (Forgejo)`) and nothing waits on one. Forgejo has no rerun
+  API either: a flaky run is re-triggered with an empty commit.
 - Still red after three fix rounds (`limits.finishPushes`) → a BLOCKED gate to you. It
   never stops quietly on a red PR.
 - At the first green, `compound` records a learning if the run struggled, and brewery
@@ -354,7 +359,8 @@ daily timer (a scheduled agent, cron with `claude -p`, a zerg drone).
 - **compound**: **after work that struggled, records at most one learning** in
   `docs/learnings/`.
 - **cellar**: **nightly per repo: promotes recurring learnings to rules (at most 15 active) and
-  checks, and retires stale ones,** as one PR. `brewery cellar <owner/name>`.
+  checks, and retires stale ones,** as one PR. `brewery cellar <owner/name>`
+  (`host/owner/name` for a Forgejo repo).
 
 <details>
 <summary>More</summary>
@@ -376,9 +382,10 @@ Design: [`docs/specs/2026-10-12-brewery-docs-and-learning-loop-design.md`](docs/
 ### Approving pull requests
 
 - **approve**: **reviews a PR against a repo-owned rubric and posts one review as a GitHub
-  App, approving low-risk PRs when the repo allows it.** `brewery approve <pr>`.
+  App, approving low-risk PRs when the repo allows it.** `brewery approve <pr>`. GitHub
+  only for now: on Forgejo it refuses to post and `--dry-run` prints the verdict.
 - **calibrate**: **turns what humans said in PR reviews into rubric rules,** as one PR.
-  `brewery calibrate <owner/name>`.
+  `brewery calibrate <owner/name>` (`host/owner/name` for a Forgejo repo).
 
 <details>
 <summary>More</summary>

@@ -37,8 +37,9 @@ the new head → observe again.
 ## Bot comments
 
 A bot is any automated reviewer: Cursor Bugbot, CodeQL and code scanning, Copilot review,
-Codex review, CodeRabbit, Sonar, dependency or security scanners, and similar. In GitHub's
-API their `author.__typename` is `Bot`, or the login ends in `[bot]`.
+Codex review, CodeRabbit, Sonar, dependency or security scanners, and similar. `forge`
+marks them `author.isBot`: GitHub's `Bot` type or a `[bot]` login, and on Forgejo a `-bot`
+or `[bot]` login or one listed under `bots` in `~/.config/forge/hosts.json`.
 
 Every bot review thread and every bot finding on the PR ends in exactly one state:
 
@@ -56,18 +57,12 @@ they report a failure or finding.
 List unresolved threads and their authors:
 
 ```bash
-gh api graphql -f query='
-  query($owner: String!, $repo: String!, $pr: Int!) {
-    repository(owner: $owner, name: $repo) {
-      pullRequest(number: $pr) {
-        reviewThreads(first: 100) {
-          nodes { id isResolved comments(first: 1) { nodes { author { __typename login } path line body } } }
-        }
-      }
-    }
-  }' -F owner=':owner' -F repo=':repo' -F pr="$PR_NUMBER" \
-  --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved | not)'
+forge pr threads "$PR_NUMBER" --unresolved --json id,path,line,comments \
+  --jq '.[] | {id, path, line, author: .comments[0].author, body: .comments[0].body}'
 ```
+
+On Forgejo a thread cannot be resolved through the API (`forge` has no resolve), so the
+reply is the answer there: a thread with a reply from anyone but a bot counts as answered.
 
 Human review threads follow the same table, except a human's question stays open until
 the human resolves it.
