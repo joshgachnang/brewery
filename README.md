@@ -96,9 +96,13 @@ the composer to invoke it.
 <summary>CLI</summary>
 
 ```bash
-~/src/brewery/bin/install    # bun install, and links ~/bin/brewery to cli/src/cli.ts
+~/src/brewery/bin/install    # bun install, and links ~/bin/brewery and ~/bin/forge
 brewery agents               # which agents are available, and how each stage routes
 ```
+
+`bin/install` also links `forge`, one CLI for pull requests, runs, issues and repos on GitHub
+(through `gh`) and Forgejo (through its API), picked from the repo's `origin`. A Forgejo host
+needs an entry in `~/.config/forge/hosts.json`; see [`forge`](cli/README.md#forge-github-and-forgejo-from-one-cli).
 
 Run from the checkout, the CLI finds its skills in `plugins/brewery/skills`. A repo that
 vendors its own (`<repo>/.claude/skills/distill`) uses those, and `BREWERY_SKILLS_DIR`
@@ -514,6 +518,8 @@ returns only the failures, by name).
 | `brewery ui` | Dashboard of runs (this machine's, plus zerg workspaces with `--scan` and other `brewery ui` instances with `--peer`) and their live, scrubbed event feed; answers waiting runs from the page. See [running it on the zerg host](cli/README.md#running-brewery-ui-on-the-zerg-host) |
 
 Exit codes: 0 done, 3 waiting on you, 4 cellar or calibrate over its change limit, 1 error.
+`forge pr|run|issue|repo|api` is the separate forge CLI; its commands, JSON schema and host
+config are in [`cli/README.md`](cli/README.md#forge-github-and-forgejo-from-one-cli).
 The full reference (routing, limits, parallel builds, events, what is enforced and how) is
 [`cli/README.md`](cli/README.md).
 
@@ -575,7 +581,7 @@ plugins/brewery/skills/<skill>/SKILL.md
 plugins/brewery/skills/terreno-shared/   Vendored terreno references (not a skill; resync with rack)
 plugins/brewery/agents/<agent>.md        Subagents (test-writer, test-runner)
 cli/                                     The brewery CLI (Bun, TypeScript)
-bin/install                              Links ~/bin/brewery
+bin/install                              Links ~/bin/brewery and ~/bin/forge
 templates/ci/                            CI jobs for brewery approve
 docs/                                    approve how-to, specs, plans, testing
 ```

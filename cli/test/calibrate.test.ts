@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { calibrate, countChanges, renderEvidence, selectPrs } from "../src/commands/calibrate.ts";
 import { initDocs } from "../src/docs.ts";
-import type { Forge, NewPr, ReviewedPr } from "../src/forge.ts";
+import type { Forge, NewPr, ReviewedPr } from "../src/forge/history.ts";
 import { fakeSetup, run, tempRepo } from "./helpers.ts";
 
 const NAME = "acme/widgets";

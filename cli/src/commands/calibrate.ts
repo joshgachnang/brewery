@@ -5,7 +5,7 @@ import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, write
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../config.ts";
-import type { Forge, ReviewNote, ReviewedPr } from "../forge.ts";
+import type { Forge, ReviewNote, ReviewedPr } from "../forge/history.ts";
 import { ping } from "../human.ts";
 import { changedPaths, isLearning } from "../learn.ts";
 import { calibrateBody, MAX_RUBRIC_RULES } from "../prompts.ts";

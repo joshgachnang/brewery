@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { failureExcerpt } from "../ci.ts";
 import { configuredRepos, loadConfig } from "../config.ts";
 import { activeRules, RULES_PATH } from "../docs.ts";
-import type { FailedRun, Forge, MergedPr } from "../forge.ts";
+import type { FailedRun, Forge, MergedPr } from "../forge/history.ts";
 import { ping } from "../human.ts";
 import { changedPaths, isLearning } from "../learn.ts";
 import { cellarBody } from "../prompts.ts";

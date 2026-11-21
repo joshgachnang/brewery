@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # install — install the brewery CLI's dependencies and link it. Idempotent.
 #   ~/bin/brewery -> <checkout>/cli/src/cli.ts
+#   ~/bin/forge   -> <checkout>/cli/src/forge/main.ts  (GitHub and Forgejo PRs, runs, issues)
 # Run from this checkout, the CLI finds its skills in plugins/brewery/skills, so nothing is
 # linked into ~/.claude/skills. Interactive sessions get the same skills from the plugin
 # (/brewery:distill), which dotfiles enables in each account's settings.
@@ -20,3 +21,5 @@ fi
 mkdir -p "$HOME/bin"
 ln -sfn "$SRC/cli/src/cli.ts" "$HOME/bin/brewery"
 echo "linked ~/bin/brewery -> $SRC/cli/src/cli.ts"
+ln -sfn "$SRC/cli/src/forge/main.ts" "$HOME/bin/forge"
+echo "linked ~/bin/forge -> $SRC/cli/src/forge/main.ts"

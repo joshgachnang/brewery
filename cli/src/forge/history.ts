@@ -1,9 +1,10 @@
-// GitHub reads and writes for `brewery cellar`. An interface so cellar can be tested
+// GitHub reads and writes for `brewery cellar` and `calibrate` (moved from src/forge.ts; the
+// `forge` CLI lives beside it in this directory). An interface so cellar can be tested
 // without GitHub, like Ci for finish.
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sh } from "./vcs.ts";
+import { sh } from "../vcs.ts";
 
 export interface FailedRun {
   id: number;

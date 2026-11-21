@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { cellar, countChanges } from "../src/commands/cellar.ts";
 import { initDocs, RULES_PATH } from "../src/docs.ts";
-import type { FailedRun, Forge, MergedPr, NewPr } from "../src/forge.ts";
+import type { FailedRun, Forge, MergedPr, NewPr } from "../src/forge/history.ts";
 import { fakeSetup, run, tempRepo } from "./helpers.ts";
 
 const NAME = "acme/widgets";

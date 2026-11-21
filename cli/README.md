@@ -582,6 +582,166 @@ Scheduling is up to the host: one line per repo, e.g. cron
 
 Design: `docs/specs/2026-10-12-brewery-docs-and-learning-loop-design.md`.
 
+## forge: GitHub and Forgejo from one CLI
+
+`forge` reads and changes pull requests, CI runs, issues and repos on either forge, so skills
+and tools stop calling `gh` directly. `bin/install` links it to `~/bin/forge`
+(`cli/src/forge/main.ts`). The forge is picked from the repo's host:
+
+1. `-R/--repo` (`OWNER/REPO`, `HOST/OWNER/REPO`, or any remote or web URL), else
+2. a URL given as the command's argument (`forge pr view https://…/pulls/3`), else
+3. the `origin` remote of the current checkout.
+
+`github.com` runs `gh` (so `gh auth` applies). A host listed in `~/.config/forge/hosts.json`
+uses the Forgejo REST API. Any other host is an error, never a guess. A bare `OWNER/REPO`
+takes origin's host, and is an error outside a checkout. SSH remotes with a port
+(`ssh://git@forgejo.nang.io:2222/o/r.git`), scp-style (`git@github.com:o/r.git`) and https
+all work.
+
+### hosts.json
+
+```json
+{
+  "forgejo.nang.io": {
+    "type": "forgejo",
+    "url": "https://forgejo.nang.io",
+    "token": "<personal access token>",
+    "bots": ["brewery-bot"]
+  }
+}
+```
+
+Keyed by the host as it appears in remotes. `url` is the web root; the API is `<url>/api/v1`.
+`token` is optional: without it `FORGEJO_TOKEN` is used. `bots` lists logins to report as
+bots (Forgejo has no bot flag; logins ending in `-bot` or `[bot]` always count). Keep the
+file mode 600; `forge` warns when a file holding a token is readable by others.
+`FORGE_HOSTS` points at a different file.
+
+### Commands
+
+Flags follow `gh` so a call swaps by renaming `gh` to `forge`. Every command takes `-R`.
+View, list, checks, threads and label take `--json [field,...]` (no list prints every
+field) and `-q/--jq <expr>` (run by `jq -r`, like gh's `--jq`).
+
+| Command | gh it replaces | Notes |
+| --- | --- | --- |
+| `forge pr view [<n>\|<url>\|<branch>]` | `gh pr view` | No selector: the current branch's open PR |
+| `forge pr list [--state open\|closed\|merged\|all] [--head] [--base] [--author] [--label] [--limit] [--search]` | `gh pr list` | `--search` is GitHub-only. Checks and reviews are fetched per PR only when `--json` asks for them |
+| `forge pr create --title t (--body b \| --body-file f) [--base] [--head] [--draft]` | `gh pr create` | Prints the URL. Head defaults to the current branch, base to the default branch. Forgejo drafts are a `WIP:` title prefix |
+| `forge pr diff [<pr>]` | `gh pr diff` | |
+| `forge pr checks [<pr>] [--watch] [--interval s] [--fail-fast] [--grace s]` | `gh pr checks` | Exit 0 green, 1 red or no checks, 8 running, like gh. `--grace` keeps watching that long while no checks have registered yet |
+| `forge pr merge [<pr>] [--merge\|--squash\|--rebase] [--match-head-commit sha] [--delete-branch]` | `gh pr merge` | `--match-head` is an alias. See "Merging at a head" |
+| `forge pr comment [<pr>] (--body \| --body-file)` | `gh pr comment` | Prints the comment URL |
+| `forge pr threads [<pr>] [--unresolved]` | `gh api graphql` reviewThreads | Review threads with resolved state |
+| `forge run list [--branch] [--commit] [--workflow] [--status] [--event] [--limit]` | `gh run list` | |
+| `forge run view <id\|url> [--log \| --log-failed] [--job id]` | `gh run view` | |
+| `forge run watch <id\|url> [--interval s] [--exit-status]` | `gh run watch` | Polls; `--exit-status` exits 1 unless the run succeeded |
+| `forge run rerun <id\|url> [--failed] [--job id]` | `gh run rerun` | GitHub only; exit 2 on Forgejo (see below) |
+| `forge run logs <id\|url> [--failed] [--job id]` | `gh run view --log[-failed]` | Lines read `<job>\t<step>\t<timestamp> <text>` on both forges, which `failureExcerpt` expects; Forgejo's step column is `UNKNOWN STEP` |
+| `forge issue list [--state open\|closed\|all] [--label] [--limit] [--search]` | `gh issue list` | Forgejo's `--search` is its keyword search |
+| `forge issue view <n\|url>` | `gh issue view` | Includes comments |
+| `forge issue close <n\|url> [--comment c] [--reason r]` | `gh issue close` | Forgejo has no close reason; it is ignored there |
+| `forge issue comment <n\|url> (--body \| --body-file)` | `gh issue comment` | |
+| `forge issue label <n\|url> [--add a,b] [--remove c]` | `gh issue edit --add-label/--remove-label` | Prints the labels after the change |
+| `forge repo view [<repo>]` | `gh repo view` | |
+| `forge repo clone <repo> [<dir>] [-- <git flags>]` | `gh repo clone` | Forgejo clones the repo's SSH URL |
+| `forge api <path> [-X] [-f k=v] [-F k=v] [--input f] [--paginate] [-q]` | `gh api` | GitHub: handed to `gh api` unchanged (with `GH_REPO` set). Forgejo: the path is relative to `/api/v1`, `{owner}`/`{repo}` are filled in, `--paginate` concatenates pages |
+
+Errors print `forge: …` on stderr and exit 1 (2 for an operation the forge cannot do).
+
+### JSON schema
+
+`--json` prints one schema for both forges. Field names are gh's `--json` names where gh has
+one; values are normalized so a field means the same thing on either forge.
+
+**Pull request** (`pr view`, `pr list`, `pr create --json`)
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `forge` | `"github" \| "forgejo"` | |
+| `repo` | string | `owner/name` |
+| `number`, `url`, `title`, `body` | | `url` is `/pull/N` on GitHub, `/pulls/N` on Forgejo |
+| `state` | `OPEN \| CLOSED \| MERGED` | |
+| `isDraft` | boolean | |
+| `author` | `{login, isBot}` | |
+| `headRefName`, `headRefOid`, `baseRefName` | string | Head branch, head sha, base branch |
+| `labels` | `[{name}]` | |
+| `mergeable` | `MERGEABLE \| CONFLICTING \| UNKNOWN` | UNKNOWN once closed. Forgejo reports false while it recomputes after a push, so a false is re-read three times, 2s apart, before it is believed |
+| `mergeStateStatus` | string | gh's value on GitHub. Forgejo: `DRAFT`, `DIRTY` (conflicting), `UNSTABLE` (checks red or running), `CLEAN`, or `UNKNOWN` when closed |
+| `reviewDecision` | `APPROVED \| CHANGES_REQUESTED \| REVIEW_REQUIRED` | See "Approval" |
+| `reviews` | `[{id, author, state, body, submittedAt, commit: {oid}, stale}]` | `state` is `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED` or `PENDING`. `stale` is Forgejo's flag for a review older than the head; always false on GitHub |
+| `comments` | `[{id, author, body, createdAt, url}]` | Conversation comments, not review comments |
+| `checks` | `[Check]` | The head's checks, as below |
+| `checksState` | `green \| red \| running \| none` | red if any check failed or was cancelled; else running if any is pending; else green; none when there are no checks. Skipped checks alone are green |
+| `createdAt`, `updatedAt`, `mergedAt`, `closedAt` | ISO time or null | |
+
+**Check** (`pr checks`, `checks[]` above): `name`, `state` (the forge's own state,
+upper-cased), `bucket` (gh's `pass`, `fail`, `pending`, `skipping`, `cancel`), `link`,
+`workflow`, `description`, `startedAt`, `completedAt`, `event`. On GitHub these come from
+`gh pr checks` (check runs and commit statuses). On Forgejo they are the head commit's
+combined statuses, one per context, which Forgejo Actions writes for every job
+(`<workflow> / <job> (<event>)`) from the moment it is queued: `success` and `warning` are
+pass, `failure` and `error` fail, `pending` pending. Forgejo's relative `target_url` is
+made absolute.
+
+**Thread** (`pr threads`): `id`, `path`, `line`, `isResolved`, `isOutdated`, `comments`
+(`[{id, author, body, createdAt, url, resolvedBy?}]`). GitHub's come from the GraphQL
+`reviewThreads`. Forgejo has no thread object: a thread is every review comment on the same
+file and line, as its UI groups them, and `id` is the first comment's id. Forgejo's API
+exposes who resolved a conversation (`resolver` on its comments) but no way to resolve one,
+and no outdated flag, so `isOutdated` is always false there.
+
+**Run** (`run list`, `run view`): `forge`, `repo`, `databaseId`, `number`, `url`,
+`workflowName`, `displayTitle`, `headBranch`, `headSha`, `event`, `status`
+(`queued \| in_progress \| completed`), `conclusion` (`success \| failure \| cancelled \|
+skipped \| ""`), `createdAt`, `updatedAt`, `startedAt`, `jobs`
+(`[{databaseId, name, status, conclusion, url, startedAt, completedAt}]`, filled by
+`run view`). `databaseId` is the id every `forge run` command takes and the number in the
+run's URL: GitHub's run id, Forgejo's per-repo run number (the API's own run ids are global
+and are resolved from it). On Forgejo `workflowName` is the workflow file name, job times are
+empty, and a job's `url` is its position in the run (`…/runs/7/jobs/0`).
+
+**Issue** (`issue list`, `issue view`): `forge`, `repo`, `number`, `url`, `title`, `body`,
+`state` (`OPEN \| CLOSED`), `author`, `labels`, `assignees` (`[{login}]`), `comments`
+(`issue view` only), `createdAt`, `updatedAt`, `closedAt`.
+
+**Repo** (`repo view`): `forge`, `host`, `name`, `owner` (`{login}`), `nameWithOwner`,
+`url`, `sshUrl`, `cloneUrl`, `defaultBranchRef` (`{name}`), `isPrivate`.
+
+### Approval
+
+`reviewDecision` is `APPROVED` when the newest deciding review (an approval or a request for
+changes) from each reviewer other than the author includes an approval and none requests
+changes. Comments, pending and dismissed reviews decide nothing; stale reviews still count,
+and `reviews[].commit.oid` says which head each one saw. With no deciding review it is
+`REVIEW_REQUIRED`. Forgejo always uses this rule. GitHub uses gh's `reviewDecision` when the
+repo's branch protection sets one, and this rule when it is empty.
+
+### Merging at a head
+
+`forge pr merge --match-head-commit <sha>` refuses (exit 1) when the PR's head is not that
+sha. On GitHub this is gh's own flag. On Forgejo, forge reads the head and refuses before
+calling merge, then sends the sha as `head_commit_id`, which Forgejo checks again
+server-side (HTTP 409 "head out of date", reported as the same refusal), so a push between
+the read and the merge is caught too.
+
+### Rerunning on Forgejo
+
+Forgejo 16 has no API to rerun a run: its Re-run button is a web route that needs a browser
+session, and a workflow dispatch starts a separate run whose statuses do not replace the
+failed one. `forge run rerun` on Forgejo exits 2 with the run's link. Push a commit or rerun
+from the web UI.
+
+### Tests
+
+`test/forge.test.ts` runs both backends against responses recorded from the live forges in
+`test/fixtures/forge/` (Forgejo 16.0.2 on `joshgachnang/forgejo-scratch`; gh on the public
+`TerrenoLabs/terreno`), with a fake Forgejo served by `Bun.serve` and a fake `gh` on PATH.
+`FORGE_LIVE=1 bun test test/forge-live.test.ts` opens a real PR on the scratch repo, waits for
+its checks, reads threads, refuses a merge at a moved head and merges at the real one. It
+needs the tailnet, SSH to `forgejo.nang.io:2222`, and an admin token in hosts.json (the
+reviews are posted as `brewery-bot` with `Sudo`).
+
 ## Development
 
 ```bash
