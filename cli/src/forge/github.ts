@@ -330,6 +330,27 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
         comments: t.comments.nodes.map((c) => ({ id: String(c.databaseId), author: ghActor(c.author), body: c.body ?? "", createdAt: c.createdAt, url: c.url })),
       }));
     },
+    prReady: async (sel, undo) => {
+      await run(["pr", "ready", ...selector(await current(sel)), ...repoArgs, ...(undo ? ["--undo"] : [])]);
+    },
+    prEdit: async (sel, o) => {
+      const argv = ["pr", "edit", ...selector(await current(sel)), ...repoArgs];
+      if (o.title !== undefined) argv.push("--title", o.title);
+      if (o.addReviewers.length) argv.push("--add-reviewer", o.addReviewers.join(","));
+      if (o.removeReviewers.length) argv.push("--remove-reviewer", o.removeReviewers.join(","));
+      if (o.addLabels.length) argv.push("--add-label", o.addLabels.join(","));
+      if (o.removeLabels.length) argv.push("--remove-label", o.removeLabels.join(","));
+      if (o.body === undefined) {
+        await run(argv);
+        return;
+      }
+      await withBodyFile(o.body, async (file) => run([...argv, "--body-file", file]));
+    },
+    prReview: async (sel, event, body) => {
+      const argv = ["pr", "review", ...selector(await current(sel)), ...repoArgs, `--${event}`];
+      if (!body) return (await run(argv)).split("\n").at(-1) ?? "";
+      return withBodyFile(body, async (file) => (await run([...argv, "--body-file", file])).split("\n").at(-1) ?? "");
+    },
     runList: async (o) => {
       const argv = ["run", "list", ...repoArgs, "--limit", String(o.limit), "--json", RUN_FIELDS];
       if (o.branch) argv.push("--branch", o.branch);
@@ -337,6 +358,7 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
       if (o.workflow) argv.push("--workflow", o.workflow);
       if (o.status) argv.push("--status", o.status);
       if (o.event) argv.push("--event", o.event);
+      if (o.created) argv.push("--created", o.created);
       return (await json<GhRun[]>(argv)).map((r) => toRun(ref, r));
     },
     runView: async (id) => toRun(ref, await json<GhRun>(["run", "view", runId(id), ...repoArgs, "--json", `${RUN_FIELDS},jobs`])),
@@ -372,6 +394,19 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
       await run(argv);
       const after = await json<{ labels: { name: string }[] }>(["issue", "view", ...selector(sel), ...repoArgs, "--json", "labels"]);
       return after.labels.map((l) => l.name);
+    },
+    issueCreate: async (o) =>
+      withBodyFile(o.body, async (file) => {
+        const argv = ["issue", "create", ...repoArgs, "--title", o.title, "--body-file", file];
+        for (const label of o.labels) argv.push("--label", label);
+        for (const who of o.assignees) argv.push("--assignee", who);
+        return (await run(argv)).split("\n").at(-1) ?? "";
+      }),
+    labelCreate: async (o) => {
+      const argv = ["label", "create", o.name, ...repoArgs, "--color", o.color.replace(/^#/, "")];
+      if (o.description) argv.push("--description", o.description);
+      if (o.force) argv.push("--force");
+      await run(argv);
     },
     repoView: async () => {
       const r = await json<{ name: string; owner: { login: string }; nameWithOwner: string; url: string; sshUrl: string; defaultBranchRef: { name: string } | null; isPrivate: boolean }>(

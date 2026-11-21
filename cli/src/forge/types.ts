@@ -195,6 +195,34 @@ export interface RunListOpts {
   workflow?: string;
   status?: string;
   event?: string;
+  // gh's --created: ">=2026-11-01", "<2026-11-01T12:00:00Z", or a bare date (that day).
+  created?: string;
+}
+
+export interface PrEditOpts {
+  title?: string;
+  body?: string;
+  addReviewers: string[];
+  removeReviewers: string[];
+  addLabels: string[];
+  removeLabels: string[];
+}
+
+export type ReviewEvent = "approve" | "request-changes" | "comment";
+
+export interface IssueCreateOpts {
+  title: string;
+  body: string;
+  labels: string[];
+  assignees: string[];
+}
+
+export interface LabelCreateOpts {
+  name: string;
+  color: string;
+  description: string;
+  // Update the label when it already exists, like gh label create --force.
+  force: boolean;
 }
 
 export interface IssueListOpts {
@@ -216,6 +244,11 @@ export interface Backend {
   prMerge: (sel: string | undefined, opts: MergeOpts) => Promise<void>;
   prComment: (sel: string | undefined, body: string) => Promise<string>;
   prThreads: (sel: string | undefined) => Promise<Thread[]>;
+  // Mark ready for review, or back to draft with undo.
+  prReady: (sel: string | undefined, undo: boolean) => Promise<void>;
+  prEdit: (sel: string | undefined, opts: PrEditOpts) => Promise<void>;
+  // Returns the review's URL where the forge gives one.
+  prReview: (sel: string | undefined, event: ReviewEvent, body: string) => Promise<string>;
   runList: (opts: RunListOpts) => Promise<Run[]>;
   runView: (id: string) => Promise<Run>;
   runRerun: (id: string, opts: { failed: boolean; job?: string }) => Promise<void>;
@@ -225,6 +258,8 @@ export interface Backend {
   issueClose: (sel: string, opts: { comment?: string; reason?: string }) => Promise<void>;
   issueComment: (sel: string, body: string) => Promise<string>;
   issueLabel: (sel: string, add: string[], remove: string[]) => Promise<string[]>;
+  issueCreate: (opts: IssueCreateOpts) => Promise<string>;
+  labelCreate: (opts: LabelCreateOpts) => Promise<void>;
   repoView: () => Promise<Repo>;
   repoClone: (dir: string | undefined, gitArgs: string[]) => Promise<void>;
   // Raw API passthrough; writes the response to stdout and returns the exit code.

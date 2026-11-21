@@ -9,7 +9,7 @@ import { githubBackend } from "../src/forge/github.ts";
 import { parseArgs } from "../src/forge/main.ts";
 import { pick } from "../src/forge/output.ts";
 import { forgeFor, loadHosts, parseSlug, resolveRepo } from "../src/forge/resolve.ts";
-import { bucketFor, checksExitCode, checksState, decideReviews, forgejoThreads, type ForgejoReviewComment } from "../src/forge/rules.ts";
+import { bucketFor, checksExitCode, checksState, createdMatches, decideReviews, forgejoThreads, type ForgejoReviewComment } from "../src/forge/rules.ts";
 import type { RepoRef, Review } from "../src/forge/types.ts";
 import { tempRepo } from "./helpers.ts";
 
@@ -130,6 +130,14 @@ describe("forge: rules shared by both forges", () => {
     expect(() => parseArgs(["--nope"], {})).toThrow(/unknown flag --nope/);
     expect(pick({ a: 1, b: 2 }, ["b"])).toEqual({ b: 2 });
     expect(() => pick({ a: 1 }, ["zz"])).toThrow(/available: a/);
+  });
+
+  test("--created reads gh's comparison forms and bare dates", () => {
+    expect(createdMatches(">=2026-11-20", "2026-11-21T00:00:00Z")).toBe(true);
+    expect(createdMatches(">2026-11-21T00:00:00Z", "2026-11-21T00:00:00Z")).toBe(false);
+    expect(createdMatches("<2026-11-20", "2026-11-19T23:59:59Z")).toBe(true);
+    expect(createdMatches("2026-11-12", "2026-11-12T19:41:07Z")).toBe(true);
+    expect(createdMatches("2026-11-12", "2026-11-13T00:00:00Z")).toBe(false);
   });
 
   test("forge api fills {owner}/{repo}, types -F fields, and is relative to /api/v1", () => {
@@ -352,6 +360,109 @@ describe("forge: Forgejo backend against recorded responses", () => {
     }
   });
 
+  test("pr ready drops Forgejo's WIP prefix, and --undo puts it back", async () => {
+    const server = fakeForgejo(scratchRoutes({
+      [`GET ${REPO}/pulls/1`]: () => fj("pr-edit-wip.json"),
+      [`PATCH ${REPO}/pulls/1`]: () => fj("pr-open.json"),
+    }));
+    try {
+      await backend(server.url).prReady("1", false);
+      expect(server.hits.find((h) => h.method === "PATCH")?.body).toEqual({ title: "Probe forge PR shapes" });
+      await backend(server.url).prReady("1", true);
+      // Already a draft: nothing to change.
+      expect(server.hits.filter((h) => h.method === "PATCH")).toHaveLength(1);
+    } finally {
+      server.stop();
+    }
+    const ready = fakeForgejo(scratchRoutes({ [`PATCH ${REPO}/pulls/1`]: () => fj("pr-edit-wip.json") }));
+    try {
+      await backend(ready.url).prReady("1", true);
+      expect(ready.hits.find((h) => h.method === "PATCH")?.body).toEqual({ title: "WIP: Probe forge PR shapes" });
+    } finally {
+      ready.stop();
+    }
+  });
+
+  test("pr edit patches title and body (keeping a draft's prefix), requests and drops reviewers, and relabels by name", async () => {
+    const server = fakeForgejo(scratchRoutes({
+      [`GET ${REPO}/pulls/1`]: () => fj("pr-edit-wip.json"),
+      [`PATCH ${REPO}/pulls/1`]: () => fj("pr-edit-wip.json"),
+      [`POST ${REPO}/pulls/1/requested_reviewers`]: () => fj("requested-reviewers.json"),
+      [`DELETE ${REPO}/pulls/1/requested_reviewers`]: () => new Response(null, { status: 204 }),
+      [`POST ${REPO}/issues/1/labels`]: () => [{ name: "bug" }],
+      [`DELETE ${REPO}/issues/1/labels/triaged`]: () => new Response(null, { status: 204 }),
+      [`GET ${REPO}/issues/1/labels`]: () => [{ name: "bug" }],
+    }));
+    try {
+      await backend(server.url).prEdit("1", { title: "New title", body: "new body", addReviewers: ["brewery-bot"], removeReviewers: ["old-bot"], addLabels: ["bug"], removeLabels: ["triaged"] });
+      const writes = server.hits.filter((h) => h.method !== "GET").map((h) => [h.method, h.path.replace(REPO, ""), h.body]);
+      expect(writes).toEqual([
+        ["PATCH", "/pulls/1", { title: "WIP: New title", body: "new body" }],
+        ["POST", "/pulls/1/requested_reviewers", { reviewers: ["brewery-bot"] }],
+        ["DELETE", "/pulls/1/requested_reviewers", { reviewers: ["old-bot"] }],
+        ["POST", "/issues/1/labels", { labels: ["bug"] }],
+        ["DELETE", "/issues/1/labels/triaged", undefined],
+      ]);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("pr review posts the verdict on the head, and a comment or change request needs a body", async () => {
+    const server = fakeForgejo(scratchRoutes({ [`POST ${REPO}/pulls/1/reviews`]: () => fj("review-rc.json") }));
+    try {
+      expect(await backend(server.url).prReview("1", "approve", "")).toContain("/pulls/1");
+      expect(server.hits.find((h) => h.method === "POST")?.body).toEqual({ event: "APPROVED", body: "", commit_id: HEAD });
+      await expect(backend(server.url).prReview("1", "request-changes", "")).rejects.toThrow(/--request-changes needs --body/);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("issue create sends label ids for label names, and an unknown label is an error", async () => {
+    const server = fakeForgejo(scratchRoutes({
+      [`GET ${REPO}/labels`]: () => fj("labels.json"),
+      [`POST ${REPO}/issues`]: () => fj("issue-create.json"),
+    }));
+    try {
+      expect(await backend(server.url).issueCreate({ title: "t", body: "b", labels: ["bug"], assignees: [] })).toBe("https://forgejo.nang.io/joshgachnang/forgejo-scratch/issues/4");
+      expect(server.hits.find((h) => h.method === "POST")?.body).toEqual({ title: "t", body: "b", labels: [32], assignees: [] });
+      await expect(backend(server.url).issueCreate({ title: "t", body: "b", labels: ["nope"], assignees: [] })).rejects.toThrow(/no label "nope"/);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("label create adds a new label, refuses an existing one, and updates it with --force", async () => {
+    const server = fakeForgejo(scratchRoutes({
+      [`GET ${REPO}/labels`]: () => fj("labels.json"),
+      [`POST ${REPO}/labels`]: () => fj("label-create.json"),
+      [`PATCH ${REPO}/labels/34`]: () => fj("label-create.json"),
+    }));
+    try {
+      const b = backend(server.url);
+      await b.labelCreate({ name: "fresh", color: "123456", description: "d", force: false });
+      expect(server.hits.find((h) => h.method === "POST")?.body).toEqual({ name: "fresh", color: "#123456", description: "d" });
+      await expect(b.labelCreate({ name: "forge-probe-label", color: "654321", description: "", force: false })).rejects.toThrow(/already exists/);
+      await b.labelCreate({ name: "forge-probe-label", color: "#654321", description: "", force: true });
+      expect(server.hits.find((h) => h.method === "PATCH")?.body).toEqual({ color: "#654321" });
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("run list --created filters by creation time, since Forgejo's API cannot", async () => {
+    const runs = fj("runs-done.json") as { workflow_runs: { created: string }[] };
+    const dated = { ...runs, workflow_runs: [{ ...runs.workflow_runs[0], created: "2026-11-21T00:35:26Z" }, { ...runs.workflow_runs[1], created: "2026-11-12T19:41:07Z" }] };
+    const server = fakeForgejo(scratchRoutes({ [`GET ${REPO}/actions/runs`]: () => dated }));
+    try {
+      expect((await backend(server.url).runList({ limit: 5, created: ">=2026-11-20" })).map((r) => r.number)).toEqual([8]);
+      expect((await backend(server.url).runList({ limit: 5, created: "2026-11-12" })).map((r) => r.number)).toEqual([7]);
+    } finally {
+      server.stop();
+    }
+  });
+
   test("pr list --state merged keeps only merged PRs, and --author @me is the token's user", async () => {
     const open = fj("pulls-open.json") as { merged: boolean }[];
     const server = fakeForgejo(scratchRoutes({
@@ -403,6 +514,11 @@ describe("forge: GitHub backend through gh, against recorded gh output", () => {
       { match: ["repo", "view"], file: ghFixture("repo-view.json") },
       { match: ["pr", "merge"], out: "" },
       { match: ["pr", "create"], out: "Creating pull request\nhttps://github.com/TerrenoLabs/terreno/pull/1800" },
+      { match: ["pr", "edit"], out: "https://github.com/TerrenoLabs/terreno/pull/1737" },
+      { match: ["pr", "ready"], out: "" },
+      { match: ["pr", "review"], out: "" },
+      { match: ["issue", "create"], out: "Creating issue\nhttps://github.com/TerrenoLabs/terreno/issues/1900" },
+      { match: ["label", "create"], out: "" },
     ]);
   });
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -434,6 +550,24 @@ describe("forge: GitHub backend through gh, against recorded gh output", () => {
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
+  });
+
+  test("pr edit, ready and review, issue create, label create and run list --created map to gh's own flags", async () => {
+    const b = githubBackend(TERRENO, { gh });
+    await b.prEdit("1737", { title: "T", body: "B", addReviewers: ["a", "b"], removeReviewers: ["c"], addLabels: ["bug"], removeLabels: ["old"] });
+    const edit = calls(dir).find((c) => c[1] === "edit") as string[];
+    expect(edit.slice(0, edit.indexOf("--body-file"))).toEqual(["pr", "edit", "1737", "-R", "TerrenoLabs/terreno", "--title", "T", "--add-reviewer", "a,b", "--remove-reviewer", "c", "--add-label", "bug", "--remove-label", "old"]);
+    await b.prReady("1737", true);
+    expect(calls(dir).find((c) => c[1] === "ready")).toEqual(["pr", "ready", "1737", "-R", "TerrenoLabs/terreno", "--undo"]);
+    await b.prReview("1737", "approve", "");
+    expect(calls(dir).find((c) => c[1] === "review")).toEqual(["pr", "review", "1737", "-R", "TerrenoLabs/terreno", "--approve"]);
+    expect(await b.issueCreate({ title: "Flaky", body: "x", labels: ["bug", "ci"], assignees: [] })).toBe("https://github.com/TerrenoLabs/terreno/issues/1900");
+    const create = calls(dir).find((c) => c[0] === "issue" && c[1] === "create") as string[];
+    expect(create.filter((a, i) => a === "--label" || create[i - 1] === "--label")).toEqual(["--label", "bug", "--label", "ci"]);
+    await b.labelCreate({ name: "flaky", color: "#ff0000", description: "Flaky test", force: true });
+    expect(calls(dir).find((c) => c[0] === "label")).toEqual(["label", "create", "flaky", "-R", "TerrenoLabs/terreno", "--color", "ff0000", "--description", "Flaky test", "--force"]);
+    await b.runList({ limit: 3, status: "failure", created: ">=2026-11-01" });
+    expect(calls(dir).findLast((c) => c[0] === "run" && c[1] === "list")?.slice(-4)).toEqual(["--status", "failure", "--created", ">=2026-11-01"]);
   });
 
   test("threads keep GitHub's resolved and outdated flags", async () => {
@@ -495,6 +629,14 @@ describe("forge: the command line", () => {
       number: 1, url: "https://forgejo.nang.io/joshgachnang/forgejo-scratch/pulls/1", reviewDecision: "APPROVED",
     });
     expect((await forge("pr", "view", "1", "--json", "headRefOid", "-q", ".headRefOid")).out.trim()).toBe(HEAD);
+  });
+
+  test("pr view --comments prints the conversation and the reviews that said something", async () => {
+    const res = await forge("pr", "view", "1", "--comments");
+    expect(res.code).toBe(0);
+    expect(res.out).toContain("--- joshgachnang commented");
+    expect(res.out).toContain("a plain conversation comment");
+    expect(res.out).toContain("--- brewery-bot reviewed: APPROVED");
   });
 
   test("pr checks exits 8 while checks run, like gh", async () => {

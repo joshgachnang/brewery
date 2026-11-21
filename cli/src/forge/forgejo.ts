@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { git } from "../vcs.ts";
 import { emit } from "./output.ts";
-import { actor, bucketFor, checksState, decideReviews, forgejoThreads, type ForgejoReviewComment } from "./rules.ts";
+import { actor, bucketFor, checksState, createdMatches, decideReviews, forgejoThreads, WIP_PREFIX, type ForgejoReviewComment } from "./rules.ts";
 import type { HostEntry } from "./resolve.ts";
 import {
   ForgeError,
@@ -384,6 +384,15 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
     return Number(n);
   };
 
+  // Labels go on by name and come off by name, on issues and PRs alike.
+  const relabel = async (n: number, add: string[], remove: string[]): Promise<string[]> => {
+    if (add.length) await call("POST", `${repoPath}/issues/${n}/labels`, { body: { labels: add } });
+    for (const name of remove) await call("DELETE", `${repoPath}/issues/${n}/labels/${encodeURIComponent(name)}`);
+    return ((await call<{ name: string }[] | null>("GET", `${repoPath}/issues/${n}/labels`)) ?? []).map((l) => l.name);
+  };
+
+  const repoLabels = async (): Promise<{ id: number; name: string; color: string; description: string }[]> => paged(`${repoPath}/labels`, {});
+
   const comment = async (n: number, body: string): Promise<string> =>
     (await call<FComment>("POST", `${repoPath}/issues/${n}/comments`, { body: { body } })).html_url;
 
@@ -447,7 +456,43 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       );
       return forgejoThreads(lists.flatMap((l) => l ?? []), bots);
     },
+    prReady: async (sel, undo) => {
+      const n = await prNumber(sel);
+      const pr = await call<FPr>("GET", `${repoPath}/pulls/${n}`);
+      const title = undo ? (WIP_PREFIX.test(pr.title) ? pr.title : `WIP: ${pr.title}`) : pr.title.replace(WIP_PREFIX, "");
+      if (title !== pr.title) await call("PATCH", `${repoPath}/pulls/${n}`, { body: { title } });
+    },
+    prEdit: async (sel, o) => {
+      const n = await prNumber(sel);
+      const patch: Record<string, string> = {};
+      if (o.title !== undefined) {
+        // Keep a draft a draft: Forgejo's draft flag is the WIP prefix on the title.
+        const current = await call<FPr>("GET", `${repoPath}/pulls/${n}`);
+        const wip = current.title.match(WIP_PREFIX)?.[0];
+        patch.title = wip && !WIP_PREFIX.test(o.title) ? `${wip}${o.title}` : o.title;
+      }
+      if (o.body !== undefined) patch.body = o.body;
+      if (Object.keys(patch).length) await call("PATCH", `${repoPath}/pulls/${n}`, { body: patch });
+      if (o.addReviewers.length) await call("POST", `${repoPath}/pulls/${n}/requested_reviewers`, { body: { reviewers: o.addReviewers } });
+      if (o.removeReviewers.length) await call("DELETE", `${repoPath}/pulls/${n}/requested_reviewers`, { body: { reviewers: o.removeReviewers } });
+      if (o.addLabels.length || o.removeLabels.length) await relabel(n, o.addLabels, o.removeLabels);
+    },
+    prReview: async (sel, event, body) => {
+      const n = await prNumber(sel);
+      const pr = await call<FPr>("GET", `${repoPath}/pulls/${n}`);
+      const kind = event === "approve" ? "APPROVED" : event === "request-changes" ? "REQUEST_CHANGES" : "COMMENT";
+      if (kind !== "APPROVED" && !body) throw new ForgeError(`forge: --${event} needs --body`);
+      const review = await call<{ html_url?: string }>("POST", `${repoPath}/pulls/${n}/reviews`, { body: { event: kind, body, commit_id: pr.head.sha } });
+      return review.html_url ?? "";
+    },
     runList: async (o) => {
+      if (o.created) {
+        // Forgejo's runs list has no date filter; page through and filter here.
+        const all = await paged<FRun>(`${repoPath}/actions/runs`, {
+          ref: o.branch ? `refs/heads/${o.branch}` : undefined, head_sha: o.commit, workflow_id: o.workflow, status: o.status, event: o.event,
+        }, 1_000, (b) => (b as { workflow_runs: FRun[] | null }).workflow_runs ?? []);
+        return all.filter((r) => createdMatches(o.created as string, r.created)).slice(0, o.limit).map((r) => toRun(r));
+      }
       const raw = await paged<FRun>(`${repoPath}/actions/runs`, {
         ref: o.branch ? `refs/heads/${o.branch}` : undefined,
         head_sha: o.commit,
@@ -495,11 +540,26 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       await call("PATCH", `${repoPath}/issues/${n}`, { body: { state: "closed" } });
     },
     issueComment: async (sel, body) => comment(issueNumber(sel), body),
-    issueLabel: async (sel, add, remove) => {
-      const n = issueNumber(sel);
-      if (add.length) await call("POST", `${repoPath}/issues/${n}/labels`, { body: { labels: add } });
-      for (const name of remove) await call("DELETE", `${repoPath}/issues/${n}/labels/${encodeURIComponent(name)}`);
-      return ((await call<{ name: string }[] | null>("GET", `${repoPath}/issues/${n}/labels`)) ?? []).map((l) => l.name);
+    issueLabel: async (sel, add, remove) => relabel(issueNumber(sel), add, remove),
+    issueCreate: async (o) => {
+      let labels: number[] = [];
+      if (o.labels.length) {
+        const known = await repoLabels();
+        labels = o.labels.map((name) => {
+          const found = known.find((l) => l.name === name);
+          if (!found) throw new ForgeError(`forge: no label "${name}" in ${slug}; create it with forge label create`);
+          return found.id;
+        });
+      }
+      const issue = await call<FIssue>("POST", `${repoPath}/issues`, { body: { title: o.title, body: o.body, labels, assignees: o.assignees } });
+      return issue.html_url;
+    },
+    labelCreate: async (o) => {
+      const color = o.color.startsWith("#") ? o.color : `#${o.color}`;
+      const existing = (await repoLabels()).find((l) => l.name === o.name);
+      if (existing && !o.force) throw new ForgeError(`forge: label "${o.name}" already exists in ${slug}; pass --force to update it`);
+      if (existing) await call("PATCH", `${repoPath}/labels/${existing.id}`, { body: { color, ...(o.description ? { description: o.description } : {}) } });
+      else await call("POST", `${repoPath}/labels`, { body: { name: o.name, color, description: o.description } });
     },
     repoView: async () => {
       const r = await call<{ name: string; owner: { login: string }; full_name: string; html_url: string; ssh_url: string; clone_url: string; default_branch: string; private: boolean }>("GET", repoPath);

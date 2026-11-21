@@ -625,7 +625,7 @@ field) and `-q/--jq <expr>` (run by `jq -r`, like gh's `--jq`).
 
 | Command | gh it replaces | Notes |
 | --- | --- | --- |
-| `forge pr view [<n>\|<url>\|<branch>]` | `gh pr view` | No selector: the current branch's open PR |
+| `forge pr view [<n>\|<url>\|<branch>] [--comments]` | `gh pr view` | No selector: the current branch's open PR. `--comments` prints the conversation and every review that said something |
 | `forge pr list [--state open\|closed\|merged\|all] [--head] [--base] [--author] [--label] [--limit] [--search]` | `gh pr list` | `--search` is GitHub-only. Checks and reviews are fetched per PR only when `--json` asks for them |
 | `forge pr create --title t (--body b \| --body-file f) [--base] [--head] [--draft]` | `gh pr create` | Prints the URL. Head defaults to the current branch, base to the default branch. Forgejo drafts are a `WIP:` title prefix |
 | `forge pr diff [<pr>]` | `gh pr diff` | |
@@ -633,7 +633,10 @@ field) and `-q/--jq <expr>` (run by `jq -r`, like gh's `--jq`).
 | `forge pr merge [<pr>] [--merge\|--squash\|--rebase] [--match-head-commit sha] [--delete-branch]` | `gh pr merge` | `--match-head` is an alias. See "Merging at a head" |
 | `forge pr comment [<pr>] (--body \| --body-file)` | `gh pr comment` | Prints the comment URL |
 | `forge pr threads [<pr>] [--unresolved]` | `gh api graphql` reviewThreads | Review threads with resolved state |
-| `forge run list [--branch] [--commit] [--workflow] [--status] [--event] [--limit]` | `gh run list` | |
+| `forge pr ready [<pr>] [--undo]` | `gh pr ready` | Forgejo: drops (or with `--undo` adds) the `WIP:` title prefix that marks a draft |
+| `forge pr edit [<pr>] [--title] [--body \| --body-file] [--add-reviewer a,b] [--remove-reviewer] [--add-label a,b] [--remove-label]` | `gh pr edit` | Forgejo keeps a draft's `WIP:` prefix when the title changes; reviewers go through `requested_reviewers`, labels by name |
+| `forge pr review [<pr>] (--approve \| --request-changes \| --comment) [--body \| --body-file]` | `gh pr review` | Forgejo posts the review on the current head and prints its URL; a change request or comment needs a body |
+| `forge run list [--branch] [--commit] [--workflow] [--status] [--event] [--created >=date] [--limit]` | `gh run list` | Forgejo's API has no date filter, so `--created` (`>=`, `>`, `<=`, `<` or a bare date for that day) is applied after paging, over the newest 1000 runs |
 | `forge run view <id\|url> [--log \| --log-failed] [--job id]` | `gh run view` | |
 | `forge run watch <id\|url> [--interval s] [--exit-status]` | `gh run watch` | Polls; `--exit-status` exits 1 unless the run succeeded |
 | `forge run rerun <id\|url> [--failed] [--job id]` | `gh run rerun` | GitHub only; exit 2 on Forgejo (see below) |
@@ -643,11 +646,19 @@ field) and `-q/--jq <expr>` (run by `jq -r`, like gh's `--jq`).
 | `forge issue close <n\|url> [--comment c] [--reason r]` | `gh issue close` | Forgejo has no close reason; it is ignored there |
 | `forge issue comment <n\|url> (--body \| --body-file)` | `gh issue comment` | |
 | `forge issue label <n\|url> [--add a,b] [--remove c]` | `gh issue edit --add-label/--remove-label` | Prints the labels after the change |
+| `forge issue create --title t (--body \| --body-file) [--label a]... [--assignee login]...` | `gh issue create` | Prints the URL. Forgejo: label names must exist in the repo |
+| `forge label create <name> [--color hex] [--description d] [--force]` | `gh label create` | Default color `ededed`. An existing label is an error unless `--force`, which updates it |
 | `forge repo view [<repo>]` | `gh repo view` | |
 | `forge repo clone <repo> [<dir>] [-- <git flags>]` | `gh repo clone` | Forgejo clones the repo's SSH URL |
 | `forge api <path> [-X] [-f k=v] [-F k=v] [--input f] [--paginate] [-q]` | `gh api` | GitHub: handed to `gh api` unchanged (with `GH_REPO` set). Forgejo: the path is relative to `/api/v1`, `{owner}`/`{repo}` are filled in, `--paginate` concatenates pages |
 
 Errors print `forge: …` on stderr and exit 1 (2 for an operation the forge cannot do).
+
+Not in `forge`, because they are about GitHub itself rather than a repo's forge: `gh auth`
+(`token`, `status`, `login`, `setup-git`, `refresh`), `gh search prs` across owners, and
+`gh repo list`. Search qualifiers in `--search` (`merged:>=`, `updated:>=`, `in:title`) only
+work on GitHub. `gh api graphql` is GitHub's own API; `forge api` passes it through on GitHub
+only.
 
 ### JSON schema
 

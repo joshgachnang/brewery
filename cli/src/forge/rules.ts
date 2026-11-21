@@ -110,3 +110,19 @@ export const forgejoThreads = (comments: ForgejoReviewComment[], bots: string[] 
     };
   });
 };
+
+// gh's --created filter for runs, applied client-side where the forge has none: ">=", ">",
+// "<=" or "<" before an ISO date or time, or a bare date meaning that whole day.
+export const createdMatches = (filter: string, createdAt: string): boolean => {
+  const m = filter.trim().match(/^(>=|<=|>|<)?\s*(\S+)$/);
+  if (!m) return true;
+  const [, op, when] = m;
+  if (!op) return createdAt.startsWith(when);
+  const at = Date.parse(createdAt);
+  const bound = Date.parse(when);
+  if (Number.isNaN(at) || Number.isNaN(bound)) return true;
+  return op === ">=" ? at >= bound : op === ">" ? at > bound : op === "<=" ? at <= bound : at < bound;
+};
+
+// Forgejo marks a draft with a title prefix (its default WIP prefixes).
+export const WIP_PREFIX = /^\s*(WIP:|\[WIP\])\s*/i;
