@@ -56,6 +56,19 @@ export const decideReviews = (reviews: Review[], prAuthor: string): ReviewDecisi
   return "REVIEW_REQUIRED";
 };
 
+// approvedAtHead: the PR is APPROVED and at least one of the approvals that decide it was
+// given on the current head. A merge "at the reviewed head" needs this, not reviewDecision,
+// because stale approvals still count toward reviewDecision.
+export const approvedAtHead = (reviews: Review[], prAuthor: string, headSha: string, decision: ReviewDecision): boolean => {
+  if (decision !== "APPROVED" || !headSha) return false;
+  const newest = new Map<string, Review>();
+  for (const review of [...reviews].sort((a, b) => a.submittedAt.localeCompare(b.submittedAt))) {
+    if (review.author.login === prAuthor) continue;
+    if (review.state === "APPROVED" || review.state === "CHANGES_REQUESTED") newest.set(review.author.login, review);
+  }
+  return [...newest.values()].some((r) => r.state === "APPROVED" && r.commit.oid === headSha);
+};
+
 export const isBotLogin = (login: string, bots: string[] = []): boolean =>
   bots.includes(login) || /(\[bot\]|-bot)$/.test(login) || login.startsWith("app/");
 

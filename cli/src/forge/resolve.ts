@@ -109,3 +109,17 @@ export const resolveRepo = async (opts: { repo?: string; urlArg?: string; cwd: s
   }
   return forgeFor(slug as Slug & { host: string }, hosts, env);
 };
+
+// Every token forge could be holding: each hosts.json token and FORGEJO_TOKEN. main() scrubs
+// them from any error it prints.
+export const knownTokens = (env: NodeJS.ProcessEnv = process.env): string[] => {
+  let hosts: Hosts = {};
+  try {
+    hosts = loadHosts(hostsPath(env));
+  } catch {
+    // a broken hosts.json is reported elsewhere; it holds no token we can read
+  }
+  return [...Object.values(hosts).map((h) => h.token), env.FORGEJO_TOKEN].filter((t): t is string => Boolean(t && t.length >= 8));
+};
+
+export const redactTokens = (text: string, tokens: string[]): string => tokens.reduce((out, t) => out.split(t).join("[REDACTED]"), text);

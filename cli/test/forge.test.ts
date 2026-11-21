@@ -9,7 +9,7 @@ import { githubBackend } from "../src/forge/github.ts";
 import { parseArgs } from "../src/forge/main.ts";
 import { pick } from "../src/forge/output.ts";
 import { forgeFor, loadHosts, parseSlug, resolveRepo } from "../src/forge/resolve.ts";
-import { bucketFor, checksExitCode, checksState, createdMatches, decideReviews, forgejoThreads, type ForgejoReviewComment } from "../src/forge/rules.ts";
+import { approvedAtHead, bucketFor, checksExitCode, checksState, createdMatches, decideReviews, forgejoThreads, type ForgejoReviewComment } from "../src/forge/rules.ts";
 import type { RepoRef, Review } from "../src/forge/types.ts";
 import { tempRepo } from "./helpers.ts";
 
@@ -108,6 +108,14 @@ describe("forge: rules shared by both forges", () => {
     expect(decideReviews([review("bot", "DISMISSED", "1"), review("ann", "COMMENTED", "2")], "me")).toBe("REVIEW_REQUIRED");
   });
 
+  test("approvedAtHead needs a deciding approval on the head, and a stale one does not count", () => {
+    const at = (login: string, state: Review["state"], when: string, oid: string): Review => ({ ...review(login, state, when), commit: { oid } });
+    expect(approvedAtHead([at("bot", "APPROVED", "1", "h2")], "me", "h2", "APPROVED")).toBe(true);
+    expect(approvedAtHead([at("bot", "APPROVED", "1", "h1")], "me", "h2", "APPROVED")).toBe(false);
+    expect(approvedAtHead([at("bot", "APPROVED", "1", "h2"), at("bot", "COMMENTED", "2", "h3")], "me", "h3", "APPROVED")).toBe(false);
+    expect(approvedAtHead([at("bot", "APPROVED", "1", "h2")], "me", "h2", "CHANGES_REQUESTED")).toBe(false);
+  });
+
   test("Forgejo review comments group into threads by file and line", () => {
     const comments = [...(fj("review-1-comments.json") as ForgejoReviewComment[]), ...(fj("review-2-comments.json") as ForgejoReviewComment[])];
     const threads = forgejoThreads(comments, []);
@@ -142,8 +150,10 @@ describe("forge: rules shared by both forges", () => {
 
   test("forge api fills {owner}/{repo}, types -F fields, and is relative to /api/v1", () => {
     expect(parseApiArgs(["/api/v1/repos/{owner}/{repo}/pulls", "-X", "post", "-f", "title=x", "-F", "draft=true", "-F", "n=3"], SCRATCH)).toEqual({
-      path: "/repos/joshgachnang/forgejo-scratch/pulls", method: "POST", fields: { title: "x", draft: true, n: 3 }, paginate: false,
+      path: "/repos/joshgachnang/forgejo-scratch/pulls", method: "POST", fields: { title: "x", draft: true, n: 3 }, paginate: false, headers: {},
     });
+    expect(parseApiArgs(["user", "-H", "Accept: text/plain", "-H", "X-Trace:1"], SCRATCH).headers).toEqual({ Accept: "text/plain", "X-Trace": "1" });
+    expect(() => parseApiArgs(["user", "-H", "nocolon"], SCRATCH)).toThrow(/Name: value/);
   });
 });
 
@@ -153,6 +163,7 @@ interface Hit {
   path: string;
   query: Record<string, string>;
   body: unknown;
+  headers: Record<string, string>;
 }
 
 const fakeForgejo = (routes: Record<string, (hit: Hit) => Response | unknown>): { url: string; hits: Hit[]; stop: () => void } => {
@@ -162,9 +173,11 @@ const fakeForgejo = (routes: Record<string, (hit: Hit) => Response | unknown>): 
     fetch: async (req) => {
       const url = new URL(req.url);
       const text = req.method === "GET" ? "" : await req.text();
-      const hit: Hit = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: text ? JSON.parse(text) : undefined };
+      const hit: Hit = { method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: text ? JSON.parse(text) : undefined, headers: Object.fromEntries(req.headers) };
       hits.push(hit);
-      if (req.headers.get("authorization") !== "token test-token") return Response.json({ message: "token is required" }, { status: 401 });
+      // A wrong token gets Forgejo 16's real 401 body, which echoes the token back.
+      const sent = (req.headers.get("authorization") ?? "").replace(/^token /, "");
+      if (sent !== "test-token") return Response.json({ message: `access token does not exist [sha: ${sent}]\ntask with token "${sent}": resource does not exist`, url: "https://forgejo.nang.io/api/swagger" }, { status: 401 });
       const route = routes[`${req.method} ${url.pathname}`];
       if (!route) return Response.json({ message: "no fixture" }, { status: 404 });
       const out = route(hit);
@@ -229,6 +242,51 @@ describe("forge: Forgejo backend against recorded responses", () => {
       expect(pr.comments.map((c) => c.body)).toEqual(["a plain conversation comment"]);
     } finally {
       server.stop();
+    }
+  });
+
+  test("a token Forgejo echoes in a 401 never reaches an error message", async () => {
+    const canary = "canary0123456789abcdef";
+    const server = fakeForgejo(scratchRoutes());
+    try {
+      const error = await forgejoBackend(SCRATCH, { entry: { type: "forgejo", url: server.url }, token: canary }).prView("1").catch((e: Error) => e);
+      expect(String((error as Error).message)).toContain("HTTP 401");
+      expect(String((error as Error).message)).toContain("[REDACTED]");
+      expect(String((error as Error).message)).not.toContain(canary);
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("a network failure is a forge: error", async () => {
+    const closed = Bun.serve({ port: 0, fetch: () => new Response("") });
+    const url = `http://127.0.0.1:${closed.port}`;
+    closed.stop(true);
+    await expect(backend(url).prView("1")).rejects.toThrow(/^forge: GET \/api\/v1\/repos\/joshgachnang\/forgejo-scratch\/pulls\/1: /);
+  });
+
+  test("issue comments are read in one call, since Forgejo ignores page and limit there", async () => {
+    const server = fakeForgejo(scratchRoutes());
+    try {
+      await backend(server.url).prView("1");
+      const reads = server.hits.filter((h) => h.path === `${REPO}/issues/1/comments`);
+      expect(reads).toHaveLength(1);
+      expect(reads[0].query).toEqual({});
+    } finally {
+      server.stop();
+    }
+  });
+
+  test("approvedAtHead holds only while a deciding approval is on the current head", async () => {
+    const moved = { ...(fj("pr-open.json") as { head: object }), head: { ...(fj("pr-open.json") as { head: object }).head, sha: "0".repeat(40) } };
+    for (const [pr, want] of [[fj("pr-open.json"), true], [moved, false]] as const) {
+      const server = fakeForgejo(scratchRoutes({ [`GET ${REPO}/pulls/1`]: () => pr, [`GET ${REPO}/commits/${"0".repeat(40)}/status`]: () => fj("status-success.json") }));
+      try {
+        const view = await backend(server.url).prView("1");
+        expect([view.reviewDecision, view.approvedAtHead]).toEqual(["APPROVED", want]);
+      } finally {
+        server.stop();
+      }
     }
   });
 
@@ -637,6 +695,28 @@ describe("forge: the command line", () => {
     expect(res.out).toContain("--- joshgachnang commented");
     expect(res.out).toContain("a plain conversation comment");
     expect(res.out).toContain("--- brewery-bot reviewed: APPROVED");
+  });
+
+  test("pr view and forge api never print the token a 401 echoes, and forge api passes -H through", async () => {
+    const canary = "canary0123456789abcdef";
+    const hostsFile = join(dir, "hosts-canary.json");
+    writeFileSync(hostsFile, JSON.stringify({ "forgejo.nang.io": { type: "forgejo", url: server.url, token: canary } }));
+    chmodSync(hostsFile, 0o600);
+    const saved = env.FORGE_HOSTS;
+    env.FORGE_HOSTS = hostsFile;
+    try {
+      for (const args of [["pr", "view", "1"], ["api", "repos/{owner}/{repo}"]]) {
+        const res = await forge(...args);
+        expect(res.code).toBe(1);
+        expect(`${res.out}${res.err}`).toContain("[REDACTED]");
+        expect(`${res.out}${res.err}`).not.toContain(canary);
+      }
+    } finally {
+      env.FORGE_HOSTS = saved;
+    }
+    const ok = await forge("api", "repos/{owner}/{repo}", "-H", "X-Forge-Test: yes", "-q", ".full_name");
+    expect(ok.out.trim()).toBe("joshgachnang/forgejo-scratch");
+    expect(server.hits.findLast((h) => h.path === REPO)?.headers["x-forge-test"]).toBe("yes");
   });
 
   test("pr checks exits 8 while checks run, like gh", async () => {

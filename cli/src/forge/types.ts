@@ -76,6 +76,8 @@ export interface Pr {
   mergeable: "MERGEABLE" | "CONFLICTING" | "UNKNOWN";
   mergeStateStatus: string;
   reviewDecision: ReviewDecision;
+  // APPROVED, and an approval that decides it was given on headRefOid.
+  approvedAtHead: boolean;
   reviews: Review[];
   comments: Comment[];
   checks: Check[];

@@ -650,7 +650,7 @@ field) and `-q/--jq <expr>` (run by `jq -r`, like gh's `--jq`).
 | `forge label create <name> [--color hex] [--description d] [--force]` | `gh label create` | Default color `ededed`. An existing label is an error unless `--force`, which updates it |
 | `forge repo view [<repo>]` | `gh repo view` | |
 | `forge repo clone <repo> [<dir>] [-- <git flags>]` | `gh repo clone` | Forgejo clones the repo's SSH URL |
-| `forge api <path> [-X] [-f k=v] [-F k=v] [--input f] [--paginate] [-q]` | `gh api` | GitHub: handed to `gh api` unchanged (with `GH_REPO` set). Forgejo: the path is relative to `/api/v1`, `{owner}`/`{repo}` are filled in, `--paginate` concatenates pages |
+| `forge api <path> [-X] [-f k=v] [-F k=v] [-H "Name: value"] [--input f] [--paginate] [-q]` | `gh api` | GitHub: handed to `gh api` unchanged (with `GH_REPO` set). Forgejo: the path is relative to `/api/v1`, `{owner}`/`{repo}` are filled in, `-H` headers are sent (never replacing the token), `--paginate` concatenates pages |
 
 Errors print `forge: …` on stderr and exit 1 (2 for an operation the forge cannot do).
 
@@ -680,6 +680,7 @@ one; values are normalized so a field means the same thing on either forge.
 | `mergeable` | `MERGEABLE \| CONFLICTING \| UNKNOWN` | UNKNOWN once closed. Forgejo reports false while it recomputes after a push, so a false is re-read three times, 2s apart, before it is believed |
 | `mergeStateStatus` | string | gh's value on GitHub. Forgejo: `DRAFT`, `DIRTY` (conflicting), `UNSTABLE` (checks red or running), `CLEAN`, or `UNKNOWN` when closed |
 | `reviewDecision` | `APPROVED \| CHANGES_REQUESTED \| REVIEW_REQUIRED` | See "Approval" |
+| `approvedAtHead` | boolean | `reviewDecision` is APPROVED and an approval that decides it was given on `headRefOid`. Merge "at the reviewed head" on this, not on `reviewDecision` |
 | `reviews` | `[{id, author, state, body, submittedAt, commit: {oid}, stale}]` | `state` is `APPROVED`, `CHANGES_REQUESTED`, `COMMENTED`, `DISMISSED` or `PENDING`. `stale` is Forgejo's flag for a review older than the head; always false on GitHub |
 | `comments` | `[{id, author, body, createdAt, url}]` | Conversation comments, not review comments |
 | `checks` | `[Check]` | The head's checks, as below |
@@ -724,7 +725,10 @@ empty, and a job's `url` is its position in the run (`…/runs/7/jobs/0`).
 `reviewDecision` is `APPROVED` when the newest deciding review (an approval or a request for
 changes) from each reviewer other than the author includes an approval and none requests
 changes. Comments, pending and dismissed reviews decide nothing; stale reviews still count,
-and `reviews[].commit.oid` says which head each one saw. With no deciding review it is
+and `reviews[].commit.oid` says which head each one saw. So a caller that merges only at the
+reviewed head must not stop at `reviewDecision`: check `approvedAtHead` (or compare the deciding
+approvals' `commit.oid` with `headRefOid` itself) and pass that sha to
+`forge pr merge --match-head-commit`. With no deciding review it is
 `REVIEW_REQUIRED`. Forgejo always uses this rule. GitHub uses gh's `reviewDecision` when the
 repo's branch protection sets one, and this rule when it is empty.
 
@@ -735,6 +739,12 @@ sha. On GitHub this is gh's own flag. On Forgejo, forge reads the head and refus
 calling merge, then sends the sha as `head_commit_id`, which Forgejo checks again
 server-side (HTTP 409 "head out of date", reported as the same refusal), so a push between
 the read and the merge is caught too.
+
+### Tokens in output
+
+Forgejo's 401 reply echoes the token it was sent. forge replaces every configured token
+(each hosts.json token and `FORGEJO_TOKEN`) with `[REDACTED]` in error messages and in
+`forge api` output.
 
 ### Rerunning on Forgejo
 

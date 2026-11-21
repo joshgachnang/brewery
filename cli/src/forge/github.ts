@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { git, sh } from "../vcs.ts";
-import { actor, bucketFor, checksState, decideReviews } from "./rules.ts";
+import { actor, approvedAtHead, bucketFor, checksState, decideReviews } from "./rules.ts";
 import {
   ForgeError,
   type Backend,
@@ -267,6 +267,7 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
       mergeable,
       mergeStateStatus: p.mergeStateStatus ?? "UNKNOWN",
       reviewDecision: decision,
+      approvedAtHead: approvedAtHead(reviews, author.login, p.headRefOid, decision),
       reviews,
       comments: (p.comments ?? []).map(toComment),
       checks,

@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { forgejoBackend } from "./forgejo.ts";
 import { githubBackend } from "./github.ts";
 import { printJson } from "./output.ts";
-import { resolveRepo, type Resolved } from "./resolve.ts";
+import { knownTokens, redactTokens, resolveRepo, type Resolved } from "./resolve.ts";
 import { checksExitCode, checksState } from "./rules.ts";
 import { ForgeError, type Backend, type Check, type Pr, type Run } from "./types.ts";
 
@@ -39,7 +39,7 @@ Usage:
   forge label create <name> [--color hex] [--description d] [--force]
   forge repo view [<repo>]
   forge repo clone <repo> [<dir>] [-- <git clone flags>]
-  forge api <path> [-X method] [-f k=v] [-F k=v] [--input file] [--paginate] [-q expr]
+  forge api <path> [-X method] [-f k=v] [-F k=v] [-H "Name: value"] [--input file] [--paginate] [-q expr]
 
 Every command takes -R/--repo OWNER/REPO, HOST/OWNER/REPO or a URL (default: the origin
 remote). View, list, checks and threads take --json [field,...] and -q/--jq <expr>.
@@ -424,7 +424,7 @@ if (import.meta.main) {
   try {
     process.exit(await main(process.argv.slice(2)));
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
+    console.error(redactTokens(error instanceof Error ? error.message : String(error), knownTokens()));
     process.exit(error instanceof ForgeError ? error.code : 1);
   }
 }

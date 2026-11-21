@@ -1,0 +1,5 @@
+2026-11-21T00:35:10.0332667Z Runner (version:v13.2.1) received task 28 of job linux, triggered by event: push
+2026-11-21T00:35:10.0364496Z workflow prepared
+2026-11-21T00:35:30.1000000Z bun test v1.3.2
+2026-11-21T00:35:31.2000000Z error: expected 2, received 3
+2026-11-21T00:35:31.3000000Z ❌  Failure - Main bun test

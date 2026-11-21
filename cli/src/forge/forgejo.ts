@@ -4,7 +4,7 @@
 import { readFileSync } from "node:fs";
 import { git } from "../vcs.ts";
 import { emit } from "./output.ts";
-import { actor, bucketFor, checksState, createdMatches, decideReviews, forgejoThreads, WIP_PREFIX, type ForgejoReviewComment } from "./rules.ts";
+import { actor, approvedAtHead, bucketFor, checksState, createdMatches, decideReviews, forgejoThreads, WIP_PREFIX, type ForgejoReviewComment } from "./rules.ts";
 import type { HostEntry } from "./resolve.ts";
 import {
   ForgeError,
@@ -168,7 +168,12 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
   const pollMs = opts.pollMs ?? 2_000;
   const who = (u: FUser | null | undefined): ReturnType<typeof actor> => actor(u?.login, bots);
 
-  const request = async (method: string, path: string, init: { query?: Record<string, string | number | undefined>; body?: unknown; raw?: string } = {}): Promise<Response> => {
+  // Forgejo's 401 body echoes the token it was sent ("access token does not exist [sha: …]"),
+  // so everything forge prints from a response or an error passes through this.
+  const secrets = [opts.token, process.env.FORGEJO_TOKEN].filter((t): t is string => Boolean(t && t.length >= 8));
+  const redact = (text: string): string => secrets.reduce((out, secret) => out.split(secret).join("[REDACTED]"), text);
+
+  const request = async (method: string, path: string, init: { query?: Record<string, string | number | undefined>; body?: unknown; raw?: string; headers?: Record<string, string> } = {}): Promise<Response> => {
     if (!opts.token) throw new ForgeError(`forge: no token for ${ref.host}; set "token" in its hosts.json entry or FORGEJO_TOKEN`);
     const url = new URL(`${base}${path.startsWith("/") ? path : `/${path}`}`);
     for (const [k, v] of Object.entries(init.query ?? {})) if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
@@ -181,7 +186,13 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       body = JSON.stringify(init.body);
       headers["Content-Type"] = "application/json";
     }
-    return doFetch(url, { method, headers, body, signal: AbortSignal.timeout(120_000) });
+    // Caller headers (forge api -H) may not replace the token.
+    for (const [k, v] of Object.entries(init.headers ?? {})) if (k.toLowerCase() !== "authorization") headers[k] = v;
+    try {
+      return await doFetch(url, { method, headers, body, signal: AbortSignal.timeout(120_000) });
+    } catch (error) {
+      throw new ForgeError(redact(`forge: ${method} ${url.pathname}: ${error instanceof Error ? error.message : String(error)}`));
+    }
   };
 
   const failure = async (method: string, path: string, res: Response): Promise<ForgeError> => {
@@ -192,7 +203,7 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
     } catch {
       // not JSON; keep the text
     }
-    return new ForgeError(`forge: ${method} ${path}: HTTP ${res.status} ${message}`.trim());
+    return new ForgeError(redact(`forge: ${method} ${path}: HTTP ${res.status} ${message}`.trim()));
   };
 
   const call = async <T>(method: string, path: string, init: { query?: Record<string, string | number | undefined>; body?: unknown } = {}): Promise<T> => {
@@ -260,6 +271,11 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
     return { reviews, raw };
   };
 
+  // Forgejo 16's issue comments endpoint ignores page and limit and always returns every
+  // comment (checked live: limit=1&page=2 returns all three of three), so it is read in one
+  // call. Paging it like the other lists would repeat the comments once there were 50.
+  const issueComments = async (n: number): Promise<FComment[]> => (await call<FComment[] | null>("GET", `${repoPath}/issues/${n}/comments`)) ?? [];
+
   const toComment = (c: FComment): Comment => ({ id: String(c.id), author: who(c.user), body: c.body ?? "", createdAt: c.created_at, url: c.html_url });
 
   // Forgejo reports mergeable=false while it recomputes after a push, so a false is re-read
@@ -278,7 +294,7 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
     const raw = await fetchPr(n);
     const [{ reviews }, comments, checks] = await Promise.all([
       reviewsFor(n),
-      call<FComment[]>("GET", `${repoPath}/issues/${n}/comments`),
+      issueComments(n),
       statusChecks(raw.head.sha),
     ]);
     return toPr(raw, reviews, (comments ?? []).map(toComment), checks);
@@ -309,6 +325,7 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       mergeable,
       mergeStateStatus,
       reviewDecision: decideReviews(reviews, author.login),
+      approvedAtHead: approvedAtHead(reviews, author.login, p.head.sha, decideReviews(reviews, author.login)),
       reviews,
       comments,
       checks,
@@ -529,7 +546,7 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       const n = issueNumber(sel);
       const [issue, comments] = await Promise.all([
         call<FIssue>("GET", `${repoPath}/issues/${n}`),
-        call<FComment[] | null>("GET", `${repoPath}/issues/${n}/comments`),
+        issueComments(n),
       ]);
       return toIssue(issue, (comments ?? []).map(toComment));
     },
@@ -591,8 +608,8 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       const pages: unknown[] = [];
       for (let page = 1; ; page++) {
         const q = parsed.paginate ? { ...query, page: String(page), limit: String(PAGE) } : query;
-        const res = await request(method, parsed.path, { query: q, raw: body });
-        const out = await res.text();
+        const res = await request(method, parsed.path, { query: q, raw: body, headers: parsed.headers });
+        const out = redact(await res.text());
         if (!res.ok) {
           process.stdout.write(out.endsWith("\n") ? out : `${out}\n`);
           console.error(`forge: ${method} ${parsed.path}: HTTP ${res.status}`);
@@ -623,13 +640,14 @@ export interface ApiArgs {
   input?: string;
   paginate: boolean;
   jq?: string;
+  headers: Record<string, string>;
 }
 
 // gh api's flags: -X/--method, -f/--raw-field k=v (string), -F/--field k=v (true, false,
 // null and numbers typed; @file reads a file), --input file, --paginate, -q/--jq. The path is
 // relative to /api/v1; {owner} and {repo} are filled in.
 export const parseApiArgs = (args: string[], ref: RepoRef): ApiArgs => {
-  const out: ApiArgs = { path: "", fields: {}, paginate: false };
+  const out: ApiArgs = { path: "", fields: {}, paginate: false, headers: {} };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     const next = (): string => {
@@ -648,7 +666,12 @@ export const parseApiArgs = (args: string[], ref: RepoRef): ApiArgs => {
     } else if (a === "--input") out.input = next();
     else if (a === "--paginate") out.paginate = true;
     else if (a === "-q" || a === "--jq") out.jq = next();
-    else if (a === "-H" || a === "--header") next();
+    else if (a === "-H" || a === "--header") {
+      const header = next();
+      const colon = header.indexOf(":");
+      if (colon <= 0) throw new ForgeError(`forge api: ${a} takes "Name: value", got ${header}`);
+      out.headers[header.slice(0, colon).trim()] = header.slice(colon + 1).trim();
+    }
     else if (a.startsWith("-")) throw new ForgeError(`forge api: unknown flag ${a}`);
     else if (!out.path) out.path = a;
     else throw new ForgeError(`forge api: unexpected argument ${a}`);
