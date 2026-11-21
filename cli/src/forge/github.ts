@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sh } from "../vcs.ts";
+import { git, sh } from "../vcs.ts";
 import { actor, bucketFor, checksState, decideReviews } from "./rules.ts";
 import {
   ForgeError,
@@ -213,6 +213,10 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
   const slug = `${ref.owner}/${ref.name}`;
   const repoArgs = ["-R", slug];
 
+  // gh refuses a PR command without an argument once -R is given, so no selector means the
+  // current branch, named explicitly.
+  const current = async (sel: string | undefined): Promise<string> => sel ?? (await git(cwd, "rev-parse", "--abbrev-ref", "HEAD"));
+
   const run = async (argv: string[], allow: number[] = [0], timeoutMs?: number): Promise<string> => {
     const res = await sh(cwd, [gh, ...argv], timeoutMs);
     if (!allow.includes(res.code)) throw new ForgeError(`forge: gh ${argv.slice(0, 2).join(" ")}: ${res.err || res.out}`);
@@ -225,7 +229,7 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
 
   const checksFor = async (sel: string | undefined): Promise<Check[]> => {
     // gh exits 8 while checks are pending and 1 with "no checks reported"; both are answers.
-    const res = await sh(cwd, [gh, "pr", "checks", ...selector(sel), ...repoArgs, "--json", CHECK_FIELDS]);
+    const res = await sh(cwd, [gh, "pr", "checks", ...selector(await current(sel)), ...repoArgs, "--json", CHECK_FIELDS]);
     if (res.out.startsWith("[")) return toChecks(JSON.parse(res.out));
     if (/no checks reported/i.test(res.err) || res.code === 0) return [];
     throw new ForgeError(`forge: gh pr checks: ${res.err || res.out}`);
@@ -276,7 +280,7 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
 
   const prView = async (sel: string | undefined): Promise<Pr> => {
     const [p, checks] = await Promise.all([
-      json<GhPr>(["pr", "view", ...selector(sel), ...repoArgs, "--json", PR_FIELDS]),
+      json<GhPr>(["pr", "view", ...selector(await current(sel)), ...repoArgs, "--json", PR_FIELDS]),
       checksFor(sel),
     ]);
     return toPr(p, checks);
@@ -301,16 +305,16 @@ export const githubBackend = (ref: RepoRef, opts: GithubOpts = {}): Backend => {
         if (o.draft) argv.push("--draft");
         return (await run(argv)).split("\n").at(-1) ?? "";
       }),
-    prDiff: async (sel) => run(["pr", "diff", ...selector(sel), ...repoArgs], [0], 120_000),
+    prDiff: async (sel) => run(["pr", "diff", ...selector(await current(sel)), ...repoArgs], [0], 120_000),
     prChecks: checksFor,
     prMerge: async (sel, o) => {
-      const argv = ["pr", "merge", ...selector(sel), ...repoArgs, `--${o.method}`];
+      const argv = ["pr", "merge", ...selector(await current(sel)), ...repoArgs, `--${o.method}`];
       if (o.matchHead) argv.push("--match-head-commit", o.matchHead);
       if (o.deleteBranch) argv.push("--delete-branch");
       await run(argv);
     },
     prComment: async (sel, body) =>
-      withBodyFile(body, async (file) => (await run(["pr", "comment", ...selector(sel), ...repoArgs, "--body-file", file])).split("\n").at(-1) ?? ""),
+      withBodyFile(body, async (file) => (await run(["pr", "comment", ...selector(await current(sel)), ...repoArgs, "--body-file", file])).split("\n").at(-1) ?? ""),
     prThreads: async (sel) => {
       const number = sel && /^\d+$/.test(selector(sel)[0]) ? Number(selector(sel)[0]) : (await prView(sel)).number;
       const data = await json<{ data: { repository: { pullRequest: { reviewThreads: { nodes: {

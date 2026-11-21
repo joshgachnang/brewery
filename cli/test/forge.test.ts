@@ -352,12 +352,15 @@ describe("forge: Forgejo backend against recorded responses", () => {
     }
   });
 
-  test("pr list --state merged keeps only merged PRs", async () => {
+  test("pr list --state merged keeps only merged PRs, and --author @me is the token's user", async () => {
     const open = fj("pulls-open.json") as { merged: boolean }[];
-    const server = fakeForgejo(scratchRoutes({ [`GET ${REPO}/pulls`]: () => [...open, { ...open[0], number: 9, state: "closed", merged: true }] }));
+    const server = fakeForgejo(scratchRoutes({
+      [`GET ${REPO}/pulls`]: () => [...open, { ...open[0], number: 9, state: "closed", merged: true }],
+      ["GET /api/v1/user"]: () => ({ login: "joshgachnang" }),
+    }));
     try {
-      expect((await backend(server.url).prList({ state: "merged", limit: 5 })).map((p) => [p.number, p.state])).toEqual([[9, "MERGED"]]);
-      expect(server.hits[0].query.state).toBe("closed");
+      expect((await backend(server.url).prList({ state: "merged", limit: 5, author: "@me" })).map((p) => [p.number, p.state])).toEqual([[9, "MERGED"]]);
+      expect(server.hits.find((h) => h.path === `${REPO}/pulls`)?.query).toMatchObject({ state: "closed", poster: "joshgachnang" });
     } finally {
       server.stop();
     }
@@ -413,6 +416,24 @@ describe("forge: GitHub backend through gh, against recorded gh output", () => {
     expect(pr.checks.filter((c) => c.bucket === "skipping").map((c) => c.state)).toEqual(["SKIPPED", "SKIPPED"]);
     expect(pr.reviews.find((r) => r.author.login === "cursor")?.state).toBe("COMMENTED");
     expect(calls(dir).find((c) => c[1] === "view")).toEqual(["pr", "view", "1737", "-R", "TerrenoLabs/terreno", "--json", expect.stringContaining("headRefOid")]);
+  });
+
+  test("with no PR given, gh is handed the current branch (gh refuses -R without one)", async () => {
+    const repo = tempRepo();
+    try {
+      Bun.spawnSync(["git", "checkout", "-q", "-b", "my-feature"], { cwd: repo });
+      const routes = join(dir, "routes.json");
+      const saved = readFileSync(routes, "utf8");
+      writeFileSync(routes, JSON.stringify([...JSON.parse(saved), { match: ["pr", "view", "my-feature"], file: ghFixture("pr-view.json") }, { match: ["pr", "checks", "my-feature"], file: ghFixture("pr-checks.json"), code: 1 }]));
+      try {
+        expect((await githubBackend(TERRENO, { gh, cwd: repo }).prView(undefined)).number).toBe(1737);
+      } finally {
+        writeFileSync(routes, saved);
+      }
+      expect(calls(dir).filter((c) => c[2] === "my-feature").map((c) => c.slice(0, 3).join(" ")).sort()).toEqual(["pr checks my-feature", "pr view my-feature"]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   test("threads keep GitHub's resolved and outdated flags", async () => {

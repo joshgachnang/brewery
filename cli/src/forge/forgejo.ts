@@ -394,7 +394,9 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
       const state = o.state === "merged" ? "closed" : o.state;
       if (o.search) throw new ForgeError("forge: pr list --search is GitHub-only; Forgejo's pull list has no search");
       const max = o.state === "merged" || o.state === "closed" || o.head ? Infinity : o.limit;
-      const raw = await paged<FPr>(`${repoPath}/pulls`, { state, head: o.head, base: o.base, poster: o.author, labels: o.label, sort: "recentupdate" }, max);
+      // gh's @me is the token's own user.
+      const poster = o.author === "@me" ? (await call<FUser>("GET", "/user")).login : o.author;
+      const raw = await paged<FPr>(`${repoPath}/pulls`, { state, head: o.head, base: o.base, poster, labels: o.label, sort: "recentupdate" }, max);
       return raw
         .filter((p) => (o.state === "merged" ? p.merged : o.state === "closed" ? !p.merged : true))
         .filter((p) => !o.head || p.head.ref === o.head)
