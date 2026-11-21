@@ -509,7 +509,7 @@ on the head and skips a red or still-pending head without spending a model. Ever
 including the GitHub App's permissions and the rollout, is in
 [`docs/approve.md`](../docs/approve.md).
 
-## Learning the rubric from humans: `brewery calibrate <owner/name>`
+## Learning the rubric from humans: `brewery calibrate <[host/]owner/name>`
 
 `owner/name` is a GitHub repo; a Forgejo repo is `host/owner/name`, with the host in
 `~/.config/forge/hosts.json`. GitHub selects PRs with an `updated:>=` search. Forgejo has no
@@ -563,7 +563,7 @@ Run state also feeds learning:
 A `D2 (durable)` row in an IP's Decisions table is copied to `docs/decisions/NNNN-<slug>.md` in the
 same end-of-run commit, and the marker becomes a link.
 
-## Nightly learning: `brewery cellar <owner/name>`
+## Nightly learning: `brewery cellar <[host/]owner/name>`
 
 `owner/name` is GitHub, `host/owner/name` a Forgejo host. On Forgejo, merged PRs are read in
 full and filtered by merge date (no `merged:>=` search), and failed runs by `--created` over

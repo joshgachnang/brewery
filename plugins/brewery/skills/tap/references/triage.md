@@ -12,9 +12,13 @@ but you cannot reach in the report.
 
 | Source | Resolve one | Search |
 | --- | --- | --- |
-| GitHub or Forgejo | `forge issue view <n> --json number,title,body,state,labels,assignees,createdAt,url,comments` | GitHub: `forge issue list --state open --search "<terms> created:>=<iso>" --json number,title,createdAt,labels,assignees,url`. Forgejo: `--search` is a plain keyword search there, so drop the qualifier and filter the date yourself: `forge issue list --state open --search "<terms>" -L 200 --json number,title,createdAt,labels,assignees,url -q '.[] \| select(.createdAt >= "<iso>")'` |
+| GitHub or Forgejo | `forge issue view <n> --json number,title,body,state,labels,assignees,createdAt,url,comments` | GitHub: `forge issue list --state open --search "<terms> created:>=<iso>" --json number,title,createdAt,labels,assignees,url`. Forgejo: see below the table |
 | Linear | the Linear MCP tools, when connected | the same tools, filtered by team, label, and created date |
 | Sentry | `GET /api/0/organizations/<org>/issues/?query=<short-id>` with `SENTRY_CLIENT_SECRET` (or `SENTRY_AUTH_TOKEN`) as the bearer token | the same endpoint with `query=is:unresolved <terms>` and `statsPeriod=24h` (or `start`/`end`) |
+
+Forgejo's `--search` is a plain keyword search, so drop the `created:` qualifier and filter
+the date yourself:
+`forge issue list --state open --search "<terms>" -L 200 --json number,title,createdAt,labels,assignees,url -q '.[] | select(.createdAt >= "<iso>")'`
 
 The current repository (GitHub or Forgejo, from its `origin`) is the default issue tracker. Repository instructions name the
 Linear team and Sentry org and projects; when they do not, use only GitHub.

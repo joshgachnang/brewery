@@ -184,15 +184,16 @@ make it clean, stop and escalate per push ownership.
 10. **Commit/push if changed, then watch.** Follow repository policy. Record the new
    head. Record the fix round as a Taste `ledger` entry. Resolve an addressed thread
    silently when the diff is self-explanatory. Reply only when a non-obvious decision
-   must be preserved, using no more than three short sentences. Reply to and resolve
+   must be preserved, using no more than three short sentences (thread replies per
+   [`push ownership`](../terreno-shared/push-ownership.md#bot-comments)). Reply to and resolve
    each declined bot thread. After a push, wait again for review bots and then the product-CI wait
    loop on the new head (`forge pr checks <pr> --watch --grace 300`, `forge run watch`,
    `circleci run watch --sha <sha>`), then act on those results once more in this
    invocation. A further push after that second act is `PENDING`. Do not watch product
    CI for a head you have not pulled, linted, typechecked, last-run-test-verified, and
    pushed.
-11. **Preserve PR description.** Never regenerate or replace human-authored text. Fetch the
-    latest body before a required minimal evidence edit; skip body mutation if it cannot
+11. **Preserve PR description.** PR operations go through `forge`, never `gh`: `forge pr create --title … --body-file …`, `forge pr edit <pr> --body-file …`, `forge pr ready`, `forge pr view`. Never regenerate or replace
+    human-authored text. Fetch the latest body before a required minimal evidence edit; skip body mutation if it cannot
     be preserved exactly. Update `Verification` instead of posting test/CI comments. Keep
     stage-result YAML in the Details toggle, never in the visible body; when you rewrite
     it, keep `ip` and the delivered task ids so the approval bot still finds the plan. Keep

@@ -98,8 +98,8 @@ must follow the [`GitHub attention contract`](../../terreno-shared/github-attent
 7. **Push.** Push once with upstream. Resolve only mechanical conflicts needed to update the PR,
    using repository conflict guidance and rerunning affected checks. A conflict requiring
    a design/behavior choice is `BLOCKED`.
-8. **Create/update PR.** Apply the GitHub attention contract and any stricter repository
-   template. On create, set the title to `[ticket] Short feature title` (Linear
+8. **Create/update PR.** PR operations go through `forge`, never `gh`: `forge pr create --title … --body-file …`, `forge pr edit <pr> --body-file …`, `forge pr ready`, `forge pr view`. Apply the GitHub attention contract and any
+   stricter repository template. On create, set the title to `[ticket] Short feature title` (Linear
    `TEAM-n` or GitHub `#n`; feature only, no `feat:` / `IP Approved` / `Task list`).
    Initialize `Why` from the IP's original justification and `What changed` from a
    brief overview of the approved IP and intended outcomes. Keep both stable unless

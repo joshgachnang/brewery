@@ -64,6 +64,14 @@ forge pr threads "$PR_NUMBER" --unresolved --json id,path,line,comments \
 On Forgejo a thread cannot be resolved through the API (`forge` has no resolve), so the
 reply is the answer there: a thread with a reply from anyone but a bot counts as answered.
 
+Reply inside the thread, not with `forge pr comment` (a conversation comment is not in the
+thread and leaves it unanswered). GitHub:
+`forge api -X POST repos/{owner}/{repo}/pulls/<pr>/comments/<first comment id>/replies -f body='…'`.
+Forgejo has no reply endpoint; it groups a thread by file and line, so post a review comment
+on the same line:
+`forge api -X POST repos/{owner}/{repo}/pulls/<pr>/reviews --input <file>` with
+`{"event": "COMMENT", "body": "", "comments": [{"path": "<path>", "new_position": <line>, "body": "…"}]}`.
+
 Human review threads follow the same table, except a human's question stays open until
 the human resolves it.
 

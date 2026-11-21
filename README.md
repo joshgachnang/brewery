@@ -516,8 +516,8 @@ returns only the failures, by name).
 | `brewery finish [pr]` | Drive a PR to green |
 | `brewery cut <ip>` | Attack an IP, print findings |
 | `brewery approve <pr>` | Rubric review, posted as a GitHub App |
-| `brewery calibrate <owner/name>` | Learn approval rules from humans |
-| `brewery cellar <owner/name>` | Nightly learning pass |
+| `brewery calibrate <[host/]owner/name>` | Learn approval rules from humans |
+| `brewery cellar <[host/]owner/name>` | Nightly learning pass |
 | `brewery init-docs` | Add the docs and learning layout to a repo |
 | `brewery status [slug]` | Runs and what waits on you |
 | `brewery board` | The repo's board |

@@ -31,8 +31,8 @@ use terreno's), and `loop-engineering.md` (terreno-internal explanation no brewe
 | `testing.md` | `skills/2-pick/references/testing.md` | tests first per task (replaces the "all imagined tests" red flag), blast radius, test tiers; the Terreno testing-skills line from TerrenoLabs/terreno#1614 (open); "Planned e2e specs" links `testing-plan.md` in this directory |
 | `../barrel/stages/pick.md` | `skills/2-pick/SKILL.md` | frontmatter dropped, links, Roast is followed from `roast.md`, steps 5–7 write all of the task's tests first through `test.md`, step 10 checks the patch against `approval-ready.md` |
 | `../barrel/stages/roast.md` | `skills/3-roast/SKILL.md` | frontmatter dropped, links, step 3 checks the tests against the task's test brief and returns `retest`; per-task Roast runs `http`/`process` e2e rows and defers `browser`/`native flow` rows to the integrated Roast; step 3 holds the tests to `approval-ready.md`'s Tests bar |
-| `../barrel/stages/brew.md` | `skills/4-brew/SKILL.md` | frontmatter dropped, links, hand-off goes to `finish`, step 3 checks the branch and body against `approval-ready.md` before the push, step 10 skips the review-bot wait on Forgejo (the forge change (see Forge below)) |
-| `../finish/taste.md` | `skills/5-taste/SKILL.md` | frontmatter dropped, links, `finish` owns the repeat loop, the forge change (see Forge below): step 3 is done at once on Forgejo, `forge` watches, step 8's rerun re-triggers with an empty commit on Forgejo |
+| `../barrel/stages/brew.md` | `skills/4-brew/SKILL.md` | frontmatter dropped, links, hand-off goes to `finish`, step 3 checks the branch and body against `approval-ready.md` before the push, step 8 names `forge` for PR operations and step 10 skips the review-bot wait on Forgejo (the forge change (see Forge below)) |
+| `../finish/taste.md` | `skills/5-taste/SKILL.md` | frontmatter dropped, links, `finish` owns the repeat loop, the forge change (see Forge below): step 3 is done at once on Forgejo, `forge` watches, step 8's rerun re-triggers with an empty commit on Forgejo, steps 10–11 name `forge` for PR body edits and thread replies |
 | `../distill/references/distilling.md` | `skills/1-grow/references/grilling.md` | rewritten: triage instead of full grilling |
 
 Only `reaching-the-human.md` is original to this directory. `../barrel/stages/test.md`,
@@ -53,6 +53,8 @@ reapply this, for every file the Changes column marks with the forge change:
   `no review bots configured (Forgejo)` and nothing waits on Bugbot, CodeQL, or approval
 - on Forgejo `forge run rerun` exits 2 (no rerun API): re-trigger with an empty commit
 - on Forgejo threads cannot be resolved through the API: the reply is the answer
+- a step that opens, edits, readies, or comments on a PR without naming a tool says `forge`,
+  so an agent does not default to `gh`
 
 Keep `gh` only for what is GitHub itself (`gh auth`, `gh search` across owners). After a
 rack, `grep -rnE "\bgh (pr|run|issue|api|repo)\b" plugins cli/src templates` must find
