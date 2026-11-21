@@ -1,5 +1,5 @@
 // Taste until the PR has no conflicts and every check passes. brewery does the waiting
-// (gh watches cost no tokens) and only starts an agent when there is something to react to.
+// (waiting on the forge costs no tokens) and only starts an agent when there is something to react to.
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { recordFailures, resolveFailures } from "../ci.ts";
@@ -16,7 +16,7 @@ import { asksFrom, gate } from "./gate.ts";
 export type Outcome = "done" | "waiting";
 
 // A repo with CI workflows whose PR reports no check at all has not passed CI: its jobs were
-// never started (an Actions budget, a missing runner) or gh could not list them. `[].every()`
+// never started (an Actions budget, a missing runner) or the forge could not list them. `[].every()`
 // is true, so without this an empty list read as "0 checks green".
 const checksGreen = (snap: PrSnapshot, ciExpected: boolean): boolean =>
   snap.mergeable !== "CONFLICTING" &&
@@ -26,7 +26,7 @@ const checksGreen = (snap: PrSnapshot, ciExpected: boolean): boolean =>
 // Done means green checks and no bot comment left unanswered, not just green checks.
 export const isGreen = (snap: PrSnapshot, ciExpected = true): boolean => checksGreen(snap, ciExpected) && !snap.botThreads?.length;
 
-const CI_CONFIG_DIRS = [".github/workflows", ".circleci", ".buildkite"];
+const CI_CONFIG_DIRS = [".github/workflows", ".forgejo/workflows", ".circleci", ".buildkite"];
 
 // Whether the repo defines CI at all; one that does not can only ever report zero checks.
 export const ciConfigured = (repo: string): boolean =>

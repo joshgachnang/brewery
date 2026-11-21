@@ -468,10 +468,13 @@ Act on it:
   behavior choice is BLOCKED with an \`ask\`.
 - A branch-caused failure: fix it, run the pre-push gates, push.
 - A failure the branch did not cause (fails on base too, known flake, infrastructure): rerun
-  only the failed jobs (\`gh run rerun <id> --failed\`). Never push code for it.
+  only the failed jobs (\`forge run rerun <id> --failed\`). On Forgejo that exits 2 with the
+  run's link, since Forgejo cannot rerun through its API: re-trigger the run with an empty
+  commit (\`git commit --allow-empty -m "Re-run CI"\`, then push) instead. Never push code for it.
 - Every unanswered bot thread above: fix it and resolve the thread, or reply with one
   sentence (false positive, intended, or out of scope with a follow-up link) and resolve
-  it. Leave one open only as a human decision, with an \`ask\`. Never leave one unanswered.
+  it. Forgejo threads cannot be resolved through its API; there the reply is the answer.
+  Leave one open only as a human decision, with an \`ask\`. Never leave one unanswered.
 Status PASS after acting (or when nothing was actionable), with \`sha\` set to the head you
 leave. BLOCKED for a human decision, with \`ask\`.`;
 

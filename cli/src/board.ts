@@ -3,6 +3,8 @@
 // is moving, and the forge (or git, offline) says what shipped.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
+import { backendAt } from "./forge/ci.ts";
+import type { Pr } from "./forge/types.ts";
 import { isApproved, parseTasks, readStatus, title, type IpTask } from "./ip.ts";
 import type { RunState } from "./state.ts";
 import { sh } from "./vcs.ts";
@@ -174,22 +176,24 @@ const readRuns = (repo: string): RunState[] => {
   return out;
 };
 
-const ghJson = async <T>(repo: string, argv: string[]): Promise<T | undefined> => {
-  const res = await sh(repo, ["gh", ...argv], 20_000);
-  if (res.code !== 0) return undefined;
+// Open or merged PRs from the checkout's forge, or undefined when it cannot be asked (offline,
+// no origin, an unknown host); a slow forge must not hold the board up past 20 seconds.
+const listPrs = async (repo: string, state: "open" | "merged", limit: number): Promise<Pr[] | undefined> => {
   try {
-    return JSON.parse(res.out || "[]") as T;
+    const b = await backendAt(repo);
+    return await Promise.race([
+      b.prList({ state, limit }),
+      new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), 20_000).unref?.()),
+    ]);
   } catch {
     return undefined;
   }
 };
 
-// Merged PRs from GitHub; offline or without gh, the base branch's first-parent history.
+// Merged PRs from the forge; offline or without one, the base branch's first-parent history.
 const readMerges = async (repo: string, base: string, limit: number): Promise<Merge[]> => {
-  const prs = await ghJson<{ number: number; title: string; mergedAt: string }[]>(repo, [
-    "pr", "list", "--state", "merged", "--limit", String(limit), "--json", "number,title,mergedAt",
-  ]);
-  if (prs) return prs.sort((a, b) => b.mergedAt.localeCompare(a.mergedAt)).map((p) => ({ ref: `#${p.number}`, title: p.title, at: p.mergedAt }));
+  const prs = await listPrs(repo, "merged", limit);
+  if (prs) return prs.sort((a, b) => (b.mergedAt ?? "").localeCompare(a.mergedAt ?? "")).map((p) => ({ ref: `#${p.number}`, title: p.title, at: p.mergedAt ?? "" }));
   for (const ref of [`origin/${base}`, base]) {
     const res = await sh(repo, ["git", "log", "--first-parent", `-${limit}`, "--format=%h%x09%cI%x09%s", ref]);
     if (res.code !== 0) continue;
@@ -203,9 +207,7 @@ const readMerges = async (repo: string, base: string, limit: number): Promise<Me
 
 export const gatherBoard = async (repo: string, opts: { base: string; planDirs: string[]; merges: number }): Promise<BoardInput> => {
   const [openPrs, merges] = await Promise.all([
-    ghJson<{ number: number; title: string; headRefName: string; isDraft: boolean }[]>(repo, [
-      "pr", "list", "--state", "open", "--limit", "50", "--json", "number,title,headRefName,isDraft",
-    ]),
+    listPrs(repo, "open", 50),
     readMerges(repo, opts.base, opts.merges),
   ]);
   return {

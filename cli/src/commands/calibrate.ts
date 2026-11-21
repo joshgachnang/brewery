@@ -38,7 +38,7 @@ export interface CalibrateOutcome {
   detail?: string;
 }
 
-const stampPath = (name: string): string => join(stateDir(), `calibrate__${name.replace("/", "__")}.json`);
+const stampPath = (name: string): string => join(stateDir(), `calibrate__${name.replaceAll("/", "__")}.json`);
 
 const readStamp = (name: string): string | undefined =>
   existsSync(stampPath(name)) ? (JSON.parse(readFileSync(stampPath(name), "utf8")) as { since: string }).since : undefined;
@@ -129,11 +129,11 @@ const prBody = (summary: string, changes: string[], proposals: string, since: st
 
 export const calibrate = async (name: string, forge: Forge, opts: CalibrateOptions = {}): Promise<CalibrateOutcome> => {
   const log = opts.log ?? ((line: string) => console.log(line));
-  if (!/^[\w.-]+\/[\w.-]+$/.test(name)) throw new Error(`brewery calibrate: want owner/name, got "${name}"`);
+  if (!/^(?:[\w.-]+\/)?[\w.-]+\/[\w.-]+$/.test(name)) throw new Error(`brewery calibrate: want owner/name or host/owner/name, got "${name}"`);
   const now = opts.now ?? new Date();
   let repo = await resolveCheckout(name);
   if (!repo) {
-    repo = join(mkdtempSync(join(tmpdir(), "brewery-calibrate-")), name.split("/")[1]);
+    repo = join(mkdtempSync(join(tmpdir(), "brewery-calibrate-")), name.split("/").at(-1) ?? "repo");
     log(`no local checkout of ${name}; cloning to ${repo}`);
     await forge.clone(name, repo);
   }
