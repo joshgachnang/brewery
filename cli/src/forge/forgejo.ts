@@ -454,9 +454,16 @@ export const forgejoBackend = (ref: RepoRef, opts: ForgejoOpts): Backend => {
         throw new ForgeError(`forge: not merging ${slug}#${n}: head is ${pr.head.sha}, not ${o.matchHead}`);
       }
       const path = `${repoPath}/pulls/${n}/merge`;
-      const res = await request("POST", path, {
-        body: { Do: o.method, ...(o.matchHead ? { head_commit_id: o.matchHead } : {}), ...(o.deleteBranch ? { delete_branch_after_merge: true } : {}) },
-      });
+      const body = { Do: o.method, ...(o.matchHead ? { head_commit_id: o.matchHead } : {}), ...(o.deleteBranch ? { delete_branch_after_merge: true } : {}) };
+      // Just after a push Forgejo can refuse with 405 "Please try again later" while it is
+      // still checking the PR; that is retried, every other refusal is final.
+      let res = await request("POST", path, { body });
+      for (let i = 0; i < 5 && res.status === 405; i++) {
+        const text = await res.clone().text();
+        if (!/try again later/i.test(text)) break;
+        await sleep(pollMs * (i + 1));
+        res = await request("POST", path, { body });
+      }
       if (res.ok) return;
       const error = await failure("POST", path, res);
       if (res.status === 409 && /head out of date/i.test(error.message)) {

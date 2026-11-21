@@ -738,7 +738,9 @@ repo's branch protection sets one, and this rule when it is empty.
 sha. On GitHub this is gh's own flag. On Forgejo, forge reads the head and refuses before
 calling merge, then sends the sha as `head_commit_id`, which Forgejo checks again
 server-side (HTTP 409 "head out of date", reported as the same refusal), so a push between
-the read and the merge is caught too.
+the read and the merge is caught too. Right after a push Forgejo can answer 405 "Please try again later"
+while it rechecks the PR; forge retries that up to five times, backing off, and treats any
+other 405 as final.
 
 ### Tokens in output
 

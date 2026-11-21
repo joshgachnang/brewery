@@ -168,7 +168,10 @@ interface Hit {
 
 const fakeForgejo = (routes: Record<string, (hit: Hit) => Response | unknown>): { url: string; hits: Hit[]; stop: () => void } => {
   const hits: Hit[] = [];
+  // Bound to 127.0.0.1 itself: with only port 0, another local server on 127.0.0.1 can hold the
+  // same port and answer these requests.
   const server = Bun.serve({
+    hostname: "127.0.0.1",
     port: 0,
     fetch: async (req) => {
       const url = new URL(req.url);
@@ -259,7 +262,7 @@ describe("forge: Forgejo backend against recorded responses", () => {
   });
 
   test("a network failure is a forge: error", async () => {
-    const closed = Bun.serve({ port: 0, fetch: () => new Response("") });
+    const closed = Bun.serve({ hostname: "127.0.0.1", port: 0, fetch: () => new Response("") });
     const url = `http://127.0.0.1:${closed.port}`;
     closed.stop(true);
     await expect(backend(url).prView("1")).rejects.toThrow(/^forge: GET \/api\/v1\/repos\/joshgachnang\/forgejo-scratch\/pulls\/1: /);
@@ -334,6 +337,26 @@ describe("forge: Forgejo backend against recorded responses", () => {
       expect(server.hits.find((h) => h.method === "POST")?.body).toEqual({ Do: "squash", head_commit_id: HEAD, delete_branch_after_merge: true });
     } finally {
       server.stop();
+    }
+  });
+
+  test("merge retries Forgejo's 405 'Please try again later' and stops on any other 405", async () => {
+    let tries = 0;
+    const server = fakeForgejo(scratchRoutes({
+      [`POST ${REPO}/pulls/1/merge`]: () => (++tries < 3 ? Response.json({ message: "Please try again later" }, { status: 405 }) : new Response(null, { status: 200 })),
+    }));
+    try {
+      await backend(server.url).prMerge("1", { method: "merge", matchHead: HEAD, deleteBranch: false });
+      expect(tries).toBe(3);
+    } finally {
+      server.stop();
+    }
+    const blocked = fakeForgejo(scratchRoutes({ [`POST ${REPO}/pulls/1/merge`]: () => Response.json({ message: "Not all required status checks successful" }, { status: 405 }) }));
+    try {
+      await expect(backend(blocked.url).prMerge("1", { method: "merge", deleteBranch: false })).rejects.toThrow(/HTTP 405 Not all required/);
+      expect(blocked.hits.filter((h) => h.method === "POST")).toHaveLength(1);
+    } finally {
+      blocked.stop();
     }
   });
 

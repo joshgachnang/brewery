@@ -97,7 +97,7 @@ test.skipIf(!process.env.FORGE_LIVE)("a PR on Forgejo goes from open through che
     expect(threads).toHaveLength(1);
     expect(threads[0]).toMatchObject({ line: 2, isResolved: false });
     expect(threads[0].comments.map((c: { author: { login: string; isBot: boolean } }) => [c.author.login, c.author.isBot])).toEqual([[REVIEWER, true], ["joshgachnang", false]]);
-    expect(JSON.parse((await forge("pr", "view", number, "--json", "reviewDecision")).out).reviewDecision).toBe("CHANGES_REQUESTED");
+    expect(JSON.parse((await forge("pr", "view", number, "--json", "reviewDecision,approvedAtHead")).out)).toEqual({ reviewDecision: "CHANGES_REQUESTED", approvedAtHead: false });
 
     // Move the head, approve it, then try to merge at the old head.
     writeFileSync(join(repo, `forge-it-${stamp}.txt`), "first line\nsecond line, fixed\nthird line\n");
@@ -105,9 +105,9 @@ test.skipIf(!process.env.FORGE_LIVE)("a PR on Forgejo goes from open through che
     await git("push", "-q", "origin", branch);
     const second = await git("rev-parse", "HEAD");
     await api("POST", `/pulls/${number}/reviews`, { event: "APPROVED", body: "Looks good", commit_id: second }, REVIEWER);
-    const approved = JSON.parse((await forge("pr", "view", number, "--json", "headRefOid,reviewDecision")).out);
+    const approved = JSON.parse((await forge("pr", "view", number, "--json", "headRefOid,reviewDecision,approvedAtHead")).out);
     step(`after push and approval: ${JSON.stringify(approved)}`);
-    expect(approved).toEqual({ headRefOid: second, reviewDecision: "APPROVED" });
+    expect(approved).toEqual({ headRefOid: second, reviewDecision: "APPROVED", approvedAtHead: true });
 
     const stale = await forge("pr", "merge", number, "--merge", "--match-head-commit", first);
     expect(stale.code).toBe(1);
