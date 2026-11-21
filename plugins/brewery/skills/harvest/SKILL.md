@@ -34,7 +34,7 @@ the chat, ask with the structured question tool and act on the answer in the sam
 
 ## Labels
 
-Create any that are missing on the first run (`gh label create <name> --color <hex>
+Create any that are missing on the first run (`forge label create <name> --color <hex>
 --description <text>`), and say so in the report. Never rename or delete a label the repo
 already has.
 
@@ -67,7 +67,8 @@ the same problem.
    with no answer stays `brewery:proposed` and goes back in today's digest, marked as
    carried over. Silence is never acceptance.
 2. **Apply.** For each answered issue, swap `brewery:proposed` for the final label, then:
-   - `wontfix`: close as not planned (`gh issue close <n> --reason "not planned"`) with
+   - `wontfix`: close as not planned (`forge issue close <n> --reason "not planned"`; Forgejo
+     has no close reason, so there the comment carries it) with
      the one-sentence reason the digest showed, edited as the human edited it.
    - `needs-info`: comment the one question the digest showed, addressed to the reporter.
    - `duplicate`: close with `Duplicate of #<n>` (`--reason "not planned"`).
@@ -85,8 +86,10 @@ the same problem.
    - is `brewery:collect-signal` with no new signal for 60 days. Propose `wontfix`
      ("no further reports in 60 days"); the human decides, as for any proposal.
    Remove the stale label before re-proposing. Leave every other labelled issue alone.
-4. **Sweep.** List open issues with no `brewery:` label, oldest first, skipping pull
-   requests, issues assigned to someone else, and issues an open PR already references
+4. **Sweep.** List open issues with no `brewery:` label, oldest first
+   (`forge issue list --state open -L 200 --json number,title,labels,assignees,createdAt`,
+   then drop any with a `brewery:` label and sort by `createdAt`; this works the same on
+   GitHub and Forgejo, with no search qualifier), skipping pull requests, issues assigned to someone else, and issues an open PR already references
    (tap's [skip rules](../tap/references/triage.md#skip)). Take the first `limit`. Count
    the rest as the backlog for the report.
 5. **Triage.** Fresh read-only subagents, one per issue or obvious cluster, at most five at

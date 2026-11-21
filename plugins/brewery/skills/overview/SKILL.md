@@ -85,6 +85,15 @@ fixed routing table passes to the next step on that work; roast gets only its fi
 traps, as claims to verify. The contract and table are in `cli/README.md` (Handoffs between
 steps).
 
+## GitHub or Forgejo
+
+Every skill and the CLI reach the forge through `forge` (`cli/README.md`, "forge"), which
+picks GitHub or Forgejo from the repo's `origin`, so the same pipeline runs on both. Where
+Forgejo differs, the skills say so: no review bots or approval agent yet (the review-bot
+wait counts as done, with `no review bots configured (Forgejo)`), no API to rerun a run
+(push an empty commit), no `--search` qualifiers (filter the JSON), and threads answered by
+reply rather than resolved. cellar and calibrate take `host/owner/name` for a Forgejo repo.
+
 ## Where things live
 
 - Plans: `docs/plans/`; specs: `docs/specs/`.

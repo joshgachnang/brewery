@@ -34,7 +34,7 @@ verbatim copies, which are forks and what each fork changes, and which SHA they 
    | Bucket | Which files | Action |
    | --- | --- | --- |
    | copy | `VENDORED.md` rows whose Changes is `none` | Copy the upstream file over brewery's, then check `git diff` shows only the upstream change |
-   | reapply | forks: `barrel/stages/*.md`, `finish/taste.md`, `terreno-shared/testing.md`, `distill/references/distilling.md` | Read the upstream hunk, then make the same change by hand in brewery's fork, in brewery's voice. Keep every brewery change the Changes column lists, such as tests first, the test tiers, and `finish` owning the repeat loop |
+   | reapply | forks: `barrel/stages/*.md`, `finish/taste.md`, `terreno-shared/testing.md`, `distill/references/distilling.md`, and every other `VENDORED.md` row whose Changes is not `none` (such as the forge change) | Read the upstream hunk, then make the same change by hand in brewery's fork, in brewery's voice. Keep every brewery change the Changes column lists, such as tests first, the test tiers, `finish` owning the repeat loop, and `forge` in place of `gh` |
    | reflect | contract changes brewery's own skills must carry: a new required IP section, a new gate, or a renamed term | Update `distill`, `cut`, `tap`, `pour`, `barrel`, `finish`, `harvest`, or `polish` where they write, attack, or act on that contract. Add a `cli/test/layout.test.ts` case for each new required phrase |
    | adopt | a new upstream reference or skill brewery's skills will link to | Vendor it into `terreno-shared/` and add a `VENDORED.md` row |
    | skip | anything else | Write one line saying why: brewery replaced it (Grow → `distill`), it is Terreno-app specific, or it is an operator tool such as a backfill skill that brewery does not run |
@@ -49,7 +49,9 @@ verbatim copies, which are forks and what each fork changes, and which SHA they 
    every manifest (`.claude-plugin`, `.cursor-plugin`, `.codex-plugin`, and the three
    marketplace files).
 6. **Prove.** `cd cli && bun test && bun run typecheck`. For every `copy` row, diff the
-   file against the upstream copy at the recorded SHA: it must be empty. Fix failures
+   file against the upstream copy at the recorded SHA: it must be empty.
+   `grep -rnE "\bgh (pr|run|issue|api|repo)\b" plugins cli/src templates` finds nothing
+   outside `cli/src/forge/` (`VENDORED.md`, "Forge"). Fix failures
    before reporting.
 7. **Commit.** One commit on a fresh branch, subject like
    `Rack terreno <short sha>: <what came in>`. The body lists adopted and skipped items

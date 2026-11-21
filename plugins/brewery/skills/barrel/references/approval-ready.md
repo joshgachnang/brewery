@@ -7,6 +7,10 @@ dimensions, scored 0–3: plan match, architecture, tests, and evidence. It appr
 checks on their own branch first, so the PR reaches the bot already passing. Fix what you
 find through Pick and Roast; never weaken the check to make it pass.
 
+The approval agent posts to GitHub only so far. On Forgejo still run every check below,
+but no approval will arrive: nothing waits on one, and finish treats the missing
+reviewer as `no review bots configured (Forgejo)`.
+
 Run this at three points:
 
 | When | What |
@@ -22,7 +26,8 @@ The bot reads its rubric from the **base branch**, so read it from there too:
 1. `approve.rubric` in `.brewery.json` on the base (default `docs/approval-rubric.md`):
    `git show origin/<base>:<path>`.
 2. No such file → brewery's default:
-   `gh api repos/joshgachnang/brewery/contents/cli/templates/approval-rubric.md -H "Accept: application/vnd.github.raw"`.
+   `forge api -R github.com/joshgachnang/brewery repos/joshgachnang/brewery/contents/cli/templates/approval-rubric.md -H "Accept: application/vnd.github.raw"`
+   (brewery's public GitHub copy, whichever forge your repo is on).
 
 Apply that file as written. Repository rules (Terreno's `APIError`, `findExactlyOne`,
 `@terreno/ui`, coverage gates, generated SDKs, changelog fragments) live in the repo's

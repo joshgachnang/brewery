@@ -20,12 +20,13 @@ import { finish } from "./commands/finish.ts";
 import { ui } from "./commands/ui.ts";
 import { DEFAULT_CONFIG, FAN_OUT, loadConfig, replyWaitMin, STAGES, userConfigPath } from "./config.ts";
 import { initDocs } from "./docs.ts";
-import { githubForge } from "./forge/history.ts";
+import { backendAt, forgeCi } from "./forge/ci.ts";
+import { repoForge } from "./forge/history.ts";
 import { waitForReply } from "./human.ts";
 import { isApproved, parseTasks, readIp, readStatus } from "./ip.ts";
 import { appendContext, appendNote, loadState, newState, readIndex, saveState, slugify, withRunLock, type RunState } from "./state.ts";
 import type { Ctx } from "./step.ts";
-import { defaultBase, ensureExcluded, githubCi, repoRoot, sh } from "./vcs.ts";
+import { defaultBase, ensureExcluded, repoRoot } from "./vcs.ts";
 
 const HELP = `brewery — plan and ship a feature with separate agents per step.
 
@@ -55,15 +56,17 @@ Usage:
       --dry-run prints the verdict and the review body without posting. --wait-checks
       waits (default limits.ciWaitMin) for every other check on the head to finish
       and skips the head, model unspent, when any failed or is still pending.
-  brewery calibrate <owner/name> [--since <ISO date>] [--reviewer login,...] [--notes file] [--dry-run]
+  brewery calibrate <[host/]owner/name> [--since <ISO date>] [--reviewer login,...] [--notes file] [--dry-run]
       Read what humans said in PR reviews since the last pass (and any pasted notes),
       and open one PR that turns the recurring ones into approval rubric rules and
-      path rules. Prints generic proposals for brewery's default rubric.
+      path rules. Prints generic proposals for brewery's default rubric. owner/name is
+      GitHub; a Forgejo repo is host/owner/name (a host in ~/.config/forge/hosts.json).
   brewery cut <ip> [--request "text" | --context file]
       Attack an IP with only the human's words; prints findings.
-  brewery cellar <owner/name> [--since <ISO date>] [--dry-run]
+  brewery cellar <[host/]owner/name> [--since <ISO date>] [--dry-run]
       Learn from one repo's journals, failed CI runs, and merged PRs since the last
       pass, and open one PR with learnings, rules, or checks. Meant for a nightly timer.
+      owner/name is GitHub; a Forgejo repo is host/owner/name.
   brewery init-docs            Add docs/{decisions,journal,learnings}/ and point AGENTS.md/CLAUDE.md at them
   brewery status [slug]        Runs, phases, and what is waiting on you
   brewery board [--merges N] [--json]
@@ -104,8 +107,12 @@ const appAuth = async (repo: string, dryRun: boolean): Promise<{ poster?: Poster
     const slug = env.TERRENO_APP_SLUG;
     return { appLogin: slug ? (slug.endsWith("[bot]") ? slug : `${slug}[bot]`) : undefined };
   }
-  const name = (await sh(repo, ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])).out;
-  if (!name) throw new Error("brewery approve: cannot resolve owner/name for this repository (gh repo view)");
+  const b = await backendAt(repo);
+  // The approval agent posts as a GitHub App. Forgejo has no reviewer yet; say so, never hang.
+  if (b.ref.forge !== "github") {
+    throw new Error(`brewery approve: ${b.ref.host} is a Forgejo host, and the approval agent only posts to GitHub so far; --dry-run still prints the verdict`);
+  }
+  const name = `${b.ref.owner}/${b.ref.name}`;
   const auth = await installationToken({ repo: name, env });
   return { poster: githubPoster({ repo: name, token: auth.token, appLogin: auth.appLogin, log }), appLogin: auth.appLogin };
 };
@@ -157,7 +164,7 @@ const makeCtx = (state: RunState, agentsFlag?: string, parallel?: string | true)
 
 const afterApproval = async (ctx: Ctx, go: boolean): Promise<number> => {
   if (!go && !ctx.state.oneShot) return 0;
-  return (await barrel(ctx, githubCi)) === "done" ? 0 : WAITING;
+  return (await barrel(ctx, forgeCi)) === "done" ? 0 : WAITING;
 };
 
 // Take the reply right here instead of exiting: from the terminal when someone is at it, or
@@ -171,7 +178,7 @@ const replyLoop = async (ctx: Ctx, interactive: boolean, go: boolean): Promise<n
     if (outcome === "approved") return afterApproval(ctx, go);
     if (outcome === "stopped") return 0;
     if (outcome === "continue") {
-      const result = await barrel(ctx, githubCi);
+      const result = await barrel(ctx, forgeCi);
       if (result === "done") return 0;
     }
   }
@@ -226,7 +233,7 @@ const cmdAnswer = async (positional: string[], flags: Record<string, string | tr
     if (outcome === "approved") return afterApproval(ctx, Boolean(flags.go));
     if (outcome === "stopped") return 0;
     if (outcome === "waiting") return replyLoop(ctx, !flags["no-wait"], Boolean(flags.go));
-    const result = await barrel(ctx, githubCi);
+    const result = await barrel(ctx, forgeCi);
     return result === "done" ? 0 : replyLoop(ctx, !flags["no-wait"], true);
   });
 };
@@ -259,7 +266,7 @@ const cmdBarrel = async (positional: string[], flags: Record<string, string | tr
   return withRunLock(state, async () => {
     saveState(state);
     const ctx = makeCtx(state, str(flags.agents), flags.parallel);
-    const result = await barrel(ctx, githubCi);
+    const result = await barrel(ctx, forgeCi);
     return result === "done" ? 0 : replyLoop(ctx, !flags["no-wait"], true);
   });
 };
@@ -268,7 +275,7 @@ const cmdFinish = async (positional: string[], flags: Record<string, string | tr
   const repo = await repoRoot(str(flags.repo) ?? process.cwd());
   await ensureExcluded(repo);
   const slugFlag = str(flags.slug);
-  const pr = positional[0] ? Number(positional[0]) : ((await githubCi.prForBranch(repo)) ?? undefined);
+  const pr = positional[0] ? Number(positional[0]) : ((await forgeCi.prForBranch(repo)) ?? undefined);
   if (!pr) throw new Error("brewery finish: no PR given and none for the current branch");
   const slug = slugFlag ?? `pr-${pr}`;
   const state = existsSync(join(repo, ".terreno", "brewery", slug, "state.json"))
@@ -277,7 +284,7 @@ const cmdFinish = async (positional: string[], flags: Record<string, string | tr
   return withRunLock(state, async () => {
     state.waiting = undefined;
     const ctx = makeCtx(state, str(flags.agents), flags.parallel);
-    const result = await finish(ctx, githubCi, pr);
+    const result = await finish(ctx, forgeCi, pr);
     return result === "done" ? 0 : replyLoop(ctx, !flags["no-wait"], true);
   });
 };
@@ -285,9 +292,9 @@ const cmdFinish = async (positional: string[], flags: Record<string, string | tr
 const cmdApprove = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
   const repo = await repoRoot(str(flags.repo) ?? process.cwd());
   await ensureExcluded(repo);
-  const pr = positional[0] ? Number(positional[0]) : ((await githubCi.prForBranch(repo)) ?? undefined);
+  const pr = positional[0] ? Number(positional[0]) : ((await forgeCi.prForBranch(repo)) ?? undefined);
   if (!pr || !Number.isSafeInteger(pr)) throw new Error("usage: brewery approve <pr> [--dry-run] [--base <branch>]");
-  let view = await githubCi.prView(repo, pr);
+  let view = await forgeCi.prView(repo, pr);
   const base = str(flags.base) ?? view.base;
   const state = newState({ slug: `approve-${pr}`, repo, ip: "", base, phase: "build" });
   const dryRun = Boolean(flags["dry-run"]);
@@ -299,12 +306,12 @@ const cmdApprove = async (positional: string[], flags: Record<string, string | t
       const policy = await basePolicy(gitReaders(repo, base, view.headSha));
       const minutes = typeof waitFlag === "string" ? Number(waitFlag) : ctx.config.limits.ciWaitMin;
       if (!Number.isFinite(minutes) || minutes < 0) throw new Error(`brewery approve: --wait-checks wants minutes, got "${waitFlag}"`);
-      const waited = await waitForOtherChecks(githubCi, repo, pr, policy, { minutes, log });
+      const waited = await waitForOtherChecks(forgeCi, repo, pr, policy, { minutes, log });
       if (waited.headChanged) return 0;
       view = waited.view;
     }
     const auth = await appAuth(repo, dryRun);
-    const outcome = await approve(ctx, { ci: githubCi, ...gitReaders(repo, base, view.headSha), poster: auth.poster }, pr, { dryRun, view, appLogin: auth.appLogin, requireChecks: waitFlag !== undefined });
+    const outcome = await approve(ctx, { ci: forgeCi, ...gitReaders(repo, base, view.headSha), poster: auth.poster }, pr, { dryRun, view, appLogin: auth.appLogin, requireChecks: waitFlag !== undefined });
     if (outcome.verdict) log(`\n${JSON.stringify({ level: outcome.verdict.level, approve: outcome.verdict.approve, reasons: outcome.verdict.reasons, dimensions: outcome.verdict.dimensions, findings: outcome.verdict.findings, gates: outcome.verdict.gates, classification: outcome.verdict.classification }, null, 2)}`);
     log(`\n${outcome.body}`);
     return 0;
@@ -325,10 +332,10 @@ const cmdResume = async (positional: string[], flags: Record<string, string | tr
     }
     if (state.phase === "done") return 0;
     if (state.phase === "finish") {
-      const result = await finish(ctx, githubCi);
+      const result = await finish(ctx, forgeCi);
       return result === "done" ? 0 : replyLoop(ctx, !flags["no-wait"], true);
     }
-    const result = await barrel(ctx, githubCi);
+    const result = await barrel(ctx, forgeCi);
     return result === "done" ? 0 : replyLoop(ctx, !flags["no-wait"], true);
   });
 };
@@ -352,15 +359,15 @@ const cmdCut = async (positional: string[], flags: Record<string, string | true>
 };
 
 const cmdCellar = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
-  if (!positional[0]) throw new Error("usage: brewery cellar <owner/name> [--since <ISO date>] [--dry-run]");
-  const outcome = await cellar(positional[0], githubForge, { since: str(flags.since), dryRun: Boolean(flags["dry-run"]), log });
+  if (!positional[0]) throw new Error("usage: brewery cellar <[host/]owner/name> [--since <ISO date>] [--dry-run]");
+  const outcome = await cellar(positional[0], repoForge, { since: str(flags.since), dryRun: Boolean(flags["dry-run"]), log });
   return outcome.status === "too-many" ? 4 : 0;
 };
 
 const cmdCalibrate = async (positional: string[], flags: Record<string, string | true>): Promise<number> => {
-  if (!positional[0]) throw new Error("usage: brewery calibrate <owner/name> [--since <ISO date>] [--reviewer login,...] [--notes file] [--dry-run]");
+  if (!positional[0]) throw new Error("usage: brewery calibrate <[host/]owner/name> [--since <ISO date>] [--reviewer login,...] [--notes file] [--dry-run]");
   const notesFile = str(flags.notes);
-  const outcome = await calibrate(positional[0], githubForge, {
+  const outcome = await calibrate(positional[0], repoForge, {
     since: str(flags.since),
     reviewers: (str(flags.reviewer) ?? "").split(",").map((r) => r.trim().replace(/^@/, "")).filter(Boolean),
     notes: notesFile ? readFileSync(notesFile, "utf8") : undefined,

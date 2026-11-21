@@ -30,7 +30,8 @@ Check each and report the version or the gap. Stop only on a missing hard requir
 | Tool | Check | Needed for |
 | --- | --- | --- |
 | git | `git --version` | everything |
-| gh | `gh auth status` | finish, board, harvest, polish, tap, cellar, calibrate, approve (hard requirement for the CLI) |
+| gh | `gh auth status` | GitHub repos: `forge` runs `gh` for them, so finish, board, harvest, polish, tap, cellar, calibrate, approve need it (hard requirement for the CLI on GitHub) |
+| forge | `forge --help`, once section 3 links it; a Forgejo host also needs its `~/.config/forge/hosts.json` entry | every skill's PR, run, and issue calls (`bin/install` links it) |
 | Bun | `~/.bun/bin/bun --version`, else `bun --version` | the CLI (`bin/install` looks in `~/.bun/bin`, then PATH) |
 | Claude Code | `claude --version` | default agent for every stage |
 | Codex | `codex --version` | second opinion on cut and review (optional; skipped with a note when absent) |

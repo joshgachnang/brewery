@@ -23,10 +23,16 @@ is fine. The bar is "a reviewer said this and would say it again", not "this sou
   agent said about the same head when it reviewed it, every human comment with its file
   and line and diff hunk, and any notes the human pasted in by hand. You are in a fresh
   worktree of the default branch.
-- **By hand (`/calibrate owner/name`):** gather it yourself:
-  `gh pr list -R <name> --state all --search "updated:>=<date>"`, then per PR
-  `gh api repos/<name>/pulls/<n>/reviews`, `gh api repos/<name>/pulls/<n>/comments`, and
-  `gh api repos/<name>/issues/<n>/comments`. Work on a branch, then open the PR yourself.
+- **By hand (`/calibrate owner/name`, or `host/owner/name` for a Forgejo repo):** gather it
+  yourself: `forge pr list -R <name> --state all --search "updated:>=<date>"`, then per PR
+  `forge pr view <n> -R <name> --json reviews,comments` (verdicts and conversation) and
+  `forge pr threads <n> -R <name> --json path,line,comments` (inline comments). On GitHub,
+  `forge api repos/<owner>/<repo>/pulls/<n>/comments` adds each inline comment's diff hunk.
+  Work on a branch, then open the PR yourself.
+- **Search on Forgejo.** `updated:>=` is a GitHub search qualifier; on Forgejo `forge pr
+  list --search` is an error, never a silent unfiltered list. List newest-updated first and
+  filter: `forge pr list -R <name> --state all -L 100 --json number,updatedAt -q '.[] | select(.updatedAt >= "<date>") | .number'`.
+  Forgejo threads carry no diff hunk; read the code at the path and line instead.
 - Always read the current rubric top to bottom first, and `.brewery.json`'s `approve`
   block. Half of what humans say is already there; the job is then to sharpen the
   wording or add the example, not to add a second line.

@@ -17,13 +17,21 @@ Output is a small PR. A PR with nothing in it is fine; the bar matters more than
 
 - **Under brewery:** the prompt holds the evidence (journal paths, failed CI runs with
   scrubbed log tails, merged PRs). You are in a fresh worktree of the default branch.
-- **By hand (`/cellar owner/name`):** gather it yourself since the last cellar PR
-  (`gh pr list -R <name> --search "Record learnings in:title" --state all -L 1`):
-  `git log --since … -- docs/journal`, `gh run list -R <name> --status failure --created ">=<date>"`,
-  `gh run view <id> --log-failed`, `gh pr list -R <name> --state merged --search "merged:>=<date>"`.
+- **By hand (`/cellar owner/name`, or `host/owner/name` for a Forgejo repo):** gather it
+  yourself since the last cellar PR
+  (`forge pr list -R <name> --search "Record learnings in:title" --state all -L 1`):
+  `git log --since … -- docs/journal`, `forge run list -R <name> --status failure --created ">=<date>"`,
+  `forge run view <id> -R <name> --log-failed`, `forge pr list -R <name> --state merged --search "merged:>=<date>"`.
   Work on a branch, then open the PR yourself.
+- **Search on Forgejo.** `--search` qualifiers are GitHub-only; on Forgejo `forge pr list
+  --search` is an error, never a silent unfiltered list. Filter the JSON instead: the last
+  cellar PR is
+  `forge pr list -R <name> --state all -L 200 --json title,createdAt -q '[.[] | select(.title | startswith("Record learnings"))][0]'`,
+  and merged PRs are
+  `forge pr list -R <name> --state merged -L 1000 --json number,title,mergedAt -q '.[] | select(.mergedAt >= "<date>")'`.
+  `--created` on `run list` works on both (Forgejo applies it over the newest 1000 runs).
 - Always read: `docs/learnings/RULES.md`, the frontmatter of everything in `docs/learnings/`,
-  and the journals listed. For a merged PR, `gh pr view <n> --comments` shows review
+  and the journals listed. For a merged PR, `forge pr view <n> --comments` shows review
   corrections. Those are a strong signal, like a human's reply in a journal.
 
 ## Method

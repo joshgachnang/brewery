@@ -2,7 +2,7 @@
 
 Brew confirms product CI started for the pushed head. Taste **waits in-process** until
 jobs for this SHA are terminal (or the wait times out), then classifies. The wait is a
-watch → snapshot loop using GitHub CLI or CircleCI CLI. Outer loops use the same hooks
+watch → snapshot loop using `forge` (GitHub and Forgejo) or CircleCI CLI. Outer loops use the same hooks
 only for Taste `PENDING` after a timeout or a second post-fix push.
 
 Review bots (Bugbot, CodeQL, Copilot review, and similar) are not product CI. Wait for
@@ -14,12 +14,13 @@ Inventory hosts at Brew push and at every Taste observe. A host is in-scope when
 these is true:
 
 1. The branch has its config (examples below).
-2. GitHub commit statuses or check runs on this SHA name that provider.
+2. Forge commit statuses or check runs on this SHA name that provider.
 3. Repository skills or docs require that host for the PR.
 
 | Host | Typical config |
 | --- | --- |
 | GitHub Actions | `.github/workflows/` |
+| Forgejo Actions | `.forgejo/workflows/` (Forgejo also runs `.github/workflows/` when there is no `.forgejo/`) |
 | CircleCI | `.circleci/` |
 | Buildkite | `.buildkite/` |
 | GitLab CI | `.gitlab-ci.yml` |
@@ -39,8 +40,8 @@ change the target.
 
 1. Resolve in-scope hosts and list jobs for this SHA (non-blocking queries below).
 2. If every in-scope job is terminal, or a host is a documented skip, stop waiting.
-3. If any job is pending, run the matching native watch command. Prefer GitHub CLI when
-   the pending work is GitHub checks or Actions runs; prefer CircleCI CLI when the
+3. If any job is pending, run the matching native watch command. Prefer `forge` when
+   the pending work is GitHub or Forgejo checks or Actions runs; prefer CircleCI CLI when the
    pending work is CircleCI. When both are pending, launch their watches concurrently.
 4. When a watch returns, re-fetch the machine-readable snapshot. A watch exit code is a
    wait result, not a Taste verdict.
@@ -51,12 +52,15 @@ change the target.
 
 | Host | Preferred bounded wait |
 | --- | --- |
-| GitHub checks | `gh pr checks <pr> --watch --interval 30` |
-| GitHub Actions run | `gh run watch <run-id> --exit-status --interval 30` |
+| GitHub or Forgejo checks | `forge pr checks <pr> --watch --interval 30 --grace 300` |
+| GitHub or Forgejo Actions run | `forge run watch <run-id> --exit-status --interval 30` |
 | CircleCI | `circleci run watch --sha <sha> --timeout <wait>s` |
 | Buildkite | `bk build watch <build-number> --pipeline <org/pipeline> --interval 30` |
 
-Never hand-roll a sleep loop when `gh` or `circleci` can watch this SHA. Wrap the
+`--grace 300` keeps the watch waiting while no check has registered yet; without it a
+watch right after a push exits 1 at once, which is not a red result.
+
+Never hand-roll a sleep loop when `forge` or `circleci` can watch this SHA. Wrap the
 command in the 20-minute bound when its own timeout is unavailable. Do not use
 fail-fast mode when Taste needs every terminal job outcome.
 
@@ -96,8 +100,8 @@ After push, for each in-scope host:
 Build one job list for the current SHA by unioning sources, then deduplicate mirrored
 rows (same host + job name).
 
-1. **GitHub checks and commit statuses** for the SHA (`gh pr checks`, check runs, combined
-   status). Use these for GitHub Actions jobs and for any other host that posts
+1. **Forge checks and commit statuses** for the SHA (`forge pr checks <pr> --json
+   name,bucket,link`: check runs and commit statuses on GitHub, combined statuses on Forgejo). Use these for GitHub Actions jobs and for any other host that posts
    job-level checks.
 2. **Native host query** when that host is in-scope and GitHub does not enumerate its
    jobs (pipeline-level status only, missing checks, or checks that lag the native UI):
@@ -154,7 +158,7 @@ and re-verifies them locally before any push to GitHub.
 ## Wait ownership
 
 - Review-bot wait: Brew and Taste, in-process.
-- Product-CI wait loop: Taste, in-process, using `gh` or `circleci` watch until jobs are
+- Product-CI wait loop: Taste, in-process, using `forge` or `circleci` watch until jobs are
   terminal or the 20-minute bound hits.
 - Product-CI observation after timeout or a second post-fix push: outer loop honors
   Taste `PENDING` with the same native watch command or harness event subscription and

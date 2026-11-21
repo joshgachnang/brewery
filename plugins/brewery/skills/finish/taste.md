@@ -52,14 +52,16 @@ make it clean, stop and escalate per push ownership.
    conclusions from older heads.
 2. **Discover supporting skills.** Load applicable CI, conflict, review-response,
    implementation, test, UI/runtime, security, and repository skills.
-3. **Wait for review bots.** Follow the async-review-bots procedure. If Bugbot, CodeQL,
-   or similar review bots are queued or in progress, prefer provider CLI watch hooks or
+3. **Wait for review bots.** Follow the async-review-bots procedure. On Forgejo no
+   review bot is configured yet, so this step is done at once with `no review bots
+   configured (Forgejo)` ([async review bots](../terreno-shared/async-review-bots.md#on-forgejo-no-review-bots-yet)).
+   If Bugbot, CodeQL, or similar review bots are queued or in progress, prefer provider CLI watch hooks or
    harness event subscriptions until they are terminal or the wait times out. Use
    bounded sleep/re-fetch only as a fallback. Do not exit while those bots are running.
 4. **Wait for product CI.** Follow the product-CI wait loop. Discover every in-scope
    host (GitHub Actions, CircleCI, Buildkite, and similar). While any job for this SHA
-   is pending, run a native watch and then re-fetch. Prefer GitHub CLI
-   (`gh pr checks <pr> --watch --interval 30`, `gh run watch <run-id> --exit-status --interval 30`)
+   is pending, run a native watch and then re-fetch. Prefer `forge` on GitHub and Forgejo
+   (`forge pr checks <pr> --watch --interval 30 --grace 300`, `forge run watch <run-id> --exit-status --interval 30`)
    or CircleCI CLI (`circleci run watch --sha <sha> --timeout <wait>s`). Repeat that
    watch → snapshot cycle in a loop until every in-scope job is terminal or the wait
    times out. Do not exit while product CI jobs for this SHA are pending, except on
@@ -96,8 +98,11 @@ make it clean, stop and escalate per push ownership.
    - Answer every unresolved bot thread in this reaction per
      [`push ownership`](../terreno-shared/push-ownership.md#bot-comments).
    - Do not push speculative code for unrelated/flaky/external failures. Rerun only
-     the failed jobs instead (`gh run rerun <run-id> --failed`, or the host's
-     rerun-from-failed). A rerun counts as a fix round.
+     the failed jobs instead (`forge run rerun <run-id> --failed`, or the host's
+     rerun-from-failed). A rerun counts as a fix round. On Forgejo `forge run rerun`
+     exits 2 with the run's link, because Forgejo has no rerun API: re-trigger the run
+     with an empty commit (`git commit --allow-empty -m "Re-run CI"`, then push) or the
+     link's Re-run button, and count that as the rerun.
    - When a review or CI fix changes behaviour, re-check both testing-plan sections
      before the push. Re-run every `## E2E tests` row whose `Proves` or spec covers the
      changed behaviour, using the command the e2e guide gives for its layer. A missing
@@ -179,15 +184,16 @@ make it clean, stop and escalate per push ownership.
 10. **Commit/push if changed, then watch.** Follow repository policy. Record the new
    head. Record the fix round as a Taste `ledger` entry. Resolve an addressed thread
    silently when the diff is self-explanatory. Reply only when a non-obvious decision
-   must be preserved, using no more than three short sentences. Reply to and resolve
+   must be preserved, using no more than three short sentences (thread replies per
+   [`push ownership`](../terreno-shared/push-ownership.md#bot-comments)). Reply to and resolve
    each declined bot thread. After a push, wait again for review bots and then the product-CI wait
-   loop on the new head (`gh pr checks <pr> --watch`, `gh run watch`,
+   loop on the new head (`forge pr checks <pr> --watch --grace 300`, `forge run watch`,
    `circleci run watch --sha <sha>`), then act on those results once more in this
    invocation. A further push after that second act is `PENDING`. Do not watch product
    CI for a head you have not pulled, linted, typechecked, last-run-test-verified, and
    pushed.
-11. **Preserve PR description.** Never regenerate or replace human-authored text. Fetch the
-    latest body before a required minimal evidence edit; skip body mutation if it cannot
+11. **Preserve PR description.** PR operations go through `forge`, never `gh`: `forge pr create --title … --body-file …`, `forge pr edit <pr> --body-file …`, `forge pr ready`, `forge pr view`. Never regenerate or replace
+    human-authored text. Fetch the latest body before a required minimal evidence edit; skip body mutation if it cannot
     be preserved exactly. Update `Verification` instead of posting test/CI comments. Keep
     stage-result YAML in the Details toggle, never in the visible body; when you rewrite
     it, keep `ip` and the delivered task ids so the approval bot still finds the plan. Keep
@@ -222,7 +228,7 @@ Under standalone entry, when step 13 would emit `PENDING`:
 1. Record the `PENDING` result in execution state as an intermediate reaction, not the
    terminal result.
 2. Wait for the requested `wait` in-process. Prefer the harness's native mechanisms: a
-   blocking provider watch (`gh pr checks <pr> --watch`, `circleci run watch --sha
+   blocking provider watch (`forge pr checks <pr> --watch --grace 300`, `circleci run watch --sha
    <sha>`), a background command that exits when CI is terminal, or a scheduled wakeup.
    Use a plain timer only as a fallback.
 3. Start the next reaction at step 1 against the current head. Do not reuse

@@ -7,7 +7,8 @@ import { join } from "node:path";
 import { failureExcerpt } from "../ci.ts";
 import { configuredRepos, loadConfig } from "../config.ts";
 import { activeRules, RULES_PATH } from "../docs.ts";
-import type { FailedRun, Forge, MergedPr } from "../forge/history.ts";
+import { repoName, type FailedRun, type Forge, type MergedPr } from "../forge/history.ts";
+import { parseSlug } from "../forge/resolve.ts";
 import { ping } from "../human.ts";
 import { changedPaths, isLearning } from "../learn.ts";
 import { cellarBody } from "../prompts.ts";
@@ -34,7 +35,7 @@ export interface CellarOutcome {
 }
 
 export const stateDir = (): string => process.env.BREWERY_CELLAR_DIR ?? join(homedir(), ".local", "state", "brewery", "cellar");
-const stampPath = (name: string): string => join(stateDir(), `${name.replace("/", "__")}.json`);
+const stampPath = (name: string): string => join(stateDir(), `${name.replaceAll("/", "__")}.json`);
 
 const readStamp = (name: string): string | undefined =>
   existsSync(stampPath(name)) ? (JSON.parse(readFileSync(stampPath(name), "utf8")) as { since: string }).since : undefined;
@@ -49,14 +50,17 @@ const finishPass = (name: string, now: Date, outcome: CellarOutcome, stamp: bool
 const sameRepo = (url: string, name: string): boolean =>
   new RegExp(`[:/]${name.replace(/[.]/g, "\\.")}(\\.git)?/?$`, "i").test(url.trim());
 
-// A local checkout of owner/name: the user config's `repos`, else any repo brewery has run in.
+// A local checkout of owner/name (or host/owner/name, whose origin must be on that host): the
+// user config's `repos`, else any repo brewery has run in.
 export const resolveCheckout = async (name: string): Promise<string | null> => {
+  const { slug } = repoName(name);
+  const host = parseSlug(name)?.host;
   const configured = configuredRepos()[name];
   if (configured && existsSync(configured)) return configured;
   for (const repo of new Set(Object.values(readIndex()))) {
     if (!existsSync(repo)) continue;
     const url = await sh(repo, ["git", "remote", "get-url", "origin"]);
-    if (url.code === 0 && sameRepo(url.out, name)) return repo;
+    if (url.code === 0 && sameRepo(url.out, slug) && (!host || parseSlug(url.out)?.host === host)) return repo;
   }
   return null;
 };
@@ -110,11 +114,11 @@ const prBody = (summary: string, changes: string[], proposals: string, since: st
 
 export const cellar = async (name: string, forge: Forge, opts: CellarOptions = {}): Promise<CellarOutcome> => {
   const log = opts.log ?? ((line: string) => console.log(line));
-  if (!/^[\w.-]+\/[\w.-]+$/.test(name)) throw new Error(`brewery cellar: want owner/name, got "${name}"`);
+  if (!/^(?:[\w.-]+\/)?[\w.-]+\/[\w.-]+$/.test(name)) throw new Error(`brewery cellar: want owner/name or host/owner/name, got "${name}"`);
   const now = opts.now ?? new Date();
   let repo = await resolveCheckout(name);
   if (!repo) {
-    repo = join(mkdtempSync(join(tmpdir(), "brewery-cellar-")), name.split("/")[1]);
+    repo = join(mkdtempSync(join(tmpdir(), "brewery-cellar-")), name.split("/").at(-1) ?? "repo");
     log(`no local checkout of ${name}; cloning to ${repo}`);
     await forge.clone(name, repo);
   }

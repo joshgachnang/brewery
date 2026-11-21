@@ -188,7 +188,7 @@ transport.
   `PENDING` while Bugbot, CodeQL, or similar review bots are still queued or in
   progress; wait per the async-review-bots procedure first. Do not emit `PENDING` for
   unfinished product CI until Taste has run the product-CI wait loop to completion or
-  timeout, preferring `gh` / `circleci` watch hooks.
+  timeout, preferring `forge` / `circleci` watch hooks.
 - `PASS`: this stage's success conditions are proven for the recorded head.
 
 Human gates include unresolved product semantics, architecture/security/data ownership,
