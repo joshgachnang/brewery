@@ -75,7 +75,7 @@ export const DEFAULT_PATH_RULES: PathRule[] = [
   { match: ["**/auth/**", "**/permissions/**", "**/session*"], category: "auth", floor: "high" },
   { match: ["**/migrations/**", "**/models/**"], category: "migrations", floor: "high" },
   { match: ["terraform/**", "infra/**", "Dockerfile*", "**/*.env*"], category: "infra", floor: "high" },
-  { match: [".circleci/**", ".github/workflows/**", ".github/scripts/**"], category: "ci", never: true },
+  { match: [".circleci/**", ".github/workflows/**", ".github/scripts/**", ".forgejo/workflows/**"], category: "ci", never: true },
   { match: [".brewery.json", "docs/approval-rubric.md"], category: "policy", never: true },
   { match: ["**/bun.lock", "**/package.json", "**/yarn.lock"], category: "deps", floor: "medium" },
 ];

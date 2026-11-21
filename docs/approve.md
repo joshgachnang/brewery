@@ -124,7 +124,7 @@ Default `pathRules`:
 | `**/auth/**`, `**/permissions/**`, `**/session*` | auth | floor high |
 | `**/migrations/**`, `**/models/**` | migrations | floor high |
 | `terraform/**`, `infra/**`, `Dockerfile*`, `**/*.env*` | infra | floor high |
-| `.circleci/**`, `.github/workflows/**`, `.github/scripts/**` | ci | never |
+| `.circleci/**`, `.github/workflows/**`, `.github/scripts/**`, `.forgejo/workflows/**` | ci | never |
 | `.brewery.json`, `docs/approval-rubric.md` | policy | never |
 | `**/bun.lock`, `**/package.json`, `**/yarn.lock` | deps | floor medium |
 

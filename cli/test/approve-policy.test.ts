@@ -70,8 +70,8 @@ describe("classify", () => {
   });
 
   test("policy and CI files are never approvable", () => {
-    const c = classify([".brewery.json", ".circleci/config.yml", "docs/approval-rubric.md", "src/a.ts"], rules);
-    expect(c.never).toEqual([".brewery.json", ".circleci/config.yml", "docs/approval-rubric.md"]);
+    const c = classify([".brewery.json", ".circleci/config.yml", ".forgejo/workflows/ci.yml", "docs/approval-rubric.md", "src/a.ts"], rules);
+    expect(c.never).toEqual([".brewery.json", ".circleci/config.yml", ".forgejo/workflows/ci.yml", "docs/approval-rubric.md"]);
   });
 
   test("an empty diff has nothing to say", () => {
